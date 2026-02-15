@@ -1,0 +1,708 @@
+<html lang="bg">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spark 3Dent — Invoice Template B (Refined v2)</title>
+    <style>
+        :root {
+            --paper: #fff;
+            --ink: #111827;
+            --muted: #6b7280;
+            --line: #e5e7eb;
+
+            --a1: #22c1c3;
+            --a2: #7c3aed;
+            --a3: #f97316;
+            --a4: #10b981;
+
+            --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--sans);
+            color: var(--ink);
+            background: #0b1020;
+            padding: 20px;
+        }
+
+        .app {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            gap: 16px;
+        }
+
+        .toolbar {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .toolbar strong {
+            font-weight: 650;
+        }
+
+        .toolbar .hint {
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 12px;
+        }
+
+        .toolbar .spacer {
+            flex: 1;
+        }
+
+        button {
+            appearance: none;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.92);
+            padding: 10px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        button:focus {
+            box-shadow: 0 0 0 3px rgba(34, 193, 195, 0.25);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.10);
+        }
+
+        .stage {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
+            padding: 16px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .toolbar, .stage {
+                border: none;
+                background: none;
+            }
+
+            .toolbar {
+                display: none;
+            }
+
+            .stage {
+                padding: 0;
+            }
+
+            .sheet {
+                box-shadow: none !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+            }
+        }
+
+        .sheet {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: var(--paper);
+            border-radius: 14px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.40);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sheet:before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            height: 2px;
+            background: var(--a1);
+            opacity: 0.9;
+        }
+
+        .sheet:after {
+            content: "";
+            position: absolute;
+            left: 16mm;
+            right: 16mm;
+            top: 34mm;
+            height: 1px;
+            background: var(--line);
+        }
+
+        .mono {
+            font-family: var(--mono);
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+
+        /* Header */
+        .header {
+            padding: 10mm 16mm 8mm;
+        }
+
+        .header-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 14px;
+            align-items: start;
+        }
+
+        .doc-title {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: 0.03em;
+            line-height: 1.05;
+        }
+
+        .company-line {
+            margin-top: 6px;
+            font-weight: 750;
+            font-size: 14px;
+            color: #111827;
+        }
+
+        .meta {
+            display: grid;
+            @media print {
+                /* 1) Force A4 and remove default browser margins */
+                @page {
+                    size: A4;
+                    margin: 0;
+                }
+
+                html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: #fff !important;
+                }
+
+                /* 2) Make the sheet exactly A4, and do NOT use min-height in print */
+                .sheet {
+                    width: 210mm !important;
+                    height: 297mm !important; /* exact page height */
+                    min-height: 0 !important; /* overrides your min-height:297mm */
+                    margin: 0 !important;
+                    border-radius: 0 !important;
+                    box-shadow: none !important;
+                    overflow: hidden !important; /* prevents tiny overflow from spilling to page 2 */
+                }
+
+                /* 3) Kill any elements that might contribute unexpected height */
+                .sheet::before,
+                .sheet::after {
+                    display: none !important;
+                }
+
+                /* 4) Prevent accidental page breaks inside the sheet content */
+                .header, .content, table, .bottom-grid {
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+            }
+
+            justify-items: end;
+            align-content: start;
+            padding-top: 1px;
+        }
+
+        .meta-row {
+            display: inline-flex;
+            align-items: baseline;
+            white-space: nowrap;
+        }
+
+        .meta-row .k {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        /* Invoice number: SAME size as "ФАКТУРА" */
+        .invno {
+            align-self: start;
+            display: inline-flex;
+            gap: 10px;
+            align-items: baseline;
+        }
+
+        .invno .hash {
+            color: var(--muted);
+            font-weight: 900;
+            font-size: 22px;
+            line-height: 1.05;
+            transform: translateY(0.5px); /* tiny optical alignment */
+        }
+
+        .invno .num {
+            font-size: 22px;
+            font-weight: 950;
+            letter-spacing: 0.02em;
+            line-height: 1.05;
+        }
+
+        /* Date aligned with company line */
+        .date {
+            font-size: 14px;
+            font-weight: 750;
+            color: #111827;
+        }
+
+        /* Content */
+        .content {
+            padding: 8mm 16mm 14mm;
+        }
+
+        .addresses {
+            margin-top: 8mm;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns:1fr 1fr;
+            gap: 18mm;
+            align-items: start;
+        }
+
+        .two-col .seller {
+            width: 320px;
+        }
+
+        .block-title {
+            font-size: 12px;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 0 0 6px;
+        }
+
+        .lines {
+            display: grid;
+            gap: 4px;
+            font-size: 13.5px;
+        }
+
+        .lines strong {
+            font-weight: 750;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--line);
+            margin: 10mm 0 8mm;
+        }
+
+        .pay-section {
+            margin-top: 8mm;
+        }
+
+        .pay-grid {
+            display: grid;
+            gap: 18mm;
+        }
+
+        .kv {
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+            padding: 6px 0;
+        }
+
+        .kv .k {
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .kv .v {
+            font-size: 13.5px;
+            font-weight: 750;
+            color: #111827;
+        }
+
+        .kv .v.mono {
+            font-weight: 850;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12mm;
+        }
+
+        thead th {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #374151;
+            text-align: left;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        tbody td {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(229, 231, 235, 0.9);
+            vertical-align: top;
+            font-size: 14px;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 1px solid var(--line);
+        }
+
+        td.idx {
+            width: 36px;
+        }
+
+        td.num, th.num {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        /* Bottom */
+        .bottom-grid {
+            display: grid;
+            grid-template-columns:1.1fr 0.9fr;
+            gap: 18mm;
+            margin-top: 6mm;
+            align-items: start;
+        }
+
+        .totals {
+            display: grid;
+            gap: 8px;
+        }
+
+        .total-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 0;
+            padding-top: 0;
+            font-size: 14px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .total-line strong {
+            font-family: var(--mono);
+            font-weight: 900;
+        }
+
+        /* Final amount bigger */
+        .total-due {
+            padding-top: 8px;
+            border-bottom: 0;
+        }
+
+        .total-due .label {
+            padding-top: 8px;
+            border-bottom: none;
+            font-size: 12px;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+        }
+
+        .total-due .value {
+            font-size: 22px;
+            font-weight: 950;
+            letter-spacing: 0.02em;
+            font-family: var(--mono);
+        }
+
+        .due-accent {
+            height: 3px;
+            border-radius: 999px;
+            background: var(--a2);
+            margin-top: 8px;
+            width: 100%;
+            opacity: 0.9;
+        }
+
+        .basis-note {
+            margin-top: 10mm;
+        }
+
+        .basis-note .basis {
+            font-size: 12px;
+            color: #374151;
+            padding: 8px 0 10px;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+        }
+
+        .basis-note .basis strong {
+            font-weight: 800;
+        }
+
+        /* Tax info under "СЛОВОМ" */
+        .tax-mini {
+            margin-top: 21mm;
+            display: grid;
+            gap: 6px;
+            font-size: 13.5px;
+            color: #111827;
+        }
+
+        .tax-mini .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .tax-mini .k {
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+        }
+
+        .tax-mini .v {
+            font-weight: 750;
+            text-align: right;
+        }
+
+        .received {
+            margin-top: 10mm;
+            font-size: 13.5px;
+            color: #111827;
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+            border-top: 1px solid var(--line);
+            padding-top: 10px;
+        }
+
+        .received .k {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 12px;
+        }
+
+        .received .v {
+            font-weight: 750;
+        }
+
+        @media print {
+            /* 1) Force A4 and remove default browser margins */
+            @page {
+                size: A4;
+                margin: 0;
+            }
+
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+            }
+
+            /* 2) Make the sheet exactly A4, and do NOT use min-height in print */
+            .sheet {
+                width: 210mm !important;
+                height: 297mm !important; /* exact page height */
+                min-height: 0 !important; /* overrides your min-height:297mm */
+                margin: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                overflow: hidden !important; /* prevents tiny overflow from spilling to page 2 */
+            }
+
+            /* 3) Kill any elements that might contribute unexpected height */
+            .sheet::before,
+            .sheet::after {
+                display: none !important;
+            }
+
+            /* 4) Prevent accidental page breaks inside the sheet content */
+            .header, .content, table, .bottom-grid {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
+
+    </style>
+</head>
+<body>
+<div class="app">
+    <!--<div class="toolbar">
+      <strong>Spark 3Dent — Template B (Refined v2)</strong>
+      <span class="hint">Print from browser (A4)</span>
+      <div class="spacer"></div>
+      <button onclick="window.print()">Print</button>
+    </div>-->
+
+
+    <div class="sheet" aria-label="Template B refined v2">
+
+        <header class="header">
+            <div class="header-grid">
+                <div>
+                    <h1 class="doc-title" id="docTitle">ФАКТУРА</h1>
+                    <div class="company-line" id="sellerNameTop">"СМТЛ Спарк 3Дент" ООД</div>
+                </div>
+
+                <div class="meta" aria-label="Invoice meta">
+                    <div class="invno" aria-label="Invoice number">
+                        <span class="hash">#</span>
+                        <span class="num mono" id="invNo">0000004269</span>
+                    </div>
+
+                    <div class="meta-row date" aria-label="Invoice date">
+                        <div class="lines">
+                            <div><span class="k">Дата</span> <strong id="invDate">04.07.2152 г.</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="content">
+            <div class="two-col addresses">
+                <section class="seller">
+                    <h2 class="block-title">Доставчик</h2>
+                    <div class="lines">
+                        <div><strong id="sellerCompanyName">"СМТЛ Спарк 3Дент" ООД</strong></div>
+                        <div><strong>Адрес:</strong> <span id="sellerCity">гр. Габрово</span>, <span id="sellerAddr">ул. Мирни дни 13, ет.6, ап.17</span>
+                        </div>
+                        <div><strong>МОЛ:</strong> <span id="sellerRepresentativeName">Петя Бонева</span></div>
+                        <div><strong>ЕИК по Булстат:</strong> <span class="mono" id="sellerBulstat">208300546</span>
+                        </div>
+                        <div><strong>ДДС Номер:</strong> <span class="mono" id="sellerVat">—</span></div>
+                    </div>
+                </section>
+
+                <section>
+                    <h2 class="block-title">Получател</h2>
+                    <div class="lines">
+                        <div><strong id="buyerCompanyName">„Иван Иванов - Тест“ ООД</strong></div>
+                        <div><strong>Адрес:</strong> <span
+                                id="buyerAddr">гр. София, ул. Хан Аспарух 6699, ет.33, ап.123</span></div>
+                        <div><strong>МОЛ:</strong> <span id="buyerRepresentativeName">Иван Иванов</span></div>
+                        <div><strong>ЕИК по Булстат:</strong> <span class="mono" id="buyerBulstat">123456789</span>
+                        </div>
+                        <div><strong>ДДС Номер:</strong> <span class="mono" id="buyerVat">BG123456789</span></div>
+                    </div>
+                </section>
+            </div>
+
+            <table aria-label="Invoice items">
+                <thead>
+                <tr>
+                    <th style="width:36px;">№</th>
+                    <th>Описание на стоката/услугата</th>
+                    <th class="num" style="width:160px;">Сума</th>
+                </tr>
+                </thead>
+                <tbody id="items">
+                <tr>
+                    <td class="idx mono" data-field="idx">1</td>
+                    <td data-field="description">Зъботехнически услуги</td>
+                    <td class="num mono" data-field="amount">1598.34 €</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="bottom-grid">
+                <section>
+                    <h2 class="block-title">Словом</h2>
+                    <div class="small" id="totalWords">петстотин деветдесет и осем евро и двадесет и един цента</div>
+
+
+                    <div class="tax-mini" aria-label="Tax event info">
+                        <div class="row">
+                            <span class="k">Място на сделката</span>
+                            <span class="v" id="placeOfSupply">Габрово</span>
+                        </div>
+                        <div class="row">
+                            <span class="k">Дата на данъчно събитие</span>
+                            <span class="v" id="taxEventDate">04.07.2152 г.</span>
+                        </div>
+                    </div>
+
+
+                    <section class="pay-section">
+                        <h2 class="block-title">Плащане</h2>
+                        <div class="pay-grid">
+                            <div>
+                                <div class="kv"><span class="k">Метод</span><span class="v"
+                                                                                  id="paymentMethod">По сметка</span>
+                                </div>
+                                <div class="kv"><span class="k">IBAN</span><span class="v mono" id="iban">BG03FINV91501017534825</span>
+                                </div>
+                                <div class="kv"><span class="k">Банка</span><span class="v" id="bank">FIRST INVESTMENT BANK</span>
+                                </div>
+                                <div class="kv"><span class="k">BIC</span><span class="v mono" id="bic">FINVBGSF</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="basis-note">
+                        <div class="basis">
+                            <strong>Основание за неначисляване на ДДС:</strong>
+                            <span id="vatBasis">чл. 113 ал. 9 от ЗДДС</span>
+                        </div>
+                        <div class="small" style="margin-top:10px;" id="accountingNote">Този документ се издава на
+                            основание на чл.31 т.6 от ЗДДС и чл.37 и 38 от ППЗДДС. Съгласно чл.7, ал.1 и чл.8 от Закона
+                            за счетоводството и писмо на МФ ГДД 91-00-46 от 25.03.2002г. печатът не е задължителен
+                            реквизит на фактурата, а подписите са заменени с идентификационни цифри.
+                        </div>
+                    </div>
+                </section>
+
+                <section aria-label="Totals">
+                    <h2 class="block-title">Общо</h2>
+                    <div class="totals">
+                        <div class="total-line">
+                            <span>Данъчна основа</span>
+                            <strong id="taxBase">1598.34 €</strong>
+                        </div>
+                        <div class="total-line">
+                            <span>ДДС 20%</span>
+                            <strong id="vat20">0.00 €</strong>
+                        </div>
+
+                        <div class="total-line total-due">
+                            <span class="label">Сума за плащане</span>
+                            <strong id="totalDue" class="value">1598.34 €</strong>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>
