@@ -7,6 +7,8 @@ public enum Currency
     Eur
 }
 
+public record BillingAddress(string Name, string RepresentativeName, string CompanyIdentifier, string? VatIdentifier, string Address, string City, string PostalCode, string Country);
+
 public record Amount
 {
     public Amount(int cents, Currency currency)
