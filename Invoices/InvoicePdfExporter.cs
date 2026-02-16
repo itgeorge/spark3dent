@@ -2,7 +2,7 @@ namespace Invoices;
 
 public class InvoicePdfExporter : IInvoiceExporter
 {
-    // TODO: add a regression test for this class (run it manually, review the result of several invoices, save the input and result as reference for the test assertions)
+    // TODO: add a regression "replay" test for this class once implemented (run it manually, review the result of several invoices, save the input and result as reference for the test assertions)
 
     public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice)
     {
