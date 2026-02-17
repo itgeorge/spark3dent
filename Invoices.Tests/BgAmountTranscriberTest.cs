@@ -194,9 +194,81 @@ public class BgAmountTranscriberTest
             Assert.That(result, Is.Not.Null.And.Not.Empty, getExceptionMessage);
         }
     }
+    
+    [Test]
+    public void Transcribe_WhenTranscribingAnyNumberBelow1M_ShouldSatisfyLinguisticInvariants()
+    {
+        for (var euros = 1; euros <= 999_999; euros++)
+        {
+            var cents = euros * 100;
+            var result = Transcribe(cents).ToLower();
+
+            string fail(string msg) => $"{msg} (failed for {cents} cents → \"{result}\")";
+
+            // 1️⃣ Basic sanity
+            Assert.That(result, Is.Not.Null.And.Not.Empty, fail("Result is null/empty"));
+
+            // 2️⃣ Must always contain "евро"
+            Assert.That(result, Does.Contain("евро"), fail("Missing 'евро'"));
+
+            // 3️⃣ Zero cents rule
+            if (cents % 100 == 0)
+                Assert.That(result, Does.Not.Contain("евроцент"), fail("Contains eurocent when cents == 0"));
+            else
+                Assert.That(result, Does.Contain("евроцент"), fail("Missing eurocent when cents != 0"));
+
+            // 4️⃣ Never allow illegal currency forms
+            Assert.That(result, Does.Not.Contain("евра"), fail("Illegal plural 'евра' detected"));
+            Assert.That(result, Does.Not.Contain("евроцентове"), fail("Wrong plural 'евроцентове' detected"));
+
+            // 5️⃣ No double conjunction
+            Assert.That(result, Does.Not.Contain(" и и "), fail("Double 'и' detected"));
+
+            // 6️⃣ No trailing conjunction
+            Assert.That(result.Trim().EndsWith("и"), Is.False, fail("Ends with 'и'"));
+
+            // 7️⃣ No double spaces
+            Assert.That(result, Does.Not.Contain("  "), fail("Double space detected"));
+
+            // 8️⃣ Gender invariant: neuter for euro
+            if (euros % 100 != 11) // exclude 11 because it ends with "единадесет"
+            {
+                if (euros % 10 == 1)
+                    Assert.That(result, Does.Not.Contain("един евро"),
+                        fail("Masculine 'един евро' detected"));
+                if (euros % 10 == 2)
+                    Assert.That(result, Does.Not.Contain("два евро"),
+                        fail("Masculine 'два евро' detected"));
+            }
+
+            // 9️⃣ Gender invariant: masculine for eurocent
+            var centPart = cents % 100;
+            if (centPart == 1)
+                Assert.That(result, Does.Contain("един евроцент"),
+                    fail("Missing masculine singular 'един евроцент'"));
+            if (centPart == 2)
+                Assert.That(result, Does.Contain("два евроцента"),
+                    fail("Missing masculine plural 'два евроцента'"));
+
+            // 🔟 Thousand agreement check
+            if (euros >= 2000 && euros < 3000)
+                Assert.That(result, Does.Contain("две хиляди"),
+                    fail("Should use feminine 'две хиляди'"));
+
+            if (euros >= 1000 && euros < 2000)
+                Assert.That(result, Does.Contain("хиляда"),
+                    fail("Should contain 'хиляда'"));
+
+            // 1️⃣1️⃣ No uppercase mid-sentence (except first char)
+            Assert.That(result.Substring(1),
+                Does.Not.Match("[А-Я]"),
+                fail("Unexpected uppercase inside sentence"));
+        }
+    }
+
 
     [Test]
-    [TestCase(100_000_000)]  // 1,000,000 EUR
+    [TestCase(100_000_000)]
     [TestCase(100_000_001)]
     [TestCase(999_999_999)]
     public void Transcribe_WhenTranscribing1MOrAbove_ThenThrows(int amountCents)
