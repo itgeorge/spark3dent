@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
-//using HtmlAgilityPack; TODO: uncomment this when HtmlAgilityPack is added to the project
+using System.Linq;
+using System.Threading.Tasks;
+using HtmlAgilityPack;
 using Invoices;
 using NUnit.Framework;
 
@@ -49,6 +51,34 @@ public class InvoiceHtmlTemplateTest
     <p>Tax base: <strong id="taxBase">100.00 €</strong></p>
     <p>VAT 20%: <strong id="vat20">0.00 €</strong></p>
     <p>Total: <strong id="totalDue">100.00 €</strong></p>
+    </body>
+    </html>
+    """;
+
+    /// <summary>Test-specific template with unique markers to assert template override is used. Not shared with default.</summary>
+    private const string TemplateUsesTemplateTestHtml =
+    """
+    <html data-test-identity="InvoiceHtmlTemplateTest-ThenUsesTemplate-unique-7f3a9b2e">
+    <body>
+    <div id="tpl-test-watermark">ZYXW-TEST-TEMPLATE-WATERMARK-9876</div>
+    <h1 id="docTitle">Doc</h1>
+    <div id="sellerNameTop">S</div>
+    <span id="invNo">0</span>
+    <span id="invDate">2026-01-01</span>
+    <strong id="sellerCompanyName">S</strong>
+    <span id="sellerCity">C</span><span id="sellerAddr">A</span>
+    <span id="sellerRepresentativeName">R</span>
+    <span id="sellerBulstat">E</span><span id="sellerVat">—</span>
+    <strong id="buyerCompanyName">B</strong>
+    <span id="buyerAddr">A</span>
+    <span id="buyerRepresentativeName">R</span>
+    <span id="buyerBulstat">E</span><span id="buyerVat">—</span>
+    <div id="totalWords">w</div>
+    <span id="placeOfSupply">P</span><span id="taxEventDate">D</span>
+    <strong id="taxBase">0</strong><strong id="vat20">0</strong><strong id="totalDue">0</strong>
+    <table><tbody id="items">
+    <tr><td data-field="idx">1</td><td data-field="description">d</td><td data-field="amount">0</td></tr>
+    </tbody></table>
     </body>
     </html>
     """;
@@ -135,16 +165,32 @@ public class InvoiceHtmlTemplateTest
 
     [Test]
     [TestCaseSource(nameof(ValidTemplateAndInvoiceData))]
-    public void Render_GivenValidTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated((string templateHtml, Invoice invoice) data)
+    public async Task Render_GivenValidTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated((string templateHtml, Invoice invoice) data)
     {
-        // TODO: use data.invoice and use data.templateHtml, render the invoice and check all fields are populated (nake sure to loop over all line items and check all fields of each line item are populated)
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), data.templateHtml);
+        var html = template.Render(data.invoice);
+        AssertFieldsPopulated(html, data.invoice);
+    }
+
+    [Test]
+    public async Task Render_GivenValidTemplate_WhenRenderingInvoice_ThenUsesTemplate()
+    {
+        var tpl = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), TemplateUsesTemplateTestHtml);
+        var html = tpl.Render(ValidInvoice);
+
+        Assert.That(html, Does.Contain("ZYXW-TEST-TEMPLATE-WATERMARK-9876"),
+            "Custom template contains unique watermark; proves override was used");
+        Assert.That(html, Does.Contain("data-test-identity=\"InvoiceHtmlTemplateTest-ThenUsesTemplate-unique-7f3a9b2e\""),
+            "Custom template has unique data attribute; default template would not");
     }
 
     [Test]
     [TestCaseSource(nameof(ValidInvoices))]
-    public void Render_GivenDefaultTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated(Invoice invoice)
+    public async Task Render_GivenDefaultTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated(Invoice invoice)
     {
-        // TODO: use invoice and don't pass template override, render the invoice and check all fields are populated (make sure to loop over all line items and check all fields of each line item are populated)
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber());
+        var html = template.Render(invoice);
+        AssertFieldsPopulated(html, invoice);
     }
 
     [Test]
@@ -153,45 +199,151 @@ public class InvoiceHtmlTemplateTest
     [TestCase("amount")]
     public void Render_GivenTemplateMissingLineItemField_WhenRenderingInvoice_ThenThrows(string missingLineItemFieldName)
     {
-        // TODO: use the valid template, but replace the data-field attribute with an empty, assert exception thrown with message indicating expected template format
+        var badTemplate = ValidTemplateHtml.Replace($"data-field=\"{missingLineItemFieldName}\"", "data-field=\"\"");
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), badTemplate));
+        Assert.That(ex!.Message, Does.Contain("data-field").Or.Contain("template").Or.Contain(missingLineItemFieldName),
+            "Exception should indicate expected template format");
     }
 
     [Test]
-    public void Render_GivenValidTemplate_WhenRenderingInvoice_ThenCopiesTagAndClassAttributes()
+    public async Task Render_GivenValidTemplate_WhenRenderingInvoice_ThenCopiesTagAndClassAttributes()
     {
-        // TODO: use the valid template, render the multi-line item invoice and check the tag and class attributes are copied to the output html for each line item
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), ValidTemplateHtml);
+        var html = template.Render(MultiLineItemInvoice);
+        var rows = GetLineItemRows(html);
+        Assert.That(rows, Has.Length.EqualTo(2));
+        var row1 = rows[0];
+        Assert.That(row1.SelectSingleNode(".//td[@class='idx-class']"), Is.Not.Null);
+        Assert.That(row1.SelectSingleNode(".//td[@class='description-class']"), Is.Not.Null);
+        Assert.That(row1.SelectSingleNode(".//td[@class='amount-class']"), Is.Not.Null);
     }
 
     [Test]
     public void Render_GivenInvalidTemplate_WhenRenderingInvoice_ThenThrows()
     {
-        // TODO: use an invalid template, render the invoice and check it throws
+        var invalidHtml = "<html><body><div id=\"invNo\"></div></body></html>";
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), invalidHtml));
+        Assert.That(ex!.Message, Does.Contain("template").Or.Contain("missing").Or.Contain("required"));
     }
 
     [Test]
-    public void Render_GivenFailingTranscriber_WhenRenderingInvoice_ThenThrows()
+    public async Task Render_GivenFailingTranscriber_WhenRenderingInvoice_ThenThrows()
     {
-        // TODO: use a failing transcriber, render the invoice and check it throws
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber { Fail = true }, ValidTemplateHtml);
+        Assert.Throws<Exception>(() => template.Render(ValidInvoice));
     }
 
     [Test]
-    public void Render_GivenDefaultTemplate_WhenRenderingInvoiceWithNegativeAmount_ThenThrows()
+    public async Task Render_GivenDefaultTemplate_WhenRenderingInvoiceWithNegativeAmount_ThenThrows()
     {
-        // TODO: create an invoice with a negative amount, render the invoice and check it throws
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber());
+        var badInvoice = new Invoice("1", new Invoice.InvoiceContent(
+            Date: DateTime.Today,
+            SellerAddress: ValidInvoice.Content.SellerAddress,
+            BuyerAddress: ValidInvoice.Content.BuyerAddress,
+            LineItems: [new Invoice.LineItem("Bad", new Amount(-100, Currency.Eur))]));
+        var ex = Assert.Throws<ArgumentException>(() => template.Render(badInvoice));
+        Assert.That(ex!.Message, Does.Contain("negative"));
     }
 
     [Test]
-    public void Render_GivenDefaultTemplate_WhenRenderingInvoiceWithZeroAmount_ThenAmountsAreZero()
+    public async Task Render_GivenDefaultPadding_WhenInvoiceNumberShort_ThenPaddedTo10Digits()
     {
-        // TODO: create an invoice with a zero total amount, render the invoice and check the amounts are zero
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), ValidTemplateHtml);
+        var shortNumberInvoice = new Invoice("4269", new Invoice.InvoiceContent(
+            Date: new DateTime(2026, 1, 15),
+            SellerAddress: ValidInvoice.Content.SellerAddress,
+            BuyerAddress: ValidInvoice.Content.BuyerAddress,
+            LineItems: [new Invoice.LineItem("Test", new Amount(100_00, Currency.Eur))]));
+        var html = template.Render(shortNumberInvoice);
+        Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo("0000004269"));
+    }
+
+    [Test]
+    public async Task Render_GivenCustomPadding_WhenInvoiceNumberShort_ThenPaddedToSpecifiedLength()
+    {
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber(), ValidTemplateHtml, invoiceNumberPadding: 5);
+        var shortNumberInvoice = new Invoice("42", new Invoice.InvoiceContent(
+            Date: new DateTime(2026, 1, 15),
+            SellerAddress: ValidInvoice.Content.SellerAddress,
+            BuyerAddress: ValidInvoice.Content.BuyerAddress,
+            LineItems: [new Invoice.LineItem("Test", new Amount(50_00, Currency.Eur))]));
+        var html = template.Render(shortNumberInvoice);
+        Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo("00042"));
+    }
+
+    [Test]
+    public async Task Render_GivenDefaultTemplate_WhenRenderingInvoiceWithZeroAmount_ThenAmountsAreZero()
+    {
+        var template = await InvoiceHtmlTemplate.LoadAsync(new FakeTranscriber());
+        var zeroInvoice = new Invoice("1", new Invoice.InvoiceContent(
+            Date: DateTime.Today,
+            SellerAddress: ValidInvoice.Content.SellerAddress,
+            BuyerAddress: ValidInvoice.Content.BuyerAddress,
+            LineItems: [new Invoice.LineItem("Free", new Amount(0, Currency.Eur))]));
+        var html = template.Render(zeroInvoice);
+        Assert.That(GetFieldValue(html, "taxBase"), Is.EqualTo("0.00 €"));
+        Assert.That(GetFieldValue(html, "vat20"), Is.EqualTo("0.00 €"));
+        Assert.That(GetFieldValue(html, "totalDue"), Is.EqualTo("0.00 €"));
+    }
+
+    private static void AssertFieldsPopulated(string html, Invoice invoice, int invoiceNumberPadding = 10)
+    {
+        var c = invoice.Content;
+        var expectedInvNo = invoice.Number.Length >= invoiceNumberPadding
+            ? invoice.Number
+            : invoice.Number.PadLeft(invoiceNumberPadding, '0');
+        Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo(expectedInvNo));
+        Assert.That(GetFieldValue(html, "invDate"), Is.EqualTo(c.Date.ToString("yyyy-MM-dd")));
+        Assert.That(GetFieldValue(html, "sellerNameTop"), Is.EqualTo(c.SellerAddress.Name));
+        Assert.That(GetFieldValue(html, "sellerCompanyName"), Is.EqualTo(c.SellerAddress.Name));
+        Assert.That(GetFieldValue(html, "sellerCity"), Is.EqualTo(c.SellerAddress.City));
+        Assert.That(GetFieldValue(html, "sellerAddr"), Is.EqualTo(c.SellerAddress.Address));
+        Assert.That(GetFieldValue(html, "sellerRepresentativeName"), Is.EqualTo(c.SellerAddress.RepresentativeName));
+        Assert.That(GetFieldValue(html, "sellerBulstat"), Is.EqualTo(c.SellerAddress.CompanyIdentifier));
+        Assert.That(GetFieldValue(html, "buyerCompanyName"), Is.EqualTo(c.BuyerAddress.Name));
+        Assert.That(GetFieldValue(html, "buyerRepresentativeName"), Is.EqualTo(c.BuyerAddress.RepresentativeName));
+        Assert.That(GetFieldValue(html, "buyerBulstat"), Is.EqualTo(c.BuyerAddress.CompanyIdentifier));
+        Assert.That(GetFieldValue(html, "taxBase"), Does.Contain("€"));
+        Assert.That(GetFieldValue(html, "vat20"), Does.Contain("€"));
+        Assert.That(GetFieldValue(html, "totalDue"), Does.Contain("€"));
+
+        var rows = GetLineItemRows(html);
+        Assert.That(rows, Has.Length.EqualTo(c.LineItems.Length));
+        for (var i = 0; i < c.LineItems.Length; i++)
+        {
+            Assert.That(GetCellValue(rows[i], "idx"), Is.EqualTo((i + 1).ToString()));
+            Assert.That(GetCellValue(rows[i], "description"), Is.EqualTo(c.LineItems[i].Description));
+            var expectedAmount = $"{c.LineItems[i].Amount.Cents / 100}.{c.LineItems[i].Amount.Cents % 100:D2} €";
+            Assert.That(GetCellValue(rows[i], "amount"), Is.EqualTo(expectedAmount));
+        }
     }
 
     private static string GetFieldValue(string html, string id)
     {
-        // TODO: uncomment this when HtmlAgilityPack is added to the project (edit code here if needed)
-        /* var document = new HtmlAgilityPack.HtmlDocument();
+        var document = new HtmlDocument { OptionUseIdAttribute = true };
         document.LoadHtml(html);
-        return document.GetElementById(id)?.InnerText ?? throw new InvalidOperationException($"Field {id} not found in html"); */
-        throw new NotImplementedException();
+        var element = document.GetElementbyId(id);
+        return element?.InnerText.Trim() ?? throw new InvalidOperationException($"Field {id} not found in html");
+    }
+
+    private static HtmlNode[] GetLineItemRows(string html)
+    {
+        var document = new HtmlDocument { OptionUseIdAttribute = true };
+        document.LoadHtml(html);
+        var itemsTbody = document.GetElementbyId("items");
+        if (itemsTbody == null)
+            throw new InvalidOperationException("items tbody not found");
+        var nodes = itemsTbody.SelectNodes(".//tr");
+        if (nodes == null) return Array.Empty<HtmlNode>();
+        return nodes.Cast<HtmlNode>().ToArray();
+    }
+
+    private static string GetCellValue(HtmlNode row, string dataField)
+    {
+        var cell = row.SelectSingleNode($".//*[@data-field='{dataField}']");
+        return cell?.InnerText.Trim() ?? throw new InvalidOperationException($"data-field '{dataField}' not found in row");
     }
 }

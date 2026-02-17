@@ -179,9 +179,9 @@ Depends on HtmlAgilityPack. Template loading + rendering with field substitution
 
 ### Tests
 
-- [ ] **3.1** Uncomment the `using HtmlAgilityPack;` in `InvoiceHtmlTemplateTest.cs`
-- [ ] **3.2** Implement `GetFieldValue` helper method using HtmlAgilityPack
-- [ ] **3.3** Implement `Render_GivenValidTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated`:
+- [x] **3.1** Uncomment the `using HtmlAgilityPack;` in `InvoiceHtmlTemplateTest.cs`
+- [x] **3.2** Implement `GetFieldValue` helper method using HtmlAgilityPack
+- [x] **3.3** Implement `Render_GivenValidTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated`:
   - Load template via `InvoiceHtmlTemplate.LoadAsync` with `templateHtmlOverride`
   - Call `Render(invoice)`
   - Assert all fields by ID: `invNo`, `invDate`, `sellerNameTop`,
@@ -191,25 +191,25 @@ Depends on HtmlAgilityPack. Template loading + rendering with field substitution
     `taxBase`, `vat20`, `totalDue`, `placeOfSupply`, `taxEventDate`
   - Assert line items in `#items` tbody: each row has `idx`, `description`, `amount`
     fields populated
-- [ ] **3.4** Implement `Render_GivenDefaultTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated`:
+- [x] **3.4** Implement `Render_GivenDefaultTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated`:
   - Same assertions but load without `templateHtmlOverride` (uses embedded resource)
-- [ ] **3.5** Implement `Render_GivenTemplateMissingLineItemField_WhenRenderingInvoice_ThenThrows`:
+- [x] **3.5** Implement `Render_GivenTemplateMissingLineItemField_WhenRenderingInvoice_ThenThrows`:
   - Modify `ValidTemplateHtml` to remove the specified `data-field` attribute
   - Assert `LoadAsync` or `Render` throws with descriptive message
-- [ ] **3.6** Implement `Render_GivenValidTemplate_WhenRenderingInvoice_ThenCopiesTagAndClassAttributes`:
+- [x] **3.6** Implement `Render_GivenValidTemplate_WhenRenderingInvoice_ThenCopiesTagAndClassAttributes`:
   - Render multi-line item invoice
   - Parse output HTML, verify each line item row preserves the tag types and CSS
     classes from the template row
-- [ ] **3.7** Implement `Render_GivenInvalidTemplate_WhenRenderingInvoice_ThenThrows`:
+- [x] **3.7** Implement `Render_GivenInvalidTemplate_WhenRenderingInvoice_ThenThrows`:
   - Pass malformed HTML, assert descriptive error
-- [ ] **3.8** Implement `Render_GivenFailingTranscriber_WhenRenderingInvoice_ThenThrows`:
+- [x] **3.8** Implement `Render_GivenFailingTranscriber_WhenRenderingInvoice_ThenThrows`:
   - Use `FakeTranscriber` with `Fail = true`, assert exception propagates
-- [ ] **3.9** Implement `Render_GivenDefaultTemplate_WhenRenderingInvoiceWithNegativeAmount_ThenThrows`
-- [ ] **3.10** Implement `Render_GivenDefaultTemplate_WhenRenderingInvoiceWithZeroAmount_ThenAmountsAreZero`
+- [x] **3.9** Implement `Render_GivenDefaultTemplate_WhenRenderingInvoiceWithNegativeAmount_ThenThrows`
+- [x] **3.10** Implement `Render_GivenDefaultTemplate_WhenRenderingInvoiceWithZeroAmount_ThenAmountsAreZero`
 
 ### Implementation
 
-- [ ] **3.11** Implement `InvoiceHtmlTemplate.LoadAsync()`:
+- [x] **3.11** Implement `InvoiceHtmlTemplate.LoadAsync()`:
   - If `templateHtmlOverride` is not null, use it; otherwise load
     `template.html` embedded resource via `EmbeddedResourceLoader`
   - Parse with `HtmlDocument`
@@ -218,7 +218,7 @@ Depends on HtmlAgilityPack. Template loading + rendering with field substitution
     attributes for `idx`, `description`, `amount`
   - Throw descriptive errors for missing fields
   - Store parsed template and transcriber in private fields
-- [ ] **3.12** Implement `InvoiceHtmlTemplate.Render()`:
+- [x] **3.12** Implement `InvoiceHtmlTemplate.Render()`:
   - Clone the parsed template document
   - Populate all fields by ID with invoice data
   - Format amounts as `{euros}.{cents:D2} €`
@@ -229,7 +229,7 @@ Depends on HtmlAgilityPack. Template loading + rendering with field substitution
   - Use `IAmountTranscriber` for `#totalWords`
   - Validate no negative amounts
   - Return the rendered HTML string
-- [ ] **3.13** Run tests:
+- [x] **3.13** Run tests:
       `dotnet test Invoices.Tests --filter InvoiceHtmlTemplateTest`
 
 ---

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Invoices;
 
@@ -61,6 +62,12 @@ internal static class CliToolsProgram
             return;
         }
 
+        if (cmd == "template")
+        {
+            RunTemplate(args.Skip(1).ToList());
+            return;
+        }
+
         Console.WriteLine($"Unknown command: {cmd}. Type 'help' for available commands.");
     }
 
@@ -72,6 +79,13 @@ internal static class CliToolsProgram
         Console.WriteLine("  transcribe <cents>           - Transcribe amount (cents) using BgAmountTranscriber");
         Console.WriteLine("  transcribe <from> <to>       - Transcribe all amounts in range [from, to] (cents)");
         Console.WriteLine("  transcribe <from> <to> euros - Same, but only whole euro amounts (step by 100)");
+        Console.WriteLine("  template [--key value...]     - Render invoice template (dev tool)");
+        Console.WriteLine("      --number, -n    Invoice number (default: TPL-001)");
+        Console.WriteLine("      --date, -d      Date yyyy-MM-dd (default: today)");
+        Console.WriteLine("      --total, -t     Total amount e.g. 213.56 (default: 213.56)");
+        Console.WriteLine("      --out, -o       Output file (default: invoice-preview.html)");
+        Console.WriteLine("      --seller-name, --seller-mol, --seller-eik, --seller-vat, --seller-addr, --seller-city");
+        Console.WriteLine("      --buyer-name, --buyer-mol, --buyer-eik, --buyer-vat, --buyer-addr, --buyer-city");
     }
 
     static void RunBgAmountTranscriber(List<string> args)
@@ -126,5 +140,104 @@ internal static class CliToolsProgram
                 Console.WriteLine($"{cents} -> Error: {ex.Message}");
             }
         }
+    }
+
+    static void RunTemplate(List<string> args)
+    {
+        var opts = ParseOpts(args, new Dictionary<string, string>
+        {
+            ["n"] = "number",
+            ["d"] = "date",
+            ["t"] = "total",
+            ["o"] = "out",
+        });
+
+        string GetOrDefault(string key, string d) => opts.TryGetValue(key, out var v) ? v : d;
+
+        var number = GetOrDefault("number", "TPL-001");
+        var dateStr = GetOrDefault("date", DateTime.Today.ToString("yyyy-MM-dd"));
+        var totalStr = GetOrDefault("total", "213.56");
+
+        if (!DateTime.TryParseExact(dateStr, new[] { "yyyy-MM-dd", "dd-MM-yyyy", "dd.MM.yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            Console.WriteLine($"Invalid date: {dateStr}. Use yyyy-MM-dd");
+            return;
+        }
+
+        var totalNorm = totalStr.Replace(',', '.');
+        if (!decimal.TryParse(totalNorm, NumberStyles.Any, CultureInfo.InvariantCulture, out var totalDec) || totalDec < 0)
+        {
+            Console.WriteLine($"Invalid total: {totalStr}. Use e.g. 213.56 or 213,56");
+            return;
+        }
+        var totalCents = (int)Math.Round(totalDec * 100);
+
+        var seller = new BillingAddress(
+            Name: GetOrDefault("seller-name", "Dev Seller EOOD"),
+            RepresentativeName: GetOrDefault("seller-mol", "Иван Проба"),
+            CompanyIdentifier: GetOrDefault("seller-eik", "111222333"),
+            VatIdentifier: opts.TryGetValue("seller-vat", out var sv) ? sv : null,
+            Address: GetOrDefault("seller-addr", "ул. Тестова 1, ет.1"),
+            City: GetOrDefault("seller-city", "София"),
+            PostalCode: "1000",
+            Country: "BG");
+
+        var buyer = new BillingAddress(
+            Name: GetOrDefault("buyer-name", "Dev Buyer EOOD"),
+            RepresentativeName: GetOrDefault("buyer-mol", "Мария Проба"),
+            CompanyIdentifier: GetOrDefault("buyer-eik", "444555666"),
+            VatIdentifier: opts.TryGetValue("buyer-vat", out var bv) ? bv : null,
+            Address: GetOrDefault("buyer-addr", "ул. Проба 42, ап.5"),
+            City: GetOrDefault("buyer-city", "Пловдив"),
+            PostalCode: "4000",
+            Country: "BG");
+
+        var invoice = new Invoice(number, new Invoice.InvoiceContent(
+            Date: date,
+            SellerAddress: seller,
+            BuyerAddress: buyer,
+            LineItems: new[] { new Invoice.LineItem("Зъботехнически услуги", new Amount(totalCents, Currency.Eur)) }));
+
+        try
+        {
+            var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber()).GetAwaiter().GetResult();
+            var html = template.Render(invoice);
+
+            var outPath = GetOrDefault("out", "invoice-preview.html");
+            File.WriteAllText(outPath, html);
+            Console.WriteLine(Path.GetFullPath(outPath));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static Dictionary<string, string> ParseOpts(List<string> args, Dictionary<string, string> shortToLong)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < args.Count; i++)
+        {
+            var a = args[i];
+            if (a.StartsWith("--"))
+            {
+                var key = a[2..].ToLowerInvariant();
+                if (i + 1 < args.Count)
+                {
+                    result[key] = args[i + 1];
+                    i++;
+                }
+            }
+            else if (a.Length == 2 && a[0] == '-')
+            {
+                var shortKey = char.ToLowerInvariant(a[1]).ToString();
+                if (shortToLong.TryGetValue(shortKey, out var longKey) && i + 1 < args.Count)
+                {
+                    result[longKey] = args[i + 1];
+                    i++;
+                }
+            }
+        }
+        return result;
     }
 }
