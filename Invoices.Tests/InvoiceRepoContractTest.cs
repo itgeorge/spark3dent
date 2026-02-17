@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Invoices;
 using NUnit.Framework;
 
 namespace Invoices.Tests;
@@ -140,6 +139,89 @@ public abstract class InvoiceRepoContractTest
         var unchanged = await fixture.GetInvoiceAsync(created2.Number);
         Assert.That(changed, Is.EqualTo(new Invoice(created1.Number, updatedContent)));
         Assert.That(unchanged, Is.EqualTo(created2));
+    }
+
+    [Test]
+    public async Task Update_WhenUpdatingInvoiceDateToBeforePreviousInvoiceDate_ThenThrows()
+    {
+        var fixture = await SetUpAsync();
+        var baseDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var older = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: baseDate));
+        var newer = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: baseDate.AddDays(1)));
+
+        var updatedContentWithEarlierDate = BuildValidInvoiceContent(
+            date: older.Content.Date.AddDays(-1),
+            buyerAddress: newer.Content.BuyerAddress,
+            sellerAddress: newer.Content.SellerAddress,
+            lineItems: newer.Content.LineItems);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Repo.UpdateAsync(newer.Number, updatedContentWithEarlierDate));
+    }
+
+    [Test]
+    public async Task Update_WhenUpdatingInvoiceDateToAfterNextInvoiceDate_ThenThrows()
+    {
+        var fixture = await SetUpAsync();
+        var baseDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var older = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: baseDate));
+        var newer = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: baseDate.AddDays(1)));
+
+        var updatedContentWithLaterDate = BuildValidInvoiceContent(
+            date: newer.Content.Date.AddDays(1),
+            buyerAddress: older.Content.BuyerAddress,
+            sellerAddress: older.Content.SellerAddress,
+            lineItems: older.Content.LineItems);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Repo.UpdateAsync(older.Number, updatedContentWithLaterDate));
+    }
+
+    [Test]
+    public async Task Update_GivenExistingInvoices_WhenUpdatingInvoiceWithNonIntersectingDate_ThenInvoiceIsUpdated()
+    {
+        var fixture = await SetUpAsync();
+        var older = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: DateTime.Now.AddDays(-5)));
+        var middle = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: DateTime.Now.AddDays(-3)));
+        var newer = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: DateTime.Now.AddDays(-1)));
+
+        // update 1 day ahead but still before the newer invoice
+        await fixture.Repo.UpdateAsync(middle.Number, BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1)));
+        var retrieved = await fixture.GetInvoiceAsync(middle.Number);
+        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1)))));
+
+        // update 1 day back but still after the older invoice
+        await fixture.Repo.UpdateAsync(middle.Number, BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1)));
+        retrieved = await fixture.GetInvoiceAsync(middle.Number);
+        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1)))));
+    }
+
+    [Test]
+    public async Task Update_GivenConcurrentUpdatesToDifferentProperties_WhenRacing_ThenOnlyOneUpdateIsReflected()
+    {
+        var fixture = await SetUpAsync();
+        var created = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent());
+        var racers = Math.Min(8, 2 * Environment.ProcessorCount);
+        var barrier = new Barrier(racers);
+
+        var tasks = Enumerable.Range(0, racers).Select(i => Task.Run(async () =>
+        {
+            barrier.SignalAndWait();
+            var uniqueSignature = $"Racer{i}";
+            var updatedContent = BuildValidInvoiceContent(
+                buyerAddress: created.Content.BuyerAddress with { Name = uniqueSignature },
+                sellerAddress: created.Content.SellerAddress with { Name = uniqueSignature },
+                lineItems: [created.Content.LineItems[0] with { Amount = new Amount(100 + i, Currency.Eur) }]);
+            await fixture.Repo.UpdateAsync(created.Number, updatedContent);
+        })).ToList();
+        await Task.WhenAll(tasks);
+
+        var retrieved = await fixture.GetInvoiceAsync(created.Number);
+        var buyerName = retrieved.Content.BuyerAddress.Name;
+        var sellerName = retrieved.Content.SellerAddress.Name;
+        var amountCents = retrieved.Content.LineItems[0].Amount.Cents;
+
+        Assert.That(buyerName, Is.EqualTo(sellerName), "Buyer and seller should come from same update (atomic)");
+        var racerIndex = int.Parse(buyerName.Replace("Racer", ""));
+        Assert.That(amountCents, Is.EqualTo(100 + racerIndex), "Line item amount should match the same racer's update");
     }
 
     [Test]
