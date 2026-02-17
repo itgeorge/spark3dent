@@ -6,7 +6,7 @@ public class JsonAppSettingsLoader : IConfigLoader
     //  - use Microsoft.Extensions.Configuration
     //  - use AddEnvironmentVariables() for future-proofing for when we move this to Google Cloud Run
     
-    public Task<AppConfig> LoadAsync()
+    public Task<Config> LoadAsync()
     {
         throw new NotImplementedException();
     }
