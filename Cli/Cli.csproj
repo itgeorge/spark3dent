@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -6,5 +6,28 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
     </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\ChromiumFetcher\ChromiumFetcher.csproj">
+            <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+        </ProjectReference>
+        <ProjectReference Include="..\Configuration\Configuration.csproj" />
+        <ProjectReference Include="..\Invoices\Invoices.csproj" />
+        <ProjectReference Include="..\Accounting\Accounting.csproj" />
+        <ProjectReference Include="..\Database\Database.csproj" />
+        <ProjectReference Include="..\Storage\Storage.csproj" />
+        <ProjectReference Include="..\Utilities\Utilities.csproj" />
+    </ItemGroup>
+
+    <!-- Bundle Chromium at build time so the app does not download at runtime.
+         Uses PuppeteerSharp BrowserFetcher.DefaultRevision (tied to PuppeteerSharp package version). -->
+    <Target Name="BundleChromium" AfterTargets="Build">
+        <PropertyGroup>
+            <_ChromiumOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(OutputPath)chromium'))</_ChromiumOutputPath>
+        </PropertyGroup>
+        <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\ChromiumFetcher\ChromiumFetcher.csproj&quot; --no-build -c $(Configuration) -- &quot;$(_ChromiumOutputPath)&quot;"
+              WorkingDirectory="$(MSBuildProjectDirectory)\.."
+              IgnoreExitCode="false" />
+    </Target>
 
 </Project>

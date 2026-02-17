@@ -57,30 +57,30 @@ starting implementation.
 Before any implementation, ensure all required NuGet packages and project references
 are in place.
 
-- [ ] **0.1** Add `HtmlAgilityPack` NuGet package to `Invoices.csproj`
-- [ ] **0.2** Add `HtmlAgilityPack` NuGet package to `Invoices.Tests.csproj`
-- [ ] **0.3** Add `Microsoft.Extensions.Configuration`, `Microsoft.Extensions.Configuration.Json`,
+- [x] **0.1** Add `HtmlAgilityPack` NuGet package to `Invoices.csproj`
+- [x] **0.2** Add `HtmlAgilityPack` NuGet package to `Invoices.Tests.csproj`
+- [x] **0.3** Add `Microsoft.Extensions.Configuration`, `Microsoft.Extensions.Configuration.Json`,
       and `Microsoft.Extensions.Configuration.EnvironmentVariables` NuGet packages to
       `Configuration.csproj`
-- [ ] **0.4** Create a new `Database` class library project (`Database.csproj`,
+- [x] **0.4** Create a new `Database` class library project (`Database.csproj`,
       target `net9.0`). Add NuGet packages: `Microsoft.EntityFrameworkCore.Sqlite`,
       `Microsoft.EntityFrameworkCore.Design`. Add project references to `Invoices`,
       `Accounting`, `Configuration`, and `Utilities`
-- [ ] **0.5** Create a new `Database.Tests` test project (`Database.Tests.csproj`).
+- [x] **0.5** Create a new `Database.Tests` test project (`Database.Tests.csproj`).
       Add NuGet packages: `Microsoft.NET.Test.Sdk`, `NUnit`, `NUnit3TestAdapter`.
       Add project references to `Database`, `Invoices.Tests`, `Accounting.Tests`
       (to inherit contract tests)
-- [ ] **0.6** Add project references to `Cli.csproj`: `Configuration`, `Invoices`,
+- [x] **0.6** Add project references to `Cli.csproj`: `Configuration`, `Invoices`,
       `Accounting`, `Database`, `Storage`, `Utilities`
-- [ ] **0.7** Add all new projects (`Database`, `Database.Tests`) to `Spark3Dent.sln`
-- [ ] **0.8** Add `PuppeteerSharp` NuGet package to `Invoices.csproj` for headless
+- [x] **0.7** Add all new projects (`Database`, `Database.Tests`) to `Spark3Dent.sln`
+- [x] **0.8** Add `PuppeteerSharp` NuGet package to `Invoices.csproj` for headless
       browser PDF rendering. Configure the build to bundle a specific Chromium
       revision so it ships with the app (no runtime download). Use
       `BrowserFetcher` at build/publish time to download the Chromium binary into
       the output directory, and at runtime point PuppeteerSharp at the local path
       (e.g. via `LaunchOptions.ExecutablePath`). Document the bundled Chromium
       revision in a comment or constant for reproducibility
-- [ ] **0.9** Verify the solution builds cleanly: `dotnet build Spark3Dent.sln`
+- [x] **0.9** Verify the solution builds cleanly: `dotnet build Spark3Dent.sln`
 
 ---
 

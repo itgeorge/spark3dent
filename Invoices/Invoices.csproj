@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
@@ -12,6 +12,8 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+      <PackageReference Include="PuppeteerSharp" Version="21.0.1" />
       <ProjectReference Include="..\Utilities\Utilities.csproj" />
     </ItemGroup>
 

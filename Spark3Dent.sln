@@ -1,5 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cli", "Cli\Cli.csproj", "{364A525E-36AD-40CF-B3A9-2F1C0518B85A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Invoices", "Invoices\Invoices.csproj", "{DBF8BA49-ABE4-495B-A111-24E0999A6E2F}"
@@ -17,6 +18,12 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Accounting.Tests", "Accounting.Tests\Accounting.Tests.csproj", "{69549B58-F18B-434F-9C9D-951DB5353CD9}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Configuration", "Configuration\Configuration.csproj", "{78FA9989-CF90-4CEA-9D34-710943157B95}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Database", "Database\Database.csproj", "{54E784C7-1DCF-47BF-8BE8-54F5E2F98936}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Database.Tests", "Database.Tests\Database.Tests.csproj", "{644A802B-D457-4F29-B63F-79058BA3EF7E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChromiumFetcher", "ChromiumFetcher\ChromiumFetcher.csproj", "{E3EF5D92-65A1-49BC-ACA6-893536DCCB94}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -60,5 +67,17 @@ Global
 		{78FA9989-CF90-4CEA-9D34-710943157B95}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78FA9989-CF90-4CEA-9D34-710943157B95}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78FA9989-CF90-4CEA-9D34-710943157B95}.Release|Any CPU.Build.0 = Release|Any CPU
+		{54E784C7-1DCF-47BF-8BE8-54F5E2F98936}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{54E784C7-1DCF-47BF-8BE8-54F5E2F98936}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{54E784C7-1DCF-47BF-8BE8-54F5E2F98936}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{54E784C7-1DCF-47BF-8BE8-54F5E2F98936}.Release|Any CPU.Build.0 = Release|Any CPU
+		{644A802B-D457-4F29-B63F-79058BA3EF7E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{644A802B-D457-4F29-B63F-79058BA3EF7E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{644A802B-D457-4F29-B63F-79058BA3EF7E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{644A802B-D457-4F29-B63F-79058BA3EF7E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E3EF5D92-65A1-49BC-ACA6-893536DCCB94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E3EF5D92-65A1-49BC-ACA6-893536DCCB94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E3EF5D92-65A1-49BC-ACA6-893536DCCB94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E3EF5D92-65A1-49BC-ACA6-893536DCCB94}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
