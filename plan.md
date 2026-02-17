@@ -139,7 +139,7 @@ Pure domain logic with no external dependencies -- a good early TDD target.
 
 ### Tests
 
-- [ ] **2.1** Complete `BgAmountTranscriberTest` test cases:
+- [x] **2.1** Complete `BgAmountTranscriberTest` test cases:
   - Cents-only values: `0_01` through `0_99` (representative samples for
     single-digit, teens, tens, compound numbers)
   - Whole-only values: `1_00`, `2_00`, ..., `9_00`, `10_00`, `11_00`, ..., `19_00`,
@@ -148,20 +148,20 @@ Pure domain logic with no external dependencies -- a good early TDD target.
     cents, 2-digit whole + 2-digit cents, 3-digit + teens, 4-digit whole, etc.)
   - Boundary: `999999_99` (max below 1M)
   - All existing test case placeholders filled in
-- [ ] **2.2** Implement the test body for `Transcribe_WhenValidAmount_ThenTranscribes`:
+- [x] **2.2** Implement the test body for `Transcribe_WhenValidAmount_ThenTranscribes`:
       instantiate `BgAmountTranscriber`, call `Transcribe`, assert expected string
-- [ ] **2.3** Implement the test body for
+- [x] **2.3** Implement the test body for
       `Transcribe_WhenTranscribingAnyNumberBelow1M_ThenTranscribes`: loop 1..999999,
       call `Transcribe`, assert result is non-null and non-empty
-- [ ] **2.4** Implement the test body for
+- [x] **2.4** Implement the test body for
       `Transcribe_WhenTranscribing1MOrAbove_ThenThrows`: test `1_000_000_00` and a
       few values above
-- [ ] **2.5** Implement the test body for
+- [x] **2.5** Implement the test body for
       `Transcribe_WhenNegativeAmount_ThenThrows`: test `-1_00`, `-100_00`
 
 ### Implementation
 
-- [ ] **2.6** Implement `BgAmountTranscriber.Transcribe()`:
+- [x] **2.6** Implement `BgAmountTranscriber.Transcribe()`:
   - Split cents into whole euros and remaining cents
   - Convert whole part to Bulgarian words (handle units, teens, tens, hundreds,
     thousands correctly with proper Bulgarian grammar -- e.g. "и" conjunction)
@@ -169,7 +169,7 @@ Pure domain logic with no external dependencies -- a good early TDD target.
   - Combine: `"{whole} евро и {cents} цента"`, or `"{whole} евро"` if cents == 0,
     or special case for zero
   - Throw for negative amounts or amounts >= 1,000,000 EUR
-- [ ] **2.7** Run tests: `dotnet test Invoices.Tests --filter BgAmountTranscriberTest`
+- [x] **2.7** Run tests: `dotnet test Invoices.Tests --filter BgAmountTranscriberTest`
 
 ---
 
