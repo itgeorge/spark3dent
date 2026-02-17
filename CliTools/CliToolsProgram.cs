@@ -69,15 +69,16 @@ internal static class CliToolsProgram
         Console.WriteLine("Available commands:");
         Console.WriteLine("  help                    - Show this help");
         Console.WriteLine("  exit                    - Exit (interactive mode only)");
-        Console.WriteLine("  transcribe <cents>      - Transcribe amount (cents) using BgAmountTranscriber");
-        Console.WriteLine("  transcribe <from> <to>  - Transcribe all amounts in range [from, to] (cents)");
+        Console.WriteLine("  transcribe <cents>           - Transcribe amount (cents) using BgAmountTranscriber");
+        Console.WriteLine("  transcribe <from> <to>       - Transcribe all amounts in range [from, to] (cents)");
+        Console.WriteLine("  transcribe <from> <to> euros - Same, but only whole euro amounts (step by 100)");
     }
 
     static void RunBgAmountTranscriber(List<string> args)
     {
         if (args.Count == 0)
         {
-            Console.WriteLine("Usage: transcribe <cents> or transcribe <from> <to>");
+            Console.WriteLine("Usage: transcribe <cents> or transcribe <from> <to> [euros]");
             return;
         }
 
@@ -98,9 +99,22 @@ internal static class CliToolsProgram
             (from, to) = (Math.Min(from, to), Math.Max(from, to));
         }
 
+        var wholeEurosOnly = args.Count >= 3 && args[2].Equals("euros", StringComparison.OrdinalIgnoreCase);
+        if (wholeEurosOnly)
+        {
+            if (from == to)
+                from = to = (from + 50) / 100 * 100;
+            else
+            {
+                from = (from + 99) / 100 * 100;
+                to = to / 100 * 100;
+            }
+        }
+
+        var step = wholeEurosOnly ? 100 : 1;
         var transcriber = new BgAmountTranscriber();
 
-        for (var cents = from; cents <= to; cents++)
+        for (var cents = from; cents <= to; cents += step)
         {
             try
             {
