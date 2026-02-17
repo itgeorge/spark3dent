@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cli", "Cli\Cli.csproj", "{364A525E-36AD-40CF-B3A9-2F1C0518B85A}"
@@ -26,6 +26,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChromiumFetcher", "ChromiumFetcher\ChromiumFetcher.csproj", "{E3EF5D92-65A1-49BC-ACA6-893536DCCB94}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Configuration.Tests", "Configuration.Tests\Configuration.Tests.csproj", "{55DFEEE4-7756-4AF5-895F-39F42BC926D5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CliTools", "CliTools\CliTools.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -85,5 +87,9 @@ Global
 		{55DFEEE4-7756-4AF5-895F-39F42BC926D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55DFEEE4-7756-4AF5-895F-39F42BC926D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{55DFEEE4-7756-4AF5-895F-39F42BC926D5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
