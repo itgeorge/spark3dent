@@ -4,7 +4,7 @@ public class BgAmountTranscriber : IAmountTranscriber
 {
     private const int MaxCents = 999_999_99; // 999,999.99 EUR
 
-    private enum AmountType { WholeEuros, Cents }  // евро=neuter (едно/две), цент=masculine (един/два)
+    private enum AmountType { WholeEuros, Cents }  // евро=neuter (едно/две), евроцент=masculine (един/два)
 
     public string Transcribe(Amount amount)
     {
@@ -21,7 +21,7 @@ public class BgAmountTranscriber : IAmountTranscriber
         var remainingCents = cents % 100;
 
         if (wholeEuros == 0 && remainingCents == 0)
-            return "Нула евро и нула цента";
+            return "Нула евро и нула евроцента";
 
         var wholePart = ToBulgarian(wholeEuros, AmountType.WholeEuros);
         var (centsPart, centsSuffix) = ToBulgarianWithSuffix(remainingCents);
@@ -40,12 +40,12 @@ public class BgAmountTranscriber : IAmountTranscriber
     private static string Capitalize(string s) =>
         s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..] : s;
 
-    /// <summary>Converts cents 0-99 to words and returns the correct noun form (цент/цента). Singular цент for 1,21,31,... (except 11).</summary>
+    /// <summary>Converts cents 0-99 to words and returns the correct noun form (евроцент/евроцента). Singular евроцент for 1,21,31,... (except 11).</summary>
     private static (string words, string suffix) ToBulgarianWithSuffix(int n)
     {
-        if (n == 0) return ("нула", "цента");
+        if (n == 0) return ("нула", "евроцента");
         var words = ToBulgarian(n, AmountType.Cents);
-        var suffix = (n % 10 == 1 && n != 11) ? "цент" : "цента";
+        var suffix = (n % 10 == 1 && n != 11) ? "евроцент" : "евроцента";
         return (words, suffix);
     }
 
