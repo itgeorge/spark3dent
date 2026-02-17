@@ -90,36 +90,36 @@ Implement config loading so all downstream components can use it.
 
 ### Tests
 
-- [ ] **1.1** Create `Configuration.Tests` project with NUnit. Add project reference
+- [x] **1.1** Create `Configuration.Tests` project with NUnit. Add project reference
       to `Configuration`
-- [ ] **1.2** Write tests for `JsonAppSettingsLoader`:
+- [x] **1.2** Write tests for `JsonAppSettingsLoader`:
   - Loading a valid `appsettings.json` with all fields populated returns correct
     `Config`
   - Loading an `appsettings.json` with missing optional fields uses defaults
     (`StartInvoiceNumber = 1`, empty paths)
   - Loading when `appsettings.json` does not exist throws a descriptive error
   - Environment variables override JSON values (test with at least one field)
-- [ ] **1.3** Add `SellerAddress` to `AppConfig` (as a nested record or
+- [x] **1.3** Add `SellerAddress` to `AppConfig` (as a nested record or
       `BillingAddress`-compatible structure). Update tests to verify it loads
       correctly
 
 ### Implementation
 
-- [ ] **1.4** Implement `JsonAppSettingsLoader.LoadAsync()`:
+- [x] **1.4** Implement `JsonAppSettingsLoader.LoadAsync()`:
   - Use `ConfigurationBuilder` with `AddJsonFile("appsettings.json")` and
     `AddEnvironmentVariables()`
   - Bind to `Config` record
   - Return the loaded config
-- [ ] **1.5** Add `SellerAddress` field to `AppConfig` (in `Config.cs`)
-- [ ] **1.6** Create `Cli/appsettings.json` with sensible defaults:
+- [x] **1.5** Add `SellerAddress` field to `AppConfig` (in `Config.cs`)
+- [x] **1.6** Create `Cli/appsettings.json` with sensible defaults:
   - `App.StartInvoiceNumber`: `1`
   - `App.SellerAddress`: placeholder seller address fields
   - `Desktop.DatabasePath`: `""` (to be filled with AppData Local default at runtime)
   - `Desktop.BlobStoragePath`: `""` (to be filled with Documents default at runtime)
   - `Desktop.LogDirectory`: `""` (to be filled with AppData Local default at runtime)
-- [ ] **1.7** Configure `Cli.csproj` to copy `appsettings.json` to output directory
+- [x] **1.7** Configure `Cli.csproj` to copy `appsettings.json` to output directory
       (`<Content Include="appsettings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>`)
-- [ ] **1.8** In `CliProgram.Main`, implement default path resolution:
+- [x] **1.8** In `CliProgram.Main`, implement default path resolution:
   - If `Desktop.DatabasePath` is empty, default to
     `Path.Combine(Environment.GetFolderPath(SpecialFolder.LocalApplicationData), "Spark3Dent", "spark3dent.db")`
   - If `Desktop.BlobStoragePath` is empty, default to
@@ -127,9 +127,9 @@ Implement config loading so all downstream components can use it.
   - If `Desktop.LogDirectory` is empty, default to
     `Path.Combine(Environment.GetFolderPath(SpecialFolder.LocalApplicationData), "Spark3Dent", "logs")`
   - Write the resolved defaults back to `appsettings.json` if defaults were used
-- [ ] **1.9** Run configuration tests and verify they pass:
+- [x] **1.9** Run configuration tests and verify they pass:
       `dotnet test Configuration.Tests`
-- [ ] **1.10** Add `Configuration.Tests` to `Spark3Dent.sln`
+- [x] **1.10** Add `Configuration.Tests` to `Spark3Dent.sln`
 
 ---
 

@@ -1,22 +1,18 @@
-﻿using System.Reflection.Emit;
+using System.Text.Json;
+using Configuration;
 
 namespace Cli;
 
 class CliProgram
 {
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
-        Console.WriteLine("Hello, World!");
-        
-        // Add an appsettings.json that gets copied to exe folder, load config using JsonAppSettingsLoader, for Desktop defaults use:
-        // - DatabasePath: AppData Local folder for app
-        // - BlobStoragePath: Documents folder for app
-        // - LogDirectory: AppData Local folder for app
-        // and update the appsettings.json with them if the defaults were used
-        
-        // initialize dependencies (repos, loggers, etc.)
+
+        var config = await LoadAndResolveConfigAsync();
+
+        // TODO: initialize dependencies (repos, loggers, etc.)
         
         // logging: add logging to all (non-test) interface implementations, log by appending to a single file in the
         //  LogDirectory, use the available Loggers.cs and add new ones if necessary. Every implemented interface method
@@ -37,6 +33,48 @@ class CliProgram
         // invoices list (lists the latest invoices, sorted by date, newest first)
         // help (displays the help message)
         // exit (exits the program)
-        
+    }
+
+    static async Task<Config> LoadAndResolveConfigAsync()
+    {
+        var loader = new JsonAppSettingsLoader();
+        var config = await loader.LoadAsync();
+
+        var defaultsUsed = false;
+        var desktop = config.Desktop;
+
+        if (string.IsNullOrEmpty(desktop.DatabasePath))
+        {
+            desktop.DatabasePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Spark3Dent", "spark3dent.db");
+            defaultsUsed = true;
+        }
+
+        if (string.IsNullOrEmpty(desktop.BlobStoragePath))
+        {
+            desktop.BlobStoragePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Spark3Dent");
+            defaultsUsed = true;
+        }
+
+        if (string.IsNullOrEmpty(desktop.LogDirectory))
+        {
+            desktop.LogDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Spark3Dent", "logs");
+            defaultsUsed = true;
+        }
+
+        if (defaultsUsed)
+        {
+            var appSettingsPath = loader.GetAppSettingsPath();
+            var json = JsonSerializer.Serialize(new { App = config.App, Desktop = desktop },
+                new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(appSettingsPath, json);
+        }
+
+        return config;
     }
 }
