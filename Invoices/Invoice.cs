@@ -41,6 +41,10 @@ public record Amount
 public record Invoice
 {
     public record LineItem(string Description, Amount Amount);
+
+    // TODO: it might be a good idea to client id (or other unique identifier) here, so that we can 
+    //  easily retrieve the invoice by client id later - though we can probably do that through
+    //  filtering by BillingAddress.CompanyIdentifier - so we should think this over more carefully once we need it
     public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems, BankTransferInfo BankTransferInfo);
 
     public Invoice(string number, InvoiceContent content)
