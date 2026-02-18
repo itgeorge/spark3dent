@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Accounting\Accounting.csproj" />
+    <ProjectReference Include="..\Invoices.Tests\Invoices.Tests.csproj" />
+    <ProjectReference Include="..\Storage\Storage.csproj" />
   </ItemGroup>
   
 </Project>

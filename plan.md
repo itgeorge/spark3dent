@@ -431,7 +431,7 @@ Coordinates between repos, exporter, and blob storage.
 
 ### Tests
 
-- [ ] **7.1** Create `Accounting.Tests/InvoiceManagementTest.cs`:
+- [x] **7.1** Create `Accounting.Tests/InvoiceManagementTest.cs`:
   - Uses `FakeInvoiceRepo`, `FakeClientRepo`, mock/fake `IInvoiceExporter`, and
     a `LocalFileSystemBlobStorage` (temp directory)
   - Test `IssueInvoiceAsync`: given a valid client nickname and amount, creates
@@ -445,7 +445,7 @@ Coordinates between repos, exporter, and blob storage.
 
 ### Implementation
 
-- [ ] **7.2** Update `InvoiceManagement` class:
+- [x] **7.2** Update `InvoiceManagement` class:
   - Constructor takes: `IInvoiceRepo`, `IClientRepo`, `IInvoiceExporter`,
     `InvoiceHtmlTemplate`, `IBlobStorage`, seller `BillingAddress` and
     `BankTransferInfo` (from config)
@@ -457,10 +457,10 @@ Coordinates between repos, exporter, and blob storage.
     get existing invoice, build updated content, update via repo, re-export PDF,
     upload to blob storage, return updated invoice
   - `ListInvoicesAsync(int limit)`: delegate to repo `LatestAsync`
-- [ ] **7.3** Add `IClientRepo` project reference to `Accounting.csproj` (it
+- [x] **7.3** Add `IClientRepo` project reference to `Accounting.csproj` (it
       currently only references `Invoices`; add `Utilities` if needed for
       `QueryResult`)
-- [ ] **7.4** Run service layer tests:
+- [x] **7.4** Run service layer tests:
       `dotnet test Accounting.Tests --filter InvoiceManagementTest`
 
 ---
