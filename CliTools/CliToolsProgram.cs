@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Invoices;
+using PuppeteerSharp;
 
 namespace CliTools;
 
@@ -68,6 +69,12 @@ internal static class CliToolsProgram
             return;
         }
 
+        if (cmd == "invoice")
+        {
+            RunInvoice(args.Skip(1).ToList());
+            return;
+        }
+
         Console.WriteLine($"Unknown command: {cmd}. Type 'help' for available commands.");
     }
 
@@ -87,6 +94,9 @@ internal static class CliToolsProgram
         Console.WriteLine("      --seller-name, --seller-mol, --seller-eik, --seller-vat, --seller-addr, --seller-city");
         Console.WriteLine("      --buyer-name, --buyer-mol, --buyer-eik, --buyer-vat, --buyer-addr, --buyer-city");
         Console.WriteLine("      --iban, --bank-name, --bic   Bank transfer info for pay-grid");
+        Console.WriteLine("  invoice [--key value...]        - Render invoice to PDF and save to file (dev tool)");
+        Console.WriteLine("      Same options as template, --out defaults to invoice.pdf");
+        Console.WriteLine("      --line-items  Comma-separated description:cents (e.g. \"Item1:12000,Item2:8000\")");
     }
 
     static void RunBgAmountTranscriber(List<string> args)
@@ -218,6 +228,118 @@ internal static class CliToolsProgram
         {
             Console.WriteLine($"Error: {ex.Message}");
         }
+    }
+
+    static void RunInvoice(List<string> args)
+    {
+        var opts = ParseOpts(args, new Dictionary<string, string>
+        {
+            ["n"] = "number",
+            ["d"] = "date",
+            ["t"] = "total",
+            ["o"] = "out",
+            ["l"] = "line-items",
+        });
+
+        string GetOrDefault(string key, string d) => opts.TryGetValue(key, out var v) ? v : d;
+
+        var number = GetOrDefault("number", "TPL-001");
+        var dateStr = GetOrDefault("date", DateTime.Today.ToString("yyyy-MM-dd"));
+
+        Invoice.LineItem[] lineItems;
+        if (opts.TryGetValue("line-items", out var lineItemsStr))
+        {
+            lineItems = ParseLineItems(lineItemsStr);
+            if (lineItems.Length == 0)
+            {
+                Console.WriteLine("Invalid --line-items. Use format \"desc1:cents1,desc2:cents2\"");
+                return;
+            }
+        }
+        else
+        {
+            var totalStr = GetOrDefault("total", "213.56");
+            var totalNorm = totalStr.Replace(',', '.');
+            if (!decimal.TryParse(totalNorm, NumberStyles.Any, CultureInfo.InvariantCulture, out var totalDec) || totalDec < 0)
+            {
+                Console.WriteLine($"Invalid total: {totalStr}. Use e.g. 213.56 or 213,56");
+                return;
+            }
+            var totalCents = (int)Math.Round(totalDec * 100);
+            lineItems = new[] { new Invoice.LineItem("Зъботехнически услуги", new Amount(totalCents, Currency.Eur)) };
+        }
+
+        if (!DateTime.TryParseExact(dateStr, new[] { "yyyy-MM-dd", "dd-MM-yyyy", "dd.MM.yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            Console.WriteLine($"Invalid date: {dateStr}. Use yyyy-MM-dd");
+            return;
+        }
+
+        var seller = new BillingAddress(
+            Name: GetOrDefault("seller-name", "Dev Seller EOOD"),
+            RepresentativeName: GetOrDefault("seller-mol", "Иван Проба"),
+            CompanyIdentifier: GetOrDefault("seller-eik", "111222333"),
+            VatIdentifier: opts.TryGetValue("seller-vat", out var sv) ? sv : null,
+            Address: GetOrDefault("seller-addr", "ул. Тестова 1, ет.1"),
+            City: GetOrDefault("seller-city", "София"),
+            PostalCode: "1000",
+            Country: "BG");
+
+        var buyer = new BillingAddress(
+            Name: GetOrDefault("buyer-name", "Dev Buyer EOOD"),
+            RepresentativeName: GetOrDefault("buyer-mol", "Мария Проба"),
+            CompanyIdentifier: GetOrDefault("buyer-eik", "444555666"),
+            VatIdentifier: opts.TryGetValue("buyer-vat", out var bv) ? bv : null,
+            Address: GetOrDefault("buyer-addr", "ул. Проба 42, ап.5"),
+            City: GetOrDefault("buyer-city", "Пловдив"),
+            PostalCode: "4000",
+            Country: "BG");
+
+        var bankTransferInfo = new BankTransferInfo(
+            Iban: GetOrDefault("iban", "BG03FINV91501017534825"),
+            BankName: GetOrDefault("bank-name", "FIRST INVESTMENT BANK"),
+            Bic: GetOrDefault("bic", "FINVBGSF"));
+
+        var invoice = new Invoice(number, new Invoice.InvoiceContent(
+            Date: date,
+            SellerAddress: seller,
+            BuyerAddress: buyer,
+            LineItems: lineItems,
+            BankTransferInfo: bankTransferInfo));
+
+        try
+        {
+            var fetcher = new BrowserFetcher();
+            fetcher.DownloadAsync().GetAwaiter().GetResult();
+            var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber()).GetAwaiter().GetResult();
+            var exporter = new InvoicePdfExporter();
+            using var pdfStream = exporter.Export(template, invoice).GetAwaiter().GetResult();
+            var outPath = GetOrDefault("out", "invoice.pdf");
+            using (var fileStream = File.Create(outPath))
+            {
+                pdfStream.CopyTo(fileStream);
+            }
+            Console.WriteLine(Path.GetFullPath(outPath));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static Invoice.LineItem[] ParseLineItems(string value)
+    {
+        var result = new List<Invoice.LineItem>();
+        foreach (var part in value.Split(','))
+        {
+            var colon = part.IndexOf(':');
+            if (colon < 0) continue;
+            var desc = part[..colon].Trim();
+            if (desc.Length == 0) continue;
+            if (!int.TryParse(part[(colon + 1)..].Trim(), out var cents) || cents < 0) continue;
+            result.Add(new Invoice.LineItem(desc, new Amount(cents, Currency.Eur)));
+        }
+        return result.ToArray();
     }
 
     static Dictionary<string, string> ParseOpts(List<string> args, Dictionary<string, string> shortToLong)

@@ -392,30 +392,30 @@ Headless browser rendering of the HTML template to PDF.
 
 ### Tests
 
-- [ ] **6.1** Create `Invoices.Tests/InvoicePdfExporterTest.cs`:
+- [x] **6.1** Create `Invoices.Tests/InvoicePdfExporterTest.cs`:
   - Test that `Export` returns a non-empty stream
   - Test that the stream contains valid PDF content (check for `%PDF` header)
 
 ### Implementation
 
-- [ ] **6.2** Implement `InvoicePdfExporter.Export()`:
+- [x] **6.2** Implement `InvoicePdfExporter.Export()`:
   - Render the template with `InvoiceHtmlTemplate.Render(invoice)` to get HTML
   - Launch headless browser via PuppeteerSharp with a bundled/embedded Chromium
     revision (shipped alongside the app, not downloaded at runtime)
   - Set page to A4 size, load HTML content
   - Generate PDF with `Page.PdfStreamAsync()` (or equivalent)
   - Return the PDF stream
-- [ ] **6.3** Run exporter tests:
+- [x] **6.3** Run exporter tests:
       `dotnet test Invoices.Tests --filter InvoicePdfExporterTest`
 
 ### Manual Testing
 
-- [ ] **6.4** Introduce a `invoice` tool in `CliTools/CliToolsProgram.cs` that allows to render a single invoice to PDF and save it to a file. Mimic the existing `template` command, but instead of rendering a template, it renders an invoice and saves it to a file.
-- [ ] **6.5** Manually test the tool by rendering a few invoices and verifying the output is correct.
+- [x] **6.4** Introduce a `invoice` tool in `CliTools/CliToolsProgram.cs` that allows to render a single invoice to PDF and save it to a file. Mimic the existing `template` command, but instead of rendering a template, it renders an invoice and saves it to a file.
+- [x] **6.5** Manually test the tool by rendering a few invoices and verifying the output is correct.
 
 ### Add regression tests
 
-- [ ] **6.6** Now that we have the `invoice` tool, and have tested and reviewed the output, we can use that output to add `InvoicePdfExporterRegressionTest` regression tests for the `InvoicePdfExporter` class that renders an invoice and saves it to a file.
+- [x] **6.6** Now that we have the `invoice` tool, and have tested and reviewed the output, we can use that output to add `InvoicePdfExporterRegressionTest` regression tests for the `InvoicePdfExporter` class that renders an invoice and saves it to a file.
   - Add a test which uses just the default data
   - Add a test which changes the invoice number, date and amount
   - Add a test which changes the buyer address

@@ -1,13 +1,52 @@
+using PuppeteerSharp;
+using PuppeteerSharp.Media;
+
 namespace Invoices;
 
+/// <summary>
+/// Exports invoices to PDF using a headless Chromium browser to render the HTML template.
+/// When <paramref name="chromiumExecutablePath"/> is provided, uses that Chromium binary
+/// (e.g. bundled alongside the app). When null, PuppeteerSharp uses its default
+/// (downloads to user cache on first run).
+/// </summary>
 public class InvoicePdfExporter : IInvoiceExporter
 {
-    // TODO: add a regression "replay" test for this class once implemented (run it manually, review the result of several invoices, save the input and result as reference for the test assertions)
+    private readonly string? _chromiumExecutablePath;
 
-    public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice)
+    /// <param name="chromiumExecutablePath">Optional path to Chromium executable. When null, uses PuppeteerSharp default (may download on first run).</param>
+    public InvoicePdfExporter(string? chromiumExecutablePath = null)
     {
-        // TODO: Use a headless browser through Puppeteer or Playwright to render the html from rendering the template with the given data
-        
-        throw new NotImplementedException();
+        _chromiumExecutablePath = chromiumExecutablePath;
+    }
+
+    public async Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice)
+    {
+        var html = template.Render(invoice);
+
+        var launchOptions = new LaunchOptions
+        {
+            Headless = true,
+            Args = ["--no-sandbox", "--disable-setuid-sandbox"]
+        };
+        if (!string.IsNullOrEmpty(_chromiumExecutablePath) && File.Exists(_chromiumExecutablePath))
+        {
+            launchOptions.ExecutablePath = _chromiumExecutablePath;
+        }
+
+        await using var browser = await Puppeteer.LaunchAsync(launchOptions);
+        await using var page = await browser.NewPageAsync();
+
+        await page.SetContentAsync(html, new NavigationOptions
+        {
+            WaitUntil = new[] { WaitUntilNavigation.Networkidle0 }
+        });
+
+        var pdfOptions = new PdfOptions
+        {
+            Format = PaperFormat.A4
+        };
+        var pdfBytes = await page.PdfDataAsync(pdfOptions);
+
+        return new MemoryStream(pdfBytes);
     }
 }
