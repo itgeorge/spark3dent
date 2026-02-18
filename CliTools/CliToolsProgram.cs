@@ -96,6 +96,7 @@ internal static class CliToolsProgram
         Console.WriteLine("      --iban, --bank-name, --bic   Bank transfer info for pay-grid");
         Console.WriteLine("  invoice [--key value...]        - Render invoice to PDF and save to file (dev tool)");
         Console.WriteLine("      Same options as template, --out defaults to invoice.pdf");
+        Console.WriteLine("      --png        Also render a PNG image alongside the PDF");
         Console.WriteLine("      --line-items  Comma-separated description:cents (e.g. \"Item1:12000,Item2:8000\")");
     }
 
@@ -242,6 +243,7 @@ internal static class CliToolsProgram
         });
 
         string GetOrDefault(string key, string d) => opts.TryGetValue(key, out var v) ? v : d;
+        bool HasFlag(string key) => opts.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v);
 
         var number = GetOrDefault("number", "TPL-001");
         var dateStr = GetOrDefault("date", DateTime.Today.ToString("yyyy-MM-dd"));
@@ -312,14 +314,27 @@ internal static class CliToolsProgram
             var fetcher = new BrowserFetcher();
             fetcher.DownloadAsync().GetAwaiter().GetResult();
             var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber()).GetAwaiter().GetResult();
-            var exporter = new InvoicePdfExporter();
-            using var pdfStream = exporter.Export(template, invoice).GetAwaiter().GetResult();
             var outPath = GetOrDefault("out", "invoice.pdf");
+
+            var pdfExporter = new InvoicePdfExporter();
+            using (var pdfStream = pdfExporter.Export(template, invoice).GetAwaiter().GetResult())
             using (var fileStream = File.Create(outPath))
             {
                 pdfStream.CopyTo(fileStream);
             }
             Console.WriteLine(Path.GetFullPath(outPath));
+
+            if (HasFlag("png"))
+            {
+                var pngPath = Path.ChangeExtension(outPath, ".png");
+                var imageExporter = new InvoiceImageExporter();
+                using (var pngStream = imageExporter.Export(template, invoice).GetAwaiter().GetResult())
+                using (var fileStream = File.Create(pngPath))
+                {
+                    pngStream.CopyTo(fileStream);
+                }
+                Console.WriteLine(Path.GetFullPath(pngPath));
+            }
         }
         catch (Exception ex)
         {
@@ -344,17 +359,28 @@ internal static class CliToolsProgram
 
     static Dictionary<string, string> ParseOpts(List<string> args, Dictionary<string, string> shortToLong)
     {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var (opts, _) = ParseOptsWithPositional(args, shortToLong);
+        return opts;
+    }
+
+    static (Dictionary<string, string> opts, List<string> positional) ParseOptsWithPositional(List<string> args, Dictionary<string, string> shortToLong)
+    {
+        var opts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var positional = new List<string>();
         for (var i = 0; i < args.Count; i++)
         {
             var a = args[i];
             if (a.StartsWith("--"))
             {
                 var key = a[2..].ToLowerInvariant();
-                if (i + 1 < args.Count)
+                if (i + 1 < args.Count && !args[i + 1].StartsWith("-"))
                 {
-                    result[key] = args[i + 1];
+                    opts[key] = args[i + 1];
                     i++;
+                }
+                else
+                {
+                    opts[key] = "true";
                 }
             }
             else if (a.Length == 2 && a[0] == '-')
@@ -362,11 +388,15 @@ internal static class CliToolsProgram
                 var shortKey = char.ToLowerInvariant(a[1]).ToString();
                 if (shortToLong.TryGetValue(shortKey, out var longKey) && i + 1 < args.Count)
                 {
-                    result[longKey] = args[i + 1];
+                    opts[longKey] = args[i + 1];
                     i++;
                 }
             }
+            else
+            {
+                positional.Add(a);
+            }
         }
-        return result;
+        return (opts, positional);
     }
 }

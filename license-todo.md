@@ -18,3 +18,4 @@
 | Date       | Notes |
 |------------|-------|
 | 2025-02-18 | Initial review: Audited 14 .csproj files; identified 13 unique NuGet packages. Created `licenses/` with license files for all: HtmlAgilityPack, PuppeteerSharp, UglyToad.PdfPig (Apache 2.0, incl. EXTERNAL COMPONENTS attribution), Microsoft.Data.Sqlite, Microsoft.EntityFrameworkCore.Sqlite, Microsoft.EntityFrameworkCore.Design, Microsoft.Extensions.Configuration{,.Binder,.Json,.EnvironmentVariables}, Microsoft.NET.Test.Sdk, NUnit, NUnit3TestAdapter. All MIT except PdfPig (Apache 2.0). No redundant licenses (folder was empty). PdfPig attribution satisfied via full license text. |
+| 2025-02-19 | Added SixLabors.ImageSharp (Invoices.Tests) – Six Labors Split License v1.0; qualifies for Apache 2.0 under open-source use. Created `licenses/SixLabors.ImageSharp.txt`. No NOTICE required. |
