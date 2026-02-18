@@ -81,7 +81,9 @@ public class ConsoleLogger : TextLogger
 public class FileLogger : TextLogger, IDisposable
 {
     public FileLogger(string filePath, LogLevel minLogLevel = LogLevel.Debug)
-        : base(new StreamWriter(filePath, append: true) { AutoFlush = true }, minLogLevel)
+        : base(new StreamWriter(
+            new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
+            leaveOpen: false) { AutoFlush = true }, minLogLevel)
     {
     }
 
