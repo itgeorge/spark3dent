@@ -395,8 +395,6 @@ Headless browser rendering of the HTML template to PDF.
 - [ ] **6.1** Create `Invoices.Tests/InvoicePdfExporterTest.cs`:
   - Test that `Export` returns a non-empty stream
   - Test that the stream contains valid PDF content (check for `%PDF` header)
-  - (Regression "replay" tests to be added manually after reviewing output, as
-    noted in the existing TODO comment)
 
 ### Implementation
 
@@ -409,6 +407,21 @@ Headless browser rendering of the HTML template to PDF.
   - Return the PDF stream
 - [ ] **6.3** Run exporter tests:
       `dotnet test Invoices.Tests --filter InvoicePdfExporterTest`
+
+### Manual Testing
+
+- [ ] **6.4** Introduce a `invoice` tool in `CliTools/CliToolsProgram.cs` that allows to render a single invoice to PDF and save it to a file. Mimic the existing `template` command, but instead of rendering a template, it renders an invoice and saves it to a file.
+- [ ] **6.5** Manually test the tool by rendering a few invoices and verifying the output is correct.
+
+### Add regression tests
+
+- [ ] **6.6** Now that we have the `invoice` tool, and have tested and reviewed the output, we can use that output to add `InvoicePdfExporterRegressionTest` regression tests for the `InvoicePdfExporter` class that renders an invoice and saves it to a file.
+  - Add a test which uses just the default data
+  - Add a test which changes the invoice number, date and amount
+  - Add a test which changes the buyer address
+  - Add a test which changes the seller address
+  - Add a test which changes the bank transfer info
+  - Add a test which changes the line items
 
 ---
 
