@@ -18,6 +18,7 @@
     <ProjectReference Include="..\Accounting\Accounting.csproj" />
     <ProjectReference Include="..\Invoices.Tests\Invoices.Tests.csproj" />
     <ProjectReference Include="..\Storage\Storage.csproj" />
+    <ProjectReference Include="..\Utilities.Tests\Utilities.Tests.csproj" />
   </ItemGroup>
   
 </Project>

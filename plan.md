@@ -469,7 +469,7 @@ Coordinates between repos, exporter, and blob storage.
 
 Add logging throughout all non-test implementations.
 
-- [ ] **8.1** Create logging decorator/wrapper pattern. For each interface
+- [x] **8.1** Create logging decorator/wrapper pattern. For each interface
       implementation that should be logged, create a logging wrapper:
   - `LoggingInvoiceRepo : IInvoiceRepo` -- wraps an inner `IInvoiceRepo`, logs
     method name + invoice number on each call
@@ -483,12 +483,12 @@ Add logging throughout all non-test implementations.
   - Each wrapper takes an `ILogger` in its constructor
   - Log at `Info` level for normal operations, `Error` for exceptions (then
     re-throw)
-- [ ] **8.2** Place logging wrappers in each project alongside the interface they
+- [x] **8.2** Place logging wrappers in each project alongside the interface they
       wrap (e.g. `Invoices/LoggingInvoiceRepo.cs`, `Accounting/LoggingClientRepo.cs`,
       `Storage/LoggingBlobStorage.cs`)
-- [ ] **8.3** Write minimal tests for logging wrappers (verify they delegate
+- [x] **8.3** Write minimal tests for logging wrappers (verify they delegate
       correctly and don't swallow exceptions)
-- [ ] **8.4** In `CliProgram.Main`, set up logging:
+- [x] **8.4** In `CliProgram.Main`, set up logging:
   - Create `FileLogger` pointing to `{LogDirectory}/spark3dent.log`
   - Wrap with `BufferedLogger` for performance
   - Wrap all dependencies with their logging decorators

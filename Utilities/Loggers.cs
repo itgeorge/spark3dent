@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 
 namespace Utilities;
 
@@ -152,6 +152,45 @@ public class BufferedLogger : ILogger, IDisposable
         if (_disposed) return;
         _disposed = true;
         Flush();
+    }
+}
+
+/// <summary>
+/// Wraps a single logger and swallows any exceptions from logging calls.
+/// Ensures logging failures never cause the application or decorated operations to fail.
+/// </summary>
+public class SafeLogger : ILogger
+{
+    private readonly ILogger _inner;
+
+    public SafeLogger(ILogger inner)
+    {
+        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+    }
+
+    public void Log(LogLevel level, string message)
+    {
+        try { _inner.Log(level, message); } catch { /* Ignore logging failures */ }
+    }
+
+    public void LogError(string message, Exception exception)
+    {
+        try { _inner.LogError(message, exception); } catch { /* Ignore logging failures */ }
+    }
+
+    public void LogInfo(string message)
+    {
+        try { _inner.LogInfo(message); } catch { /* Ignore logging failures */ }
+    }
+
+    public void LogDebug(string message)
+    {
+        try { _inner.LogDebug(message); } catch { /* Ignore logging failures */ }
+    }
+
+    public void LogWarning(string message)
+    {
+        try { _inner.LogWarning(message); } catch { /* Ignore logging failures */ }
     }
 }
 

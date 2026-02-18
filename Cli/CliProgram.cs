@@ -1,10 +1,13 @@
 using System.Text.Json;
 using Configuration;
+using Utilities;
 
 namespace Cli;
 
 class CliProgram
 {
+    private const int LogBufferSize = 20;
+
     static async Task Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -12,27 +15,22 @@ class CliProgram
 
         var config = await LoadAndResolveConfigAsync();
 
-        // TODO: initialize dependencies (repos, loggers, etc.)
-        
-        // logging: add logging to all (non-test) interface implementations, log by appending to a single file in the
-        //  LogDirectory, use the available Loggers.cs and add new ones if necessary. Every implemented interface method
-        //  should log info with it's name and some parameters to allow tracking overall flow (don't log all details,
-        //  just something to make the logs human-readable, e.g.: for invoices log only the number). Catch unhandled
-        //  exceptions at the Cli level, log errors and stacktrace and continue executing commands - an exception should
-        //  generally not crash the Cli when possible.
-        
-        // Run in a loop until exit. 
+        // Set up logging: file in LogDirectory, buffered for performance
+        var logDir = config.Desktop.LogDirectory;
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "spark3dent.log");
+        // FileLogger uses append mode; BufferedLogger flushes on Dispose
+        using var fileLogger = new FileLogger(logPath);
+        using var logger = new BufferedLogger(fileLogger, LogBufferSize);
+        logger.LogInfo("Spark3Dent started");
+
+        // TODO (Phase 9): initialize dependencies (repos, exporter, blob storage, etc.) and wrap with logging decorators:
+        // LoggingInvoiceRepo, LoggingClientRepo, LoggingInvoiceExporter, LoggingBlobStorage, LoggingConfigLoader
+
+        // Run in a loop until exit.
         // - If args are provided, run based on them
         // - Otherwise, go into "interactive mode", prompt for command and parameters
-        // Commands:
-        // clients add (asks for client nickname, and address fields)
-        // clients edit (asks for client nickname, fails if not found, then for, info and address fields, empty fields defaults to current value)
-        // clients list (lists all clients, alphabetically sorted by nickname)
-        // invoices issue <client nickname> <amount (handles both . and , separator)> [date (dd-MM-yyyy)] (validates amount, date is optional, defaults to today)
-        // invoices correct <invoice number> <amount (handles both . and , separator)> [date (dd-MM-yyyy)] (validates number and date change consistent with other known invoices) 
-        // invoices list (lists the latest invoices, sorted by date, newest first)
-        // help (displays the help message)
-        // exit (exits the program)
+        // Commands: clients add/edit/list, invoices issue/correct/list, help, exit
     }
 
     static async Task<Config> LoadAndResolveConfigAsync()
