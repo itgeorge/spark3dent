@@ -184,14 +184,16 @@ public abstract class InvoiceRepoContractTest
         var newer = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: DateTime.Now.AddDays(-1)));
 
         // update 1 day ahead but still before the newer invoice
-        await fixture.Repo.UpdateAsync(middle.Number, BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1)));
+        var updatedContent1 = BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1));
+        await fixture.Repo.UpdateAsync(middle.Number, updatedContent1);
         var retrieved = await fixture.GetInvoiceAsync(middle.Number);
-        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1)))));
+        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, updatedContent1)));
 
         // update 1 day back but still after the older invoice
-        await fixture.Repo.UpdateAsync(middle.Number, BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1)));
+        var updatedContent2 = BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1));
+        await fixture.Repo.UpdateAsync(middle.Number, updatedContent2);
         retrieved = await fixture.GetInvoiceAsync(middle.Number);
-        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1)))));
+        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, updatedContent2)));
     }
 
     [Test]

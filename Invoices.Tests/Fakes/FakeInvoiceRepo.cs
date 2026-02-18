@@ -1,31 +1,107 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Utilities;
 
-// TODO: might want this in a separate TestFakes project/ns in the future to not have to add dependencies to the .Tests
-//  project here - but let's do that if it ever becomes a problem
 namespace Invoices.Tests.Fakes;
 
 public class FakeInvoiceRepo : IInvoiceRepo
 {
-    // TODO: implement as in-memory repo fake for tests, keep implementation simple, no optimizations. Support proper concurrent access to CreateAsync so that invoice numbering is correct, but don't worry about performance - locking the whole repo for every operation is fine, as long as it's simple and passes the ContractTest.
-    
+    private readonly Dictionary<string, Invoice> _storage = new();
+    private int _nextNumber = 1;
+    private readonly object _lock = new();
+
     public Task<Invoice> CreateAsync(Invoice.InvoiceContent content)
     {
-        throw new System.NotImplementedException();
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                var lastInvoice = _storage.Values
+                    .OrderByDescending(i => long.Parse(i.Number))
+                    .FirstOrDefault();
+
+                if (lastInvoice != null && content.Date < lastInvoice.Content.Date)
+                    throw new InvalidOperationException(
+                        $"Invoice date {content.Date:yyyy-MM-dd} cannot be before the last invoice date {lastInvoice.Content.Date:yyyy-MM-dd}.");
+
+                var number = _nextNumber.ToString();
+                _nextNumber++;
+
+                var invoice = new Invoice(number, content);
+                _storage[number] = invoice;
+                return invoice;
+            }
+        });
     }
 
     public Task<Invoice> GetAsync(string number)
     {
-        throw new System.NotImplementedException();
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (!_storage.TryGetValue(number, out var invoice))
+                    throw new InvalidOperationException($"Invoice with number {number} not found.");
+                return invoice;
+            }
+        });
     }
 
     public Task UpdateAsync(string number, Invoice.InvoiceContent content)
     {
-        throw new System.NotImplementedException();
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (!_storage.TryGetValue(number, out var existing))
+                    throw new InvalidOperationException($"Invoice with number {number} not found.");
+
+                var num = long.Parse(number);
+                var prev = _storage.Values
+                    .Where(i => long.Parse(i.Number) < num)
+                    .OrderByDescending(i => long.Parse(i.Number))
+                    .FirstOrDefault();
+                var next = _storage.Values
+                    .Where(i => long.Parse(i.Number) > num)
+                    .OrderBy(i => long.Parse(i.Number))
+                    .FirstOrDefault();
+
+                if (prev != null && content.Date < prev.Content.Date)
+                    throw new InvalidOperationException(
+                        $"Invoice date {content.Date:yyyy-MM-dd} cannot be before the previous invoice date {prev.Content.Date:yyyy-MM-dd}.");
+
+                if (next != null && content.Date > next.Content.Date)
+                    throw new InvalidOperationException(
+                        $"Invoice date {content.Date:yyyy-MM-dd} cannot be after the next invoice date {next.Content.Date:yyyy-MM-dd}.");
+
+                _storage[number] = new Invoice(number, content);
+            }
+        });
     }
 
     public Task<QueryResult<Invoice>> LatestAsync(int limit, string? startAfterCursor = null)
     {
-        throw new System.NotImplementedException();
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                var ordered = _storage.Values
+                    .OrderByDescending(i => long.Parse(i.Number))
+                    .AsEnumerable();
+
+                if (!string.IsNullOrEmpty(startAfterCursor))
+                {
+                    var cursorNum = long.Parse(startAfterCursor);
+                    ordered = ordered.Where(i => long.Parse(i.Number) < cursorNum);
+                }
+
+                var items = ordered.Take(limit).ToList();
+                var nextStartAfter = items.Count > 0 ? items[^1].Number : null;
+
+                return new QueryResult<Invoice>(items, nextStartAfter);
+            }
+        });
     }
 }

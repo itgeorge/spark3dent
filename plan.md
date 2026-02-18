@@ -117,7 +117,7 @@ Implement config loading so all downstream components can use it.
   - Bind to `Config` record
   - Return the loaded config
 - [x] **1.5** Add `SellerAddress` field to `AppConfig` (in `Config.cs`)
-- [ ] **1.11** Add `SellerBankTransferInfo` field to `AppConfig` (in `Config.cs`).
+- [x] **1.11** Add `SellerBankTransferInfo` field to `AppConfig` (in `Config.cs`).
       Add placeholder to `Cli/appsettings.json` with IBAN, BankName, Bic.
       Update configuration tests to verify it loads correctly
 - [x] **1.6** Create `Cli/appsettings.json` with sensible defaults:
@@ -250,7 +250,7 @@ tests (service layer, CLI) to avoid needing a real database.
 
 ### Invoice Fake
 
-- [ ] **4.1** Implement `FakeInvoiceRepo` (in `Invoices.Tests/Fakes/`):
+- [x] **4.1** Implement `FakeInvoiceRepo` (in `Invoices.Tests/Fakes/`):
   - In-memory `Dictionary<string, Invoice>` storage
   - Thread-safe via `lock` on all operations
   - `CreateAsync`: auto-increment number starting from 1, enforce date ordering
@@ -260,17 +260,17 @@ tests (service layer, CLI) to avoid needing a real database.
     invoices (prev and next by number), throw if violated, replace content
   - `LatestAsync`: return invoices sorted by number descending, support limit and
     cursor-based pagination. Cursor is the invoice number to start after
-- [ ] **4.2** Implement `FakeInvoiceRepoTest.SetUpAsync()`:
+- [x] **4.2** Implement `FakeInvoiceRepoTest.SetUpAsync()`:
   - Return a `FixtureBase` that wraps `FakeInvoiceRepo`
   - `SetUpInvoiceAsync` delegates to `Repo.CreateAsync`
   - `GetInvoiceAsync` delegates to `Repo.GetAsync`
-- [ ] **4.3** Run fake invoice repo tests:
+- [x] **4.3** Run fake invoice repo tests:
       `dotnet test Invoices.Tests --filter FakeInvoiceRepoTest`
-- [ ] **4.4** Verify all 20 contract tests pass for the fake
+- [x] **4.4** Verify all 20 contract tests pass for the fake
 
 ### Client Contract Tests
 
-- [ ] **4.5** Write `ClientRepoContractTest` test cases (in `Accounting.Tests/`):
+- [x] **4.5** Write `ClientRepoContractTest` test cases (in `Accounting.Tests/`):
   - `Add_GivenValidClient_WhenAdding_ThenClientIsRetrievable`
   - `Add_WhenAddingDuplicateNickname_ThenThrows`
   - `Get_GivenExistingClient_WhenGetting_ThenReturnsClient`
@@ -287,7 +287,7 @@ tests (service layer, CLI) to avoid needing a real database.
 
 ### Client Fake
 
-- [ ] **4.6** Implement `FakeClientRepo` (in `Accounting.Tests/Fakes/`):
+- [x] **4.6** Implement `FakeClientRepo` (in `Accounting.Tests/Fakes/`):
   - In-memory `Dictionary<string, Client>` keyed by nickname
   - `AddAsync`: throw if nickname already exists
   - `GetAsync`: throw if not found
@@ -295,12 +295,12 @@ tests (service layer, CLI) to avoid needing a real database.
     client not found. If nickname changes, re-key the dictionary entry
   - `DeleteAsync`: throw if not found
   - `ListAsync`: return sorted by nickname, support limit + cursor pagination
-- [ ] **4.7** Implement `FakeClientRepoTest.SetUpAsync()`:
+- [x] **4.7** Implement `FakeClientRepoTest.SetUpAsync()`:
   - Wrap `FakeClientRepo`, delegate `SetUpClientAsync` to `Repo.AddAsync`,
     `GetClientAsync` to `Repo.GetAsync`
-- [ ] **4.8** Run fake client repo tests:
+- [x] **4.8** Run fake client repo tests:
       `dotnet test Accounting.Tests --filter FakeClientRepoTest`
-- [ ] **4.9** Verify all contract tests pass for the client fake
+- [x] **4.9** Verify all contract tests pass for the client fake
 
 ---
 

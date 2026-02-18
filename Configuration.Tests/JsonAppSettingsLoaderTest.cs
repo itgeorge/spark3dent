@@ -185,4 +185,29 @@ public class JsonAppSettingsLoaderTest
         Assert.That(config.App.SellerAddress!.Country, Is.EqualTo("България"));
     }
 
+    [Test]
+    public async Task LoadAsync_GivenAppSettingsWithSellerBankTransferInfo_WhenLoading_ThenSellerBankTransferInfoLoaded()
+    {
+        WriteAppSettings("""
+            {
+              "App": {
+                "SellerBankTransferInfo": {
+                  "Iban": "BG12UNCR40001234567890",
+                  "BankName": "UNCRBGSF",
+                  "Bic": "UNCRBGSF"
+                }
+              },
+              "Desktop": {}
+            }
+            """);
+
+        var loader = new JsonAppSettingsLoader(_tempDir);
+        var config = await loader.LoadAsync();
+
+        Assert.That(config.App.SellerBankTransferInfo, Is.Not.Null);
+        Assert.That(config.App.SellerBankTransferInfo!.Iban, Is.EqualTo("BG12UNCR40001234567890"));
+        Assert.That(config.App.SellerBankTransferInfo!.BankName, Is.EqualTo("UNCRBGSF"));
+        Assert.That(config.App.SellerBankTransferInfo!.Bic, Is.EqualTo("UNCRBGSF"));
+    }
+
 }

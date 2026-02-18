@@ -7,10 +7,31 @@ namespace Invoices.Tests.Fakes;
 [TestOf(typeof(FakeInvoiceRepo))]
 public class FakeInvoiceRepoTest : InvoiceRepoContractTest
 {
-    // TODO: implement fixture using fake repo to ensure fake behaves in line with contract
-    
     protected override Task<FixtureBase> SetUpAsync()
     {
-        throw new System.NotImplementedException();
+        var repo = new FakeInvoiceRepo();
+        return Task.FromResult<FixtureBase>(new FakeFixture(repo));
+    }
+
+    private sealed class FakeFixture : FixtureBase
+    {
+        private readonly FakeInvoiceRepo _repo;
+
+        public FakeFixture(FakeInvoiceRepo repo)
+        {
+            _repo = repo;
+        }
+
+        public override IInvoiceRepo Repo => _repo;
+
+        public override Task<Invoice> SetUpInvoiceAsync(Invoice.InvoiceContent content)
+        {
+            return _repo.CreateAsync(content);
+        }
+
+        public override Task<Invoice> GetInvoiceAsync(string number)
+        {
+            return _repo.GetAsync(number);
+        }
     }
 }

@@ -10,6 +10,6 @@ public interface IClientRepo
     Task<Client> GetAsync(string nickname);
     Task<QueryResult<Client>> ListAsync(int limit, string? startAfterCursor = null);
     Task AddAsync(Client client);
-    Task UpdateAsync(ClientUpdate update);
+    Task UpdateAsync(string nickname, ClientUpdate update);
     Task DeleteAsync(string nickname);
 }

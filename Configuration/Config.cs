@@ -16,10 +16,22 @@ public record SellerAddress
     public string Country { get; init; } = string.Empty;
 }
 
+/// <summary>
+/// Bank transfer info for the seller (IBAN, BankName, Bic).
+/// Can be mapped to Invoices.BankTransferInfo when needed.
+/// </summary>
+public record SellerBankTransferInfo
+{
+    public string Iban { get; init; } = string.Empty;
+    public string BankName { get; init; } = string.Empty;
+    public string Bic { get; init; } = string.Empty;
+}
+
 public record AppConfig
 {
     public int StartInvoiceNumber { get; init; } = 1;
     public SellerAddress? SellerAddress { get; init; }
+    public SellerBankTransferInfo? SellerBankTransferInfo { get; init; }
 }
 
 public record DesktopConfig
