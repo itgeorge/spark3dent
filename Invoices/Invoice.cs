@@ -41,7 +41,6 @@ public record Amount
 public record Invoice
 {
     public record LineItem(string Description, Amount Amount);
-    
     public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems, BankTransferInfo BankTransferInfo);
 
     public Invoice(string number, InvoiceContent content)

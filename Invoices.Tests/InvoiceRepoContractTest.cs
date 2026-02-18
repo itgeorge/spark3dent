@@ -30,7 +30,7 @@ public abstract class InvoiceRepoContractTest
         var created = await fixture.Repo.CreateAsync(content);
 
         Assert.That(created.Number, Is.Not.Null.And.Not.Empty);
-        Assert.That(created.Content, Is.EqualTo(content));
+        AssertInvoiceContentsEqual(content, created.Content);
     }
 
     [Test]
@@ -42,7 +42,7 @@ public abstract class InvoiceRepoContractTest
         var created = await fixture.Repo.CreateAsync(content);
 
         var retrieved = await fixture.GetInvoiceAsync(created.Number);
-        Assert.That(retrieved, Is.EqualTo(created));
+        AssertInvoicesEqual(created, retrieved);
     }
 
     [Test]
@@ -86,7 +86,7 @@ public abstract class InvoiceRepoContractTest
 
         var retrieved = await fixture.GetInvoiceAsync(created.Number);
 
-        Assert.That(retrieved, Is.EqualTo(created));
+        AssertInvoicesEqual(created, retrieved);
     }
 
     [Test]
@@ -122,7 +122,7 @@ public abstract class InvoiceRepoContractTest
         await fixture.Repo.UpdateAsync(created.Number, updatedContent);
 
         var retrieved = await fixture.GetInvoiceAsync(created.Number);
-        Assert.That(retrieved, Is.EqualTo(new Invoice(created.Number, updatedContent)));
+        AssertInvoicesEqual(new Invoice(created.Number, updatedContent), retrieved);
     }
 
     [Test]
@@ -137,8 +137,8 @@ public abstract class InvoiceRepoContractTest
 
         var changed = await fixture.GetInvoiceAsync(created1.Number);
         var unchanged = await fixture.GetInvoiceAsync(created2.Number);
-        Assert.That(changed, Is.EqualTo(new Invoice(created1.Number, updatedContent)));
-        Assert.That(unchanged, Is.EqualTo(created2));
+        AssertInvoicesEqual(new Invoice(created1.Number, updatedContent), changed);
+        AssertInvoicesEqual(created2, unchanged);
     }
 
     [Test]
@@ -187,13 +187,13 @@ public abstract class InvoiceRepoContractTest
         var updatedContent1 = BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1));
         await fixture.Repo.UpdateAsync(middle.Number, updatedContent1);
         var retrieved = await fixture.GetInvoiceAsync(middle.Number);
-        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, updatedContent1)));
+        AssertInvoicesEqual(new Invoice(middle.Number, updatedContent1), retrieved);
 
         // update 1 day back but still after the older invoice
         var updatedContent2 = BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1));
         await fixture.Repo.UpdateAsync(middle.Number, updatedContent2);
         retrieved = await fixture.GetInvoiceAsync(middle.Number);
-        Assert.That(retrieved, Is.EqualTo(new Invoice(middle.Number, updatedContent2)));
+        AssertInvoicesEqual(new Invoice(middle.Number, updatedContent2), retrieved);
     }
 
     [Test]
@@ -237,9 +237,9 @@ public abstract class InvoiceRepoContractTest
         var latestInvoices = await fixture.Repo.LatestAsync(5);
 
         Assert.That(latestInvoices.Items, Has.Count.EqualTo(3));
-        Assert.That(latestInvoices.Items[0], Is.EqualTo(newer));
-        Assert.That(latestInvoices.Items[1], Is.EqualTo(middle));
-        Assert.That(latestInvoices.Items[2], Is.EqualTo(older));
+        AssertInvoicesEqual(newer, latestInvoices.Items[0]);
+        AssertInvoicesEqual(middle, latestInvoices.Items[1]);
+        AssertInvoicesEqual(older, latestInvoices.Items[2]);
         Assert.That(latestInvoices.NextStartAfter, Is.EqualTo(older.Number));
     }
 
@@ -255,7 +255,7 @@ public abstract class InvoiceRepoContractTest
         var invoicesFromCursor = await fixture.Repo.LatestAsync(2, latestInvoices.NextStartAfter);
 
         Assert.That(invoicesFromCursor.Items, Has.Count.EqualTo(1));
-        Assert.That(invoicesFromCursor.Items[0], Is.EqualTo(older));
+        AssertInvoicesEqual(older, invoicesFromCursor.Items[0]);
     }
 
     [Test]
@@ -269,8 +269,8 @@ public abstract class InvoiceRepoContractTest
         var invoices = await fixture.Repo.LatestAsync(2);
 
         Assert.That(invoices.Items, Has.Count.EqualTo(2));
-        Assert.That(invoices.Items[0], Is.EqualTo(newer));
-        Assert.That(invoices.Items[1], Is.EqualTo(middle));
+        AssertInvoicesEqual(newer, invoices.Items[0]);
+        AssertInvoicesEqual(middle, invoices.Items[1]);
     }
 
     [Test]
@@ -286,12 +286,12 @@ public abstract class InvoiceRepoContractTest
         var secondPage = await fixture.Repo.LatestAsync(2, firstPage.NextStartAfter);
 
         Assert.That(secondPage.Items, Has.Count.EqualTo(2));
-        Assert.That(secondPage.Items[0], Is.EqualTo(middle));
-        Assert.That(secondPage.Items[1], Is.EqualTo(older));
-        
+        AssertInvoicesEqual(middle, secondPage.Items[0]);
+        AssertInvoicesEqual(older, secondPage.Items[1]);
+
         var lastPage = await fixture.Repo.LatestAsync(2, secondPage.NextStartAfter);
         Assert.That(lastPage.Items, Has.Count.EqualTo(1));
-        Assert.That(lastPage.Items[0], Is.EqualTo(oldest));
+        AssertInvoicesEqual(oldest, lastPage.Items[0]);
     }
 
     [Test]
@@ -380,7 +380,24 @@ public abstract class InvoiceRepoContractTest
 
     private static readonly BankTransferInfo TestBankTransferInfo = new(Iban: "BG00TEST00000000000000", BankName: "Test Bank", Bic: "TESTBGSF");
 
-    private static Invoice.InvoiceContent BuildValidInvoiceContent(DateTime? date = null, BillingAddress? sellerAddress = null, BillingAddress? buyerAddress = null, Invoice.LineItem[]? lineItems = null, BankTransferInfo? bankTransferInfo = null)
+    protected static void AssertInvoicesEqual(Invoice expected, Invoice actual)
+    {
+        Assert.That(actual.Number, Is.EqualTo(expected.Number));
+        AssertInvoiceContentsEqual(expected.Content, actual.Content);
+    }
+
+    protected static void AssertInvoiceContentsEqual(Invoice.InvoiceContent expected, Invoice.InvoiceContent actual)
+    {
+        Assert.That(actual.Date, Is.EqualTo(expected.Date));
+        Assert.That(actual.SellerAddress, Is.EqualTo(expected.SellerAddress));
+        Assert.That(actual.BuyerAddress, Is.EqualTo(expected.BuyerAddress));
+        Assert.That(actual.BankTransferInfo, Is.EqualTo(expected.BankTransferInfo));
+        Assert.That(actual.LineItems, Has.Length.EqualTo(expected.LineItems.Length));
+        for (var i = 0; i < expected.LineItems.Length; i++)
+            Assert.That(actual.LineItems[i], Is.EqualTo(expected.LineItems[i]));
+    }
+
+    protected static Invoice.InvoiceContent BuildValidInvoiceContent(DateTime? date = null, BillingAddress? sellerAddress = null, BillingAddress? buyerAddress = null, Invoice.LineItem[]? lineItems = null, BankTransferInfo? bankTransferInfo = null)
     {
         return new Invoice.InvoiceContent(
             Date: date ?? DateTime.Now,

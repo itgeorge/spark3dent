@@ -310,7 +310,7 @@ The real persistence layer. Contract tests ensure it behaves identically to fake
 
 ### EF Core Setup
 
-- [ ] **5.1** Create `Database/AppDbContext.cs`:
+- [x] **5.1** Create `Database/AppDbContext.cs`:
   - `DbSet<InvoiceEntity>` for invoices
   - `DbSet<InvoiceLineItemEntity>` for line items
   - `DbSet<ClientEntity>` for clients
@@ -320,18 +320,18 @@ The real persistence layer. Contract tests ensure it behaves identically to fake
     - Foreign key from `InvoiceLineItemEntity` to `InvoiceEntity`
     - Primary key on `ClientEntity.Nickname`
     - `InvoiceSequenceEntity`: Id (PK, always 1), LastNumber (int, not null)
-- [ ] **5.2** Create entity classes in `Database/Entities/`:
+- [x] **5.2** Create entity classes in `Database/Entities/`:
   - `InvoiceEntity` (Id, Number, Date, seller fields, buyer fields)
   - `InvoiceLineItemEntity` (Id, InvoiceEntityId, Description, AmountCents,
     Currency)
   - `ClientEntity` (Nickname as PK, all BillingAddress fields)
   - `InvoiceSequenceEntity` (Id, LastNumber)
-- [ ] **5.3** Create mapping helpers to convert between domain records
+- [x] **5.3** Create mapping helpers to convert between domain records
       (`Invoice`, `Client`) and EF entities
 
 ### SQLite Invoice Repository
 
-- [ ] **5.4** Create `Database/SqliteInvoiceRepo.cs` implementing `IInvoiceRepo`:
+- [x] **5.4** Create `Database/SqliteInvoiceRepo.cs` implementing `IInvoiceRepo`:
   - Constructor takes `Func<AppDbContext>` factory (new context per operation) and
     `Config` (for `StartInvoiceNumber`)
   - `EnsureSequenceInitialized()`: within a transaction, check if
@@ -349,25 +349,25 @@ The real persistence layer. Contract tests ensure it behaves identically to fake
 
 ### SQLite Invoice Repo Tests
 
-- [ ] **5.5** Create `Database.Tests/SqliteInvoiceRepoTest.cs` inheriting
+- [x] **5.5** Create `Database.Tests/SqliteInvoiceRepoTest.cs` inheriting
       `InvoiceRepoContractTest`:
   - `SetUpAsync`: create a temp SQLite database file, create `AppDbContext`,
     run `EnsureCreated()`, return fixture wrapping `SqliteInvoiceRepo`
   - Tear down: delete temp database file
-- [ ] **5.6** Add SQLite-specific tests (in same class or separate):
+- [x] **5.6** Add SQLite-specific tests (in same class or separate):
   - Fresh DB + `StartInvoiceNumber=1` -> first invoice number is `"1"`
   - Fresh DB + `StartInvoiceNumber=1000` -> first invoice number is `"1000"`
   - Changing config `StartInvoiceNumber` after first invoice does NOT affect
     numbering (sequence table is source of truth)
   - Concurrent `CreateAsync` calls: spawn parallel tasks, assert all numbers
     unique and contiguous
-- [ ] **5.7** Run SQLite invoice repo tests:
+- [x] **5.7** Run SQLite invoice repo tests:
       `dotnet test Database.Tests --filter SqliteInvoiceRepoTest`
-- [ ] **5.8** Verify all contract tests + SQLite-specific tests pass
+- [x] **5.8** Verify all contract tests + SQLite-specific tests pass
 
 ### SQLite Client Repository
 
-- [ ] **5.9** Create `Database/SqliteClientRepo.cs` implementing `IClientRepo`:
+- [x] **5.9** Create `Database/SqliteClientRepo.cs` implementing `IClientRepo`:
   - Constructor takes `Func<AppDbContext>` factory
   - `AddAsync`: insert, throw if duplicate nickname
   - `GetAsync`: query by nickname, throw if not found
@@ -377,12 +377,12 @@ The real persistence layer. Contract tests ensure it behaves identically to fake
 
 ### SQLite Client Repo Tests
 
-- [ ] **5.10** Create `Database.Tests/SqliteClientRepoTest.cs` inheriting
+- [x] **5.10** Create `Database.Tests/SqliteClientRepoTest.cs` inheriting
       `ClientRepoContractTest`:
   - Same temp-DB pattern as invoice repo tests
-- [ ] **5.11** Run SQLite client repo tests:
+- [x] **5.11** Run SQLite client repo tests:
       `dotnet test Database.Tests --filter SqliteClientRepoTest`
-- [ ] **5.12** Verify all contract tests pass
+- [x] **5.12** Verify all contract tests pass
 
 ---
 
