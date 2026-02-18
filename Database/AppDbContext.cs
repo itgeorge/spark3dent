@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
         {
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Number).IsUnique();
+            e.HasIndex(x => x.NumberNumeric).IsUnique();
             e.HasMany(x => x.LineItems)
                 .WithOne(x => x.Invoice)
                 .HasForeignKey(x => x.InvoiceEntityId)
@@ -39,7 +40,8 @@ public class AppDbContext : DbContext
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedNever();
-            e.ToTable("InvoiceSequence");
+            e.ToTable("InvoiceSequence", t =>
+                t.HasCheckConstraint("CK_InvoiceSequence_Id", "Id = 1"));
         });
     }
 }
