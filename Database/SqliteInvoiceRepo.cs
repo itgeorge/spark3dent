@@ -21,11 +21,11 @@ public class SqliteInvoiceRepo : IInvoiceRepo
     {
         await using var ctx = _contextFactory();
 
-        await EnsureSequenceInitializedAsync(ctx);
-
         Invoice? result = null;
         await SqliteImmediateTransaction.ExecuteAsync(ctx, async c =>
         {
+            await EnsureSequenceInitializedAsync(c);
+
             var seq = await c.InvoiceSequence.FindAsync(SequenceId)
                 ?? throw new InvalidOperationException("Invoice sequence not initialized.");
 
