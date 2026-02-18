@@ -75,6 +75,8 @@ public class InvoiceHtmlTemplateTest
     <span id="buyerBulstat">E</span><span id="buyerVat">—</span>
     <div id="totalWords">w</div>
     <span id="placeOfSupply">P</span><span id="taxEventDate">D</span>
+    <span id="paymentMethod">Bank</span>
+    <span id="iban">BG00</span><span id="bank">Bank</span><span id="bic">BIC</span>
     <strong id="taxBase">0</strong><strong id="vat20">0</strong><strong id="totalDue">0</strong>
     <table><tbody id="items">
     <tr><td data-field="idx">1</td><td data-field="description">d</td><td data-field="amount">0</td></tr>
@@ -82,6 +84,11 @@ public class InvoiceHtmlTemplateTest
     </body>
     </html>
     """;
+
+    private static readonly BankTransferInfo TestBankTransferInfo = new(
+        Iban: "BG00TEST12345678901234",
+        BankName: "Test Bank AD",
+        Bic: "TESTBGSF");
 
     private static readonly Invoice ValidInvoice = new(
         number: "1234567890",
@@ -105,7 +112,8 @@ public class InvoiceHtmlTemplateTest
                 City: "София",
                 PostalCode: "1111",
                 Country: "BG"),
-            LineItems: new[] { new Invoice.LineItem("Зъботехнически услуги", new Amount(100_00, Currency.Eur)) }
+            LineItems: new[] { new Invoice.LineItem("Зъботехнически услуги", new Amount(100_00, Currency.Eur)) },
+            BankTransferInfo: TestBankTransferInfo
         ));
 
     private static readonly Invoice MultiLineItemInvoice = new(
@@ -134,7 +142,8 @@ public class InvoiceHtmlTemplateTest
             {
                 new Invoice.LineItem("Зъболекарски консултации", new Amount(120_00, Currency.Eur)),
                 new Invoice.LineItem("Профилактичен преглед", new Amount(80_00, Currency.Eur))
-            }
+            },
+            BankTransferInfo: TestBankTransferInfo
         ));
 
     private static readonly List<Invoice> ValidInvoices = new()
@@ -243,7 +252,8 @@ public class InvoiceHtmlTemplateTest
             Date: DateTime.Today,
             SellerAddress: ValidInvoice.Content.SellerAddress,
             BuyerAddress: ValidInvoice.Content.BuyerAddress,
-            LineItems: [new Invoice.LineItem("Bad", new Amount(-100, Currency.Eur))]));
+            LineItems: [new Invoice.LineItem("Bad", new Amount(-100, Currency.Eur))],
+            BankTransferInfo: TestBankTransferInfo));
         var ex = Assert.Throws<ArgumentException>(() => template.Render(badInvoice));
         Assert.That(ex!.Message, Does.Contain("negative"));
     }
@@ -256,7 +266,8 @@ public class InvoiceHtmlTemplateTest
             Date: new DateTime(2026, 1, 15),
             SellerAddress: ValidInvoice.Content.SellerAddress,
             BuyerAddress: ValidInvoice.Content.BuyerAddress,
-            LineItems: [new Invoice.LineItem("Test", new Amount(100_00, Currency.Eur))]));
+            LineItems: [new Invoice.LineItem("Test", new Amount(100_00, Currency.Eur))],
+            BankTransferInfo: TestBankTransferInfo));
         var html = template.Render(shortNumberInvoice);
         Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo("0000004269"));
     }
@@ -269,7 +280,8 @@ public class InvoiceHtmlTemplateTest
             Date: new DateTime(2026, 1, 15),
             SellerAddress: ValidInvoice.Content.SellerAddress,
             BuyerAddress: ValidInvoice.Content.BuyerAddress,
-            LineItems: [new Invoice.LineItem("Test", new Amount(50_00, Currency.Eur))]));
+            LineItems: [new Invoice.LineItem("Test", new Amount(50_00, Currency.Eur))],
+            BankTransferInfo: TestBankTransferInfo));
         var html = template.Render(shortNumberInvoice);
         Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo("00042"));
     }
@@ -282,7 +294,8 @@ public class InvoiceHtmlTemplateTest
             Date: DateTime.Today,
             SellerAddress: ValidInvoice.Content.SellerAddress,
             BuyerAddress: ValidInvoice.Content.BuyerAddress,
-            LineItems: [new Invoice.LineItem("Free", new Amount(0, Currency.Eur))]));
+            LineItems: [new Invoice.LineItem("Free", new Amount(0, Currency.Eur))],
+            BankTransferInfo: TestBankTransferInfo));
         var html = template.Render(zeroInvoice);
         Assert.That(GetFieldValue(html, "taxBase"), Is.EqualTo("0.00 €"));
         Assert.That(GetFieldValue(html, "vat20"), Is.EqualTo("0.00 €"));
@@ -306,6 +319,10 @@ public class InvoiceHtmlTemplateTest
         Assert.That(GetFieldValue(html, "buyerCompanyName"), Is.EqualTo(c.BuyerAddress.Name));
         Assert.That(GetFieldValue(html, "buyerRepresentativeName"), Is.EqualTo(c.BuyerAddress.RepresentativeName));
         Assert.That(GetFieldValue(html, "buyerBulstat"), Is.EqualTo(c.BuyerAddress.CompanyIdentifier));
+        Assert.That(GetFieldValue(html, "paymentMethod"), Is.EqualTo("По сметка"));
+        Assert.That(GetFieldValue(html, "iban"), Is.EqualTo(c.BankTransferInfo.Iban));
+        Assert.That(GetFieldValue(html, "bank"), Is.EqualTo(c.BankTransferInfo.BankName));
+        Assert.That(GetFieldValue(html, "bic"), Is.EqualTo(c.BankTransferInfo.Bic));
         Assert.That(GetFieldValue(html, "taxBase"), Does.Contain("€"));
         Assert.That(GetFieldValue(html, "vat20"), Does.Contain("€"));
         Assert.That(GetFieldValue(html, "totalDue"), Does.Contain("€"));

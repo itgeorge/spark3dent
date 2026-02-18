@@ -50,6 +50,12 @@ starting implementation.
    `AppDbContext`, entity configurations, and SQLite repository implementations.
    A corresponding `Database.Tests` project will hold the SQLite-specific tests.
 
+7. **`BankTransferInfo`**: Bank transfer is the only payment method for now.
+   `BankTransferInfo` (IBAN, BankName, Bic) is required on every `InvoiceContent`
+   and populates the pay-grid section of the invoice template. The seller's bank
+   details should come from `AppConfig` (alongside `SellerAddress`) for the
+   CLI/service layer.
+
 ---
 
 ## Phase 0: Project Setup & Dependencies
@@ -111,6 +117,9 @@ Implement config loading so all downstream components can use it.
   - Bind to `Config` record
   - Return the loaded config
 - [x] **1.5** Add `SellerAddress` field to `AppConfig` (in `Config.cs`)
+- [ ] **1.11** Add `SellerBankTransferInfo` field to `AppConfig` (in `Config.cs`).
+      Add placeholder to `Cli/appsettings.json` with IBAN, BankName, Bic.
+      Update configuration tests to verify it loads correctly
 - [x] **1.6** Create `Cli/appsettings.json` with sensible defaults:
   - `App.StartInvoiceNumber`: `1`
   - `App.SellerAddress`: placeholder seller address fields
@@ -425,11 +434,12 @@ Coordinates between repos, exporter, and blob storage.
 
 - [ ] **7.2** Update `InvoiceManagement` class:
   - Constructor takes: `IInvoiceRepo`, `IClientRepo`, `IInvoiceExporter`,
-    `InvoiceHtmlTemplate`, `IBlobStorage`, seller `BillingAddress` (from config)
+    `InvoiceHtmlTemplate`, `IBlobStorage`, seller `BillingAddress` and
+    `BankTransferInfo` (from config)
   - `IssueInvoiceAsync(string clientNickname, int amountCents, DateTime? date)`:
-    look up client, build `InvoiceContent` with seller address from config and
-    buyer address from client, create invoice via repo, export PDF, upload to
-    blob storage, return `(Invoice, string pdfPath)`
+    look up client, build `InvoiceContent` with seller address and bank transfer
+    info from config, buyer address from client, create invoice via repo, export
+    PDF, upload to blob storage, return `(Invoice, string pdfPath)`
   - `CorrectInvoiceAsync(string invoiceNumber, int? amountCents, DateTime? date)`:
     get existing invoice, build updated content, update via repo, re-export PDF,
     upload to blob storage, return updated invoice
@@ -517,6 +527,7 @@ Wire everything together in the CLI with a command loop.
   - Parse: `invoices issue <client nickname> <amount> [date]`
   - Parse amount: handle both `.` and `,` as decimal separator, convert to cents
   - Parse date: optional, format `dd-MM-yyyy`, default to today
+  - Bank transfer info (IBAN, bank name, BIC) for the pay-grid comes from config
   - Call `InvoiceManagement.IssueInvoiceAsync`
   - Display created invoice number and PDF file path
 - [ ] **9.9** Implement `invoices correct` command:
@@ -609,7 +620,7 @@ start as soon as there are implementations to wrap. Phase 9 depends on everythin
 | Create | `Configuration.Tests/Configuration.Tests.csproj` | Test project for Configuration |
 | Create | `Configuration.Tests/JsonAppSettingsLoaderTest.cs` | Config loader tests |
 | Create | `Cli/appsettings.json` | Default application configuration |
-| Modify | `Configuration/Config.cs` | Add `SellerAddress` to `AppConfig` |
+| Modify | `Configuration/Config.cs` | Add `SellerAddress` and `SellerBankTransferInfo` to `AppConfig` |
 | Modify | `Configuration/Configuration.csproj` | Add NuGet packages |
 | Modify | `Configuration/JsonAppSettingsLoader.cs` | Implement config loading |
 | Modify | `Invoices/Invoices.csproj` | Add HtmlAgilityPack + PuppeteerSharp |

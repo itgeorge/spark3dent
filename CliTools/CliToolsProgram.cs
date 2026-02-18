@@ -86,6 +86,7 @@ internal static class CliToolsProgram
         Console.WriteLine("      --out, -o       Output file (default: invoice-preview.html)");
         Console.WriteLine("      --seller-name, --seller-mol, --seller-eik, --seller-vat, --seller-addr, --seller-city");
         Console.WriteLine("      --buyer-name, --buyer-mol, --buyer-eik, --buyer-vat, --buyer-addr, --buyer-city");
+        Console.WriteLine("      --iban, --bank-name, --bic   Bank transfer info for pay-grid");
     }
 
     static void RunBgAmountTranscriber(List<string> args)
@@ -192,11 +193,17 @@ internal static class CliToolsProgram
             PostalCode: "4000",
             Country: "BG");
 
+        var bankTransferInfo = new BankTransferInfo(
+            Iban: GetOrDefault("iban", "BG03FINV91501017534825"),
+            BankName: GetOrDefault("bank-name", "FIRST INVESTMENT BANK"),
+            Bic: GetOrDefault("bic", "FINVBGSF"));
+
         var invoice = new Invoice(number, new Invoice.InvoiceContent(
             Date: date,
             SellerAddress: seller,
             BuyerAddress: buyer,
-            LineItems: new[] { new Invoice.LineItem("Зъботехнически услуги", new Amount(totalCents, Currency.Eur)) }));
+            LineItems: new[] { new Invoice.LineItem("Зъботехнически услуги", new Amount(totalCents, Currency.Eur)) },
+            BankTransferInfo: bankTransferInfo));
 
         try
         {

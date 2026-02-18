@@ -9,6 +9,8 @@ public enum Currency
 
 public record BillingAddress(string Name, string RepresentativeName, string CompanyIdentifier, string? VatIdentifier, string Address, string City, string PostalCode, string Country);
 
+public record BankTransferInfo(string Iban, string BankName, string Bic);
+
 public record Amount
 {
     public Amount(int cents, Currency currency)
@@ -40,7 +42,7 @@ public record Invoice
 {
     public record LineItem(string Description, Amount Amount);
     
-    public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems);
+    public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems, BankTransferInfo BankTransferInfo);
 
     public Invoice(string number, InvoiceContent content)
     {

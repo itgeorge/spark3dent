@@ -376,12 +376,15 @@ public abstract class InvoiceRepoContractTest
         }
     }
 
-    private static Invoice.InvoiceContent BuildValidInvoiceContent(DateTime? date = null, BillingAddress? sellerAddress = null, BillingAddress? buyerAddress = null, Invoice.LineItem[]? lineItems = null)
+    private static readonly BankTransferInfo TestBankTransferInfo = new(Iban: "BG00TEST00000000000000", BankName: "Test Bank", Bic: "TESTBGSF");
+
+    private static Invoice.InvoiceContent BuildValidInvoiceContent(DateTime? date = null, BillingAddress? sellerAddress = null, BillingAddress? buyerAddress = null, Invoice.LineItem[]? lineItems = null, BankTransferInfo? bankTransferInfo = null)
     {
         return new Invoice.InvoiceContent(
             Date: date ?? DateTime.Now,
             SellerAddress: sellerAddress ?? new BillingAddress(Name: "Test Seller", RepresentativeName: "Test Representative", CompanyIdentifier: "Test CompanyIdentifier", VatIdentifier: "Test VatIdentifier", Address: "Test Address", City: "Test City", PostalCode: "Test PostalCode", Country: "Test Country"),
             BuyerAddress: buyerAddress ?? new BillingAddress(Name: "Test Buyer", RepresentativeName: "Test Representative", CompanyIdentifier: "Test CompanyIdentifier", VatIdentifier: "Test VatIdentifier", Address: "Test Address", City: "Test City", PostalCode: "Test PostalCode", Country: "Test Country"),
-            LineItems: lineItems ?? new[] { new Invoice.LineItem(Description: "Test Item", Amount: new Amount(100, Currency.Eur)) });
+            LineItems: lineItems ?? new[] { new Invoice.LineItem(Description: "Test Item", Amount: new Amount(100, Currency.Eur)) },
+            BankTransferInfo: bankTransferInfo ?? TestBankTransferInfo);
     }
 }

@@ -15,7 +15,7 @@ public class InvoiceHtmlTemplate
         "invNo", "invDate", "sellerNameTop", "sellerCompanyName", "sellerCity", "sellerAddr",
         "sellerRepresentativeName", "sellerBulstat", "sellerVat", "buyerCompanyName", "buyerAddr",
         "buyerRepresentativeName", "buyerBulstat", "buyerVat", "totalWords", "taxBase", "vat20",
-        "totalDue", "placeOfSupply", "taxEventDate"
+        "totalDue", "placeOfSupply", "taxEventDate", "paymentMethod", "iban", "bank", "bic"
     };
 
     private static readonly string[] RequiredLineItemFields = { "idx", "description", "amount" };
@@ -116,6 +116,10 @@ public class InvoiceHtmlTemplate
         SetField(doc, "totalWords", _amountTranscriber.Transcribe(invoice.TotalAmount));
         SetField(doc, "placeOfSupply", seller.City);
         SetField(doc, "taxEventDate", c.Date.ToString("yyyy-MM-dd"));
+        SetField(doc, "paymentMethod", "По сметка");
+        SetField(doc, "iban", c.BankTransferInfo.Iban);
+        SetField(doc, "bank", c.BankTransferInfo.BankName);
+        SetField(doc, "bic", c.BankTransferInfo.Bic);
 
         var formattedTotal = FormatAmount(totalCents);
         SetField(doc, "taxBase", formattedTotal);
