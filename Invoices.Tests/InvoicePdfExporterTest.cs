@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Invoices;
 using NUnit.Framework;
 using PuppeteerSharp;
+using UglyToad.PdfPig;
 
 namespace Invoices.Tests;
 
@@ -77,5 +79,44 @@ public class InvoicePdfExporterTest
         Assert.That(buffer[1], Is.EqualTo((byte)'P'));
         Assert.That(buffer[2], Is.EqualTo((byte)'D'));
         Assert.That(buffer[3], Is.EqualTo((byte)'F'));
+    }
+
+    [Test]
+    public async Task Export_WhenGivenValidInvoice_ContainsAllInvoiceText()
+    {
+        var template = await InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber());
+        var exporter = new InvoicePdfExporter();
+
+        await using var stream = await exporter.Export(template, ValidInvoice);
+        stream.Position = 0;
+
+        using var document = PdfDocument.Open(stream);
+        var allText = string.Join(" ", document.GetPages()
+            .SelectMany(p => p.GetWords())
+            .Select(w => w.Text));
+
+        // Invoice number (padded to 10 digits)
+        Assert.That(allText, Does.Contain("0000000001"));
+        // Date
+        Assert.That(allText, Does.Contain("2026-01-15"));
+        // Seller
+        Assert.That(allText, Does.Contain("Test Seller EOOD"));
+        Assert.That(allText, Does.Contain("Иван Тестов"));
+        Assert.That(allText, Does.Contain("111222333"));
+        Assert.That(allText, Does.Contain("ул. Тестова 1"));
+        Assert.That(allText, Does.Contain("София"));
+        // Buyer
+        Assert.That(allText, Does.Contain("Test Buyer EOOD"));
+        Assert.That(allText, Does.Contain("Мария Тестова"));
+        Assert.That(allText, Does.Contain("444555666"));
+        Assert.That(allText, Does.Contain("ул. Проба 42"));
+        Assert.That(allText, Does.Contain("Пловдив"));
+        // Line item
+        Assert.That(allText, Does.Contain("Зъботехнически услуги"));
+        Assert.That(allText, Does.Contain("100.00"));
+        // Bank transfer
+        Assert.That(allText, Does.Contain("BG00TEST12345678901234"));
+        Assert.That(allText, Does.Contain("Test Bank AD"));
+        Assert.That(allText, Does.Contain("TESTBGSF"));
     }
 }
