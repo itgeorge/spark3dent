@@ -15,6 +15,7 @@ class CliProgram
 {
     private const int LogBufferSize = 20;
     private const string InvoicesBucket = "invoices";
+    private const int InvoiceNumberPadding = 10;
 
     static async Task Main(string[] args)
     {
@@ -68,7 +69,7 @@ class CliProgram
         var clientRepo = new SqliteClientRepo(ContextFactory);
 
         var transcriber = new BgAmountTranscriber();
-        var template = await InvoiceHtmlTemplate.LoadAsync(transcriber);
+        var template = await InvoiceHtmlTemplate.LoadAsync(transcriber, invoiceNumberPadding: InvoiceNumberPadding);
 
         var chromiumPath = await ResolveChromiumExecutablePathAsync();
         var pdfExporter = new InvoicePdfExporter(chromiumPath);
@@ -92,7 +93,8 @@ class CliProgram
             sellerAddress,
             bankTransferInfo,
             InvoicesBucket,
-            logger);
+            logger,
+            invoiceNumberPadding: InvoiceNumberPadding);
 
         return (invoiceManagement, loggingClientRepo, loggingPdfExporter, loggingImageExporter);
     }

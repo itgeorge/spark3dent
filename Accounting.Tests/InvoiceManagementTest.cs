@@ -34,6 +34,55 @@ public class InvoiceManagementTest
     private static readonly string LineItemDescription = "Зъботехнически услуги";
 
     [Test]
+    public async Task IssueInvoiceAsync_GivenInvoiceNumberPadding_WhenIssuing_ThenFileStoredWithPaddedNumber()
+    {
+        const int padding = 6;
+        var fixture = await CreateFixtureAsync(invoiceNumberPadding: padding);
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+
+        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
+
+        Assert.That(result.Invoice.Number, Is.EqualTo("1"));
+        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.PdfPath, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.PdfPath), Is.EqualTo("invoice-000001.pdf"));
+    }
+
+    [Test]
+    public async Task ReExportInvoiceAsync_GivenInvoiceNumberPadding_WhenReExporting_ThenFileStoredWithPaddedNumber()
+    {
+        const int padding = 8;
+        var fixture = await CreateFixtureAsync(invoiceNumberPadding: padding);
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
+
+        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
+
+        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.PdfPath, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.PdfPath), Is.EqualTo("invoice-00000001.pdf"));
+    }
+
+    [Test]
+    public async Task CorrectInvoiceAsync_GivenInvoiceNumberPadding_WhenCorrecting_ThenFileStoredWithPaddedNumber()
+    {
+        const int padding = 6;
+        var fixture = await CreateFixtureAsync(invoiceNumberPadding: padding);
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+
+        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
+
+        Assert.That(result.Invoice.Number, Is.EqualTo("1"));
+        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.PdfPath, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.PdfPath), Is.EqualTo("invoice-000001.pdf"));
+    }
+
+    [Test]
     public async Task IssueInvoiceAsync_GivenValidClientAndAmount_WhenIssuing_ThenCreatesInvoiceExportsPdfStoresInBlobStorageAndReturnsPath()
     {
         var fixture = await CreateFixtureAsync();
@@ -445,14 +494,14 @@ public class InvoiceManagementTest
         PostalCode: "4000",
         Country: "BG");
 
-    private static async Task<TestFixture> CreateFixtureAsync()
+    private static async Task<TestFixture> CreateFixtureAsync(int invoiceNumberPadding = 10)
     {
-        var f = CreateFixture();
+        var f = CreateFixture(invoiceNumberPadding: invoiceNumberPadding);
         await f.InitializeAsync();
         return f;
     }
 
-    private static TestFixture CreateFixture(IInvoiceExporter? exporter = null)
+    private static TestFixture CreateFixture(IInvoiceExporter? exporter = null, int invoiceNumberPadding = 10)
     {
         var exp = exporter ?? new FakeInvoiceExporter();
         var invoiceRepo = new FakeInvoiceRepo();
@@ -462,7 +511,7 @@ public class InvoiceManagementTest
         var contentTypeMap = new Dictionary<string, string> { ["application/pdf"] = ".pdf" };
         var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
         blobStorage.DefineBucket(InvoicesBucket, tempDir);
-        var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber()).GetAwaiter().GetResult();
+        var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber(), null, invoiceNumberPadding).GetAwaiter().GetResult();
         var management = new InvoiceManagement(
             invoiceRepo,
             clientRepo,
@@ -472,11 +521,12 @@ public class InvoiceManagementTest
             BankInfo,
             InvoicesBucket,
             new CapturingLogger(),
-            LineItemDescription);
+            LineItemDescription,
+            invoiceNumberPadding);
         return new TestFixture(invoiceRepo, clientRepo, management, exp, tempDir);
     }
 
-    private static TestFixture CreateFixtureWithExporter(IInvoiceExporter exporter, out CapturingLogger logger)
+    private static TestFixture CreateFixtureWithExporter(IInvoiceExporter exporter, out CapturingLogger logger, int invoiceNumberPadding = 10)
     {
         logger = new CapturingLogger();
         var invoiceRepo = new FakeInvoiceRepo();
@@ -486,7 +536,7 @@ public class InvoiceManagementTest
         var contentTypeMap = new Dictionary<string, string> { ["application/pdf"] = ".pdf" };
         var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
         blobStorage.DefineBucket(InvoicesBucket, tempDir);
-        var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber()).GetAwaiter().GetResult();
+        var template = InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber(), null, invoiceNumberPadding).GetAwaiter().GetResult();
         var management = new InvoiceManagement(
             invoiceRepo,
             clientRepo,
@@ -496,7 +546,8 @@ public class InvoiceManagementTest
             BankInfo,
             InvoicesBucket,
             logger,
-            LineItemDescription);
+            LineItemDescription,
+            invoiceNumberPadding);
         return new TestFixture(invoiceRepo, clientRepo, management, exporter, tempDir);
     }
 

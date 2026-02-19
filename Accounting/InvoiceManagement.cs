@@ -23,6 +23,7 @@ public class InvoiceManagement
     private readonly BankTransferInfo _bankTransferInfo;
     private readonly string _invoicesBucket;
     private readonly string _lineItemDescription;
+    private readonly int _invoiceNumberPadding;
 
     public InvoiceManagement(
         IInvoiceRepo invoiceRepo,
@@ -33,7 +34,8 @@ public class InvoiceManagement
         BankTransferInfo bankTransferInfo,
         string invoicesBucket,
         ILogger logger,
-        string lineItemDescription = "Зъботехнически услуги")
+        string lineItemDescription = "Зъботехнически услуги",
+        int invoiceNumberPadding = 10)
     {
         _invoiceRepo = invoiceRepo ?? throw new ArgumentNullException(nameof(invoiceRepo));
         _clientRepo = clientRepo ?? throw new ArgumentNullException(nameof(clientRepo));
@@ -44,6 +46,7 @@ public class InvoiceManagement
         _bankTransferInfo = bankTransferInfo ?? throw new ArgumentNullException(nameof(bankTransferInfo));
         _invoicesBucket = invoicesBucket ?? throw new ArgumentNullException(nameof(invoicesBucket));
         _lineItemDescription = lineItemDescription ?? throw new ArgumentNullException(nameof(lineItemDescription));
+        _invoiceNumberPadding = invoiceNumberPadding;
     }
 
     public async Task<InvoiceOperationResult> IssueInvoiceAsync(
@@ -119,7 +122,10 @@ public class InvoiceManagement
         try
         {
             await using var stream = await exporter.Export(_template, invoice);
-            var objectKey = $"invoice-{invoice.Number}";
+            var formattedNumber = invoice.Number.Length >= _invoiceNumberPadding
+                ? invoice.Number
+                : invoice.Number.PadLeft(_invoiceNumberPadding, '0');
+            var objectKey = $"invoice-{formattedNumber}";
             var path = await _blobStorage.UploadAsync(_invoicesBucket, objectKey, stream, exporter.MimeType);
             return new ExportResult(true, path);
         }
