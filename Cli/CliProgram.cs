@@ -90,7 +90,8 @@ class CliProgram
             loggingBlobStorage,
             sellerAddress,
             bankTransferInfo,
-            InvoicesBucket);
+            InvoicesBucket,
+            logger);
 
         return (invoiceManagement, loggingClientRepo);
     }
@@ -385,9 +386,12 @@ class CliProgram
 
         try
         {
-            var (invoice, pdfPath) = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date);
-            Console.WriteLine($"Invoice {invoice.Number} created.");
-            Console.WriteLine($"PDF saved to: {pdfPath}");
+            var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date);
+            Console.WriteLine($"Invoice {result.Invoice.Number} created.");
+            if (result.ExportSuccessful && result.PdfPath != null)
+                Console.WriteLine($"PDF saved to: {result.PdfPath}");
+            else
+                Console.WriteLine("Warning: PDF export failed.");
         }
         catch (InvalidOperationException ex)
         {
@@ -425,9 +429,11 @@ class CliProgram
 
         try
         {
-            var invoice = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date);
-            Console.WriteLine($"Invoice {invoice.Number} corrected successfully.");
-            Console.WriteLine($"Total: {invoice.TotalAmount.Cents / 100}.{invoice.TotalAmount.Cents % 100:D2} €");
+            var result = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date);
+            Console.WriteLine($"Invoice {result.Invoice.Number} corrected successfully.");
+            Console.WriteLine($"Total: {result.Invoice.TotalAmount.Cents / 100}.{result.Invoice.TotalAmount.Cents % 100:D2} €");
+            if (!result.ExportSuccessful)
+                Console.WriteLine("Warning: PDF export failed.");
         }
         catch (InvalidOperationException ex)
         {

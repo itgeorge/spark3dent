@@ -4,6 +4,8 @@ using Utilities;
 
 namespace Accounting;
 
+public record InvoiceOperationResult(Invoice Invoice, bool ExportSuccessful, string? PdfPath);
+
 public class InvoiceManagement
 {
     /// <summary>MIME type used when storing invoice PDFs in blob storage.</summary>
@@ -12,6 +14,7 @@ public class InvoiceManagement
     private readonly IInvoiceRepo _invoiceRepo;
     private readonly IClientRepo _clientRepo;
     private readonly IInvoiceExporter _exporter;
+    private readonly ILogger _logger;
     private readonly InvoiceHtmlTemplate _template;
     private readonly IBlobStorage _blobStorage;
     private readonly BillingAddress _sellerAddress;
@@ -28,11 +31,13 @@ public class InvoiceManagement
         BillingAddress sellerAddress,
         BankTransferInfo bankTransferInfo,
         string invoicesBucket,
+        ILogger logger,
         string lineItemDescription = "Зъботехнически услуги")
     {
         _invoiceRepo = invoiceRepo ?? throw new ArgumentNullException(nameof(invoiceRepo));
         _clientRepo = clientRepo ?? throw new ArgumentNullException(nameof(clientRepo));
         _exporter = exporter ?? throw new ArgumentNullException(nameof(exporter));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _template = template ?? throw new ArgumentNullException(nameof(template));
         _blobStorage = blobStorage ?? throw new ArgumentNullException(nameof(blobStorage));
         _sellerAddress = sellerAddress ?? throw new ArgumentNullException(nameof(sellerAddress));
@@ -41,18 +46,18 @@ public class InvoiceManagement
         _lineItemDescription = lineItemDescription ?? throw new ArgumentNullException(nameof(lineItemDescription));
     }
 
-    public async Task<(Invoice Invoice, string PdfPath)> IssueInvoiceAsync(string clientNickname, int amountCents, DateTime? date)
+    public async Task<InvoiceOperationResult> IssueInvoiceAsync(string clientNickname, int amountCents, DateTime? date)
     {
         var client = await _clientRepo.GetAsync(clientNickname);
         var invoiceDate = date ?? DateTime.UtcNow.Date;
         var content = BuildInvoiceContent(invoiceDate, client.Address, amountCents);
 
         var invoice = await _invoiceRepo.CreateAsync(content);
-        var pdfPath = await ExportAndStorePdfAsync(invoice);
-        return (invoice, pdfPath);
+        var (exportSuccess, pdfPath) = await ExportAndStorePdfAsync(invoice);
+        return new InvoiceOperationResult(invoice, exportSuccess, pdfPath);
     }
 
-    public async Task<Invoice> CorrectInvoiceAsync(string invoiceNumber, int? amountCents, DateTime? date)
+    public async Task<InvoiceOperationResult> CorrectInvoiceAsync(string invoiceNumber, int? amountCents, DateTime? date)
     {
         var existing = await _invoiceRepo.GetAsync(invoiceNumber);
         var newDate = date ?? existing.Content.Date;
@@ -61,8 +66,8 @@ public class InvoiceManagement
 
         await _invoiceRepo.UpdateAsync(invoiceNumber, updatedContent);
         var updatedInvoice = new Invoice(invoiceNumber, updatedContent);
-        await ExportAndStorePdfAsync(updatedInvoice);
-        return updatedInvoice;
+        var (exportSuccess, pdfPath) = await ExportAndStorePdfAsync(updatedInvoice);
+        return new InvoiceOperationResult(updatedInvoice, exportSuccess, pdfPath);
     }
 
     /// <summary>
@@ -70,13 +75,13 @@ public class InvoiceManagement
     /// Use when the template has changed or the PDF was lost/corrupted.
     /// </summary>
     /// <param name="invoiceNumber">The invoice number to re-export.</param>
-    /// <returns>The invoice and the path where the PDF was stored.</returns>
+    /// <returns>The invoice and export result.</returns>
     /// <exception cref="InvalidOperationException">When the invoice is not found.</exception>
-    public async Task<(Invoice Invoice, string PdfPath)> ReExportInvoiceAsync(string invoiceNumber)
+    public async Task<InvoiceOperationResult> ReExportInvoiceAsync(string invoiceNumber)
     {
         var invoice = await _invoiceRepo.GetAsync(invoiceNumber);
-        var pdfPath = await ExportAndStorePdfAsync(invoice);
-        return (invoice, pdfPath);
+        var (exportSuccess, pdfPath) = await ExportAndStorePdfAsync(invoice);
+        return new InvoiceOperationResult(invoice, exportSuccess, pdfPath);
     }
 
     public Task<QueryResult<Invoice>> ListInvoicesAsync(int limit)
@@ -98,10 +103,19 @@ public class InvoiceManagement
             BankTransferInfo: _bankTransferInfo);
     }
 
-    private async Task<string> ExportAndStorePdfAsync(Invoice invoice)
+    private async Task<(bool Success, string? Path)> ExportAndStorePdfAsync(Invoice invoice)
     {
-        await using var pdfStream = await _exporter.Export(_template, invoice);
-        var objectKey = $"invoice-{invoice.Number}";
-        return await _blobStorage.UploadAsync(_invoicesBucket, objectKey, pdfStream, PdfContentType);
+        try
+        {
+            await using var pdfStream = await _exporter.Export(_template, invoice);
+            var objectKey = $"invoice-{invoice.Number}";
+            var path = await _blobStorage.UploadAsync(_invoicesBucket, objectKey, pdfStream, PdfContentType);
+            return (true, path);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Invoice PDF export failed", ex);
+            return (false, null);
+        }
     }
 }
