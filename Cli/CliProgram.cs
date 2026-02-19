@@ -30,7 +30,7 @@ class CliProgram
         using var logger = new BufferedLogger(fileLogger, LogBufferSize);
         logger.LogInfo("Spark3Dent started");
 
-        var (invoiceManagement, clientRepo, exporter) = await SetupDependenciesAsync(config, logger);
+        var (invoiceManagement, clientRepo, pdfExporter, imageExporter) = await SetupDependenciesAsync(config, logger);
         if (invoiceManagement == null || clientRepo == null)
         {
             logger.LogError("Failed to initialize dependencies. Check config: SellerAddress and SellerBankTransferInfo are required.", new InvalidOperationException("Missing config"));
@@ -38,13 +38,13 @@ class CliProgram
             return;
         }
 
-        await RunCommandLoopAsync(args, invoiceManagement, clientRepo, exporter!, logger);
+        await RunCommandLoopAsync(args, invoiceManagement, clientRepo, pdfExporter!, imageExporter, logger);
     }
 
-    static async Task<(InvoiceManagement? InvoiceManagement, IClientRepo? ClientRepo, IInvoiceExporter? Exporter)> SetupDependenciesAsync(Config config, ILogger logger)
+    static async Task<(InvoiceManagement? InvoiceManagement, IClientRepo? ClientRepo, IInvoiceExporter? PdfExporter, IInvoiceExporter? ImageExporter)> SetupDependenciesAsync(Config config, ILogger logger)
     {
         if (config.App.SellerAddress == null || config.App.SellerBankTransferInfo == null)
-            return (null, null, null);
+            return (null, null, null, null);
 
         var sellerAddress = ConfigToBillingAddress(config.App.SellerAddress);
         var bankTransferInfo = ConfigToBankTransferInfo(config.App.SellerBankTransferInfo);
@@ -71,12 +71,14 @@ class CliProgram
         var template = await InvoiceHtmlTemplate.LoadAsync(transcriber);
 
         var chromiumPath = await ResolveChromiumExecutablePathAsync();
-        var exporter = new InvoicePdfExporter(chromiumPath);
+        var pdfExporter = new InvoicePdfExporter(chromiumPath);
+        var imageExporter = new InvoiceImageExporter(chromiumPath);
 
         var loggingInvoiceRepo = new LoggingInvoiceRepo(invoiceRepo, logger);
         var loggingClientRepo = new LoggingClientRepo(clientRepo, logger);
-        var loggingExporter = new LoggingInvoiceExporter(exporter, logger);
-        var contentTypeMap = BuildContentTypeMap(loggingExporter);
+        var loggingPdfExporter = new LoggingInvoiceExporter(pdfExporter, logger);
+        var loggingImageExporter = new LoggingInvoiceExporter(imageExporter, logger);
+        var contentTypeMap = BuildContentTypeMap(loggingPdfExporter, loggingImageExporter);
         var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
         var invoicesDir = Path.Combine(config.Desktop.BlobStoragePath, "invoices");
         blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
@@ -92,7 +94,7 @@ class CliProgram
             InvoicesBucket,
             logger);
 
-        return (invoiceManagement, loggingClientRepo, loggingExporter);
+        return (invoiceManagement, loggingClientRepo, loggingPdfExporter, loggingImageExporter);
     }
 
     static async Task<string?> ResolveChromiumExecutablePathAsync()
@@ -113,7 +115,7 @@ class CliProgram
         }
     }
 
-    static Dictionary<string, string> BuildContentTypeMap(IInvoiceExporter exporter)
+    static Dictionary<string, string> BuildContentTypeMap(IInvoiceExporter pdfExporter, IInvoiceExporter imageExporter)
     {
         var mimeToExtension = new Dictionary<string, string>
         {
@@ -121,8 +123,11 @@ class CliProgram
             ["image/png"] = ".png"
         };
         var map = new Dictionary<string, string>();
-        if (mimeToExtension.TryGetValue(exporter.MimeType, out var ext))
-            map[exporter.MimeType] = ext;
+        foreach (var exporter in new[] { pdfExporter, imageExporter })
+        {
+            if (mimeToExtension.TryGetValue(exporter.MimeType, out var ext))
+                map[exporter.MimeType] = ext;
+        }
         return map;
     }
 
@@ -136,12 +141,13 @@ class CliProgram
         string[] args,
         InvoiceManagement invoiceManagement,
         IClientRepo clientRepo,
-        IInvoiceExporter exporter,
+        IInvoiceExporter pdfExporter,
+        IInvoiceExporter? imageExporter,
         ILogger logger)
     {
         if (args.Length > 0)
         {
-            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, exporter, logger);
+            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
             return;
         }
 
@@ -160,7 +166,7 @@ class CliProgram
                 break;
             }
 
-            await ExecuteCommandAsync(parts, invoiceManagement, clientRepo, exporter, logger);
+            await ExecuteCommandAsync(parts, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
         }
     }
 
@@ -168,7 +174,8 @@ class CliProgram
         string[] args,
         InvoiceManagement invoiceManagement,
         IClientRepo clientRepo,
-        IInvoiceExporter exporter,
+        IInvoiceExporter pdfExporter,
+        IInvoiceExporter? imageExporter,
         ILogger logger)
     {
         try
@@ -194,7 +201,7 @@ class CliProgram
 
             if (cmd == "invoices")
             {
-                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, exporter);
+                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, pdfExporter, imageExporter);
                 return;
             }
 
@@ -219,6 +226,7 @@ class CliProgram
         Console.WriteLine("                          - Issue invoice. Amount: 123.45 or 123,45 (€). Date: dd-MM-yyyy (default: today)");
         Console.WriteLine("  invoices correct <number> <amount> [date]");
         Console.WriteLine("                          - Correct an existing invoice");
+        Console.WriteLine("  invoices issue/correct  - Add --exportPng to also export PNG image (in addition to PDF)");
         Console.WriteLine("  invoices list           - List recent invoices (newest first)");
     }
 
@@ -348,7 +356,8 @@ class CliProgram
     static async Task RunInvoicesCommandAsync(
         string[] args,
         InvoiceManagement invoiceManagement,
-        IInvoiceExporter exporter)
+        IInvoiceExporter pdfExporter,
+        IInvoiceExporter? imageExporter)
     {
         if (args.Length == 0)
         {
@@ -360,13 +369,13 @@ class CliProgram
 
         if (sub == "issue")
         {
-            await InvoicesIssueAsync(args.Skip(1).ToArray(), invoiceManagement, exporter);
+            await InvoicesIssueAsync(args.Skip(1).ToArray(), invoiceManagement, pdfExporter, imageExporter);
             return;
         }
 
         if (sub == "correct")
         {
-            await InvoicesCorrectAsync(args.Skip(1).ToArray(), invoiceManagement, exporter);
+            await InvoicesCorrectAsync(args.Skip(1).ToArray(), invoiceManagement, pdfExporter, imageExporter);
             return;
         }
 
@@ -382,18 +391,22 @@ class CliProgram
     static async Task InvoicesIssueAsync(
         string[] args,
         InvoiceManagement invoiceManagement,
-        IInvoiceExporter exporter)
+        IInvoiceExporter pdfExporter,
+        IInvoiceExporter? imageExporter)
     {
-        if (args.Length < 2)
+        var (opts, positional) = CliOptsParser.ParseWithPositional(args.ToList());
+        var exportPng = CliOptsParser.HasFlag(opts, "exportPng");
+
+        if (positional.Count < 2)
         {
-            Console.WriteLine("Usage: invoices issue <client nickname> <amount> [date]");
+            Console.WriteLine("Usage: invoices issue <client nickname> <amount> [date] [--exportPng]");
             Console.WriteLine("  amount: e.g. 123.45 or 123,45 (euros)");
             Console.WriteLine("  date: dd-MM-yyyy (default: today)");
             return;
         }
 
-        var nickname = args[0];
-        var amountStr = args[1].Replace(',', '.');
+        var nickname = positional[0];
+        var amountStr = positional[1].Replace(',', '.');
         if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amountDec) || amountDec < 0)
         {
             Console.WriteLine("Invalid amount. Use e.g. 123.45 or 123,45");
@@ -402,9 +415,9 @@ class CliProgram
         var amountCents = (int)Math.Round(amountDec * 100);
 
         DateTime? date = null;
-        if (args.Length >= 3)
+        if (positional.Count >= 3)
         {
-            if (!DateTime.TryParseExact(args[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            if (!DateTime.TryParseExact(positional[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
             {
                 Console.WriteLine("Invalid date. Use dd-MM-yyyy");
                 return;
@@ -414,12 +427,21 @@ class CliProgram
 
         try
         {
-            var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, exporter);
+            var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, pdfExporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} created.");
             if (result.ExportSuccessful && result.PdfPath != null)
                 Console.WriteLine($"PDF saved to: {result.PdfPath}");
             else
                 Console.WriteLine("Warning: PDF export failed.");
+
+            if (exportPng && imageExporter != null)
+            {
+                var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
+                if (pngResult.ExportSuccessful && pngResult.ExportResult.Path != null)
+                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Path}");
+                else
+                    Console.WriteLine("Warning: PNG export failed.");
+            }
         }
         catch (InvalidOperationException ex)
         {
@@ -430,16 +452,20 @@ class CliProgram
     static async Task InvoicesCorrectAsync(
         string[] args,
         InvoiceManagement invoiceManagement,
-        IInvoiceExporter exporter)
+        IInvoiceExporter pdfExporter,
+        IInvoiceExporter? imageExporter)
     {
-        if (args.Length < 2)
+        var (opts, positional) = CliOptsParser.ParseWithPositional(args.ToList());
+        var exportPng = CliOptsParser.HasFlag(opts, "exportPng");
+
+        if (positional.Count < 2)
         {
-            Console.WriteLine("Usage: invoices correct <invoice number> <amount> [date]");
+            Console.WriteLine("Usage: invoices correct <invoice number> <amount> [date] [--exportPng]");
             return;
         }
 
-        var invoiceNumber = args[0];
-        var amountStr = args[1].Replace(',', '.');
+        var invoiceNumber = positional[0];
+        var amountStr = positional[1].Replace(',', '.');
         if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amountDec) || amountDec < 0)
         {
             Console.WriteLine("Invalid amount. Use e.g. 123.45 or 123,45");
@@ -448,9 +474,9 @@ class CliProgram
         var amountCents = (int)Math.Round(amountDec * 100);
 
         DateTime? date = null;
-        if (args.Length >= 3)
+        if (positional.Count >= 3)
         {
-            if (!DateTime.TryParseExact(args[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            if (!DateTime.TryParseExact(positional[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
             {
                 Console.WriteLine("Invalid date. Use dd-MM-yyyy");
                 return;
@@ -460,11 +486,20 @@ class CliProgram
 
         try
         {
-            var result = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date, exporter);
+            var result = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date, pdfExporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} corrected successfully.");
             Console.WriteLine($"Total: {result.Invoice.TotalAmount.Cents / 100}.{result.Invoice.TotalAmount.Cents % 100:D2} €");
             if (!result.ExportSuccessful)
                 Console.WriteLine("Warning: PDF export failed.");
+
+            if (exportPng && imageExporter != null)
+            {
+                var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
+                if (pngResult.ExportSuccessful && pngResult.ExportResult.Path != null)
+                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Path}");
+                else
+                    Console.WriteLine("Warning: PNG export failed.");
+            }
         }
         catch (InvalidOperationException ex)
         {

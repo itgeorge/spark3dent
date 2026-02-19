@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Invoices;
 using PuppeteerSharp;
+using Utilities;
 
 namespace CliTools;
 
@@ -156,7 +157,7 @@ internal static class CliToolsProgram
 
     static void RunTemplate(List<string> args)
     {
-        var opts = ParseOpts(args, new Dictionary<string, string>
+        var opts = CliOptsParser.Parse(args, new Dictionary<string, string>
         {
             ["n"] = "number",
             ["d"] = "date",
@@ -233,7 +234,7 @@ internal static class CliToolsProgram
 
     static void RunInvoice(List<string> args)
     {
-        var opts = ParseOpts(args, new Dictionary<string, string>
+        var opts = CliOptsParser.Parse(args, new Dictionary<string, string>
         {
             ["n"] = "number",
             ["d"] = "date",
@@ -243,7 +244,7 @@ internal static class CliToolsProgram
         });
 
         string GetOrDefault(string key, string d) => opts.TryGetValue(key, out var v) ? v : d;
-        bool HasFlag(string key) => opts.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v);
+        bool HasFlag(string key) => CliOptsParser.HasFlag(opts, key);
 
         var number = GetOrDefault("number", "TPL-001");
         var dateStr = GetOrDefault("date", DateTime.Today.ToString("yyyy-MM-dd"));
@@ -357,46 +358,4 @@ internal static class CliToolsProgram
         return result.ToArray();
     }
 
-    static Dictionary<string, string> ParseOpts(List<string> args, Dictionary<string, string> shortToLong)
-    {
-        var (opts, _) = ParseOptsWithPositional(args, shortToLong);
-        return opts;
-    }
-
-    static (Dictionary<string, string> opts, List<string> positional) ParseOptsWithPositional(List<string> args, Dictionary<string, string> shortToLong)
-    {
-        var opts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var positional = new List<string>();
-        for (var i = 0; i < args.Count; i++)
-        {
-            var a = args[i];
-            if (a.StartsWith("--"))
-            {
-                var key = a[2..].ToLowerInvariant();
-                if (i + 1 < args.Count && !args[i + 1].StartsWith("-"))
-                {
-                    opts[key] = args[i + 1];
-                    i++;
-                }
-                else
-                {
-                    opts[key] = "true";
-                }
-            }
-            else if (a.Length == 2 && a[0] == '-')
-            {
-                var shortKey = char.ToLowerInvariant(a[1]).ToString();
-                if (shortToLong.TryGetValue(shortKey, out var longKey) && i + 1 < args.Count)
-                {
-                    opts[longKey] = args[i + 1];
-                    i++;
-                }
-            }
-            else
-            {
-                positional.Add(a);
-            }
-        }
-        return (opts, positional);
-    }
 }
