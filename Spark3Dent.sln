@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cli", "Cli\Cli.csproj", "{364A525E-36AD-40CF-B3A9-2F1C0518B85A}"
@@ -30,6 +30,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Configuration.Tests", "Configuration.Tests\Configuration.Tests.csproj", "{55DFEEE4-7756-4AF5-895F-39F42BC926D5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CliTools", "CliTools\CliTools.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QaHarness", "QaHarness\QaHarness.csproj", "{31BBD95C-01EB-4146-A898-3A5EC61CF219}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -97,5 +99,9 @@ Global
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31BBD95C-01EB-4146-A898-3A5EC61CF219}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31BBD95C-01EB-4146-A898-3A5EC61CF219}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31BBD95C-01EB-4146-A898-3A5EC61CF219}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31BBD95C-01EB-4146-A898-3A5EC61CF219}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
