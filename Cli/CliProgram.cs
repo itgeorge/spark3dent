@@ -1,5 +1,12 @@
+using System.Globalization;
 using System.Text.Json;
+using Accounting;
 using Configuration;
+using Database;
+using Invoices;
+using Microsoft.EntityFrameworkCore;
+using PuppeteerSharp;
+using Storage;
 using Utilities;
 
 namespace Cli;
@@ -7,6 +14,7 @@ namespace Cli;
 class CliProgram
 {
     private const int LogBufferSize = 20;
+    private const string InvoicesBucket = "invoices";
 
     static async Task Main(string[] args)
     {
@@ -15,23 +23,458 @@ class CliProgram
 
         var config = await LoadAndResolveConfigAsync();
 
-        // Set up logging: file in LogDirectory, buffered for performance
         var logDir = config.Desktop.LogDirectory;
         Directory.CreateDirectory(logDir);
         var logPath = Path.Combine(logDir, "spark3dent.log");
-        // FileLogger uses append mode; BufferedLogger flushes on Dispose
         using var fileLogger = new FileLogger(logPath);
         using var logger = new BufferedLogger(fileLogger, LogBufferSize);
         logger.LogInfo("Spark3Dent started");
 
-        // TODO (Phase 9): initialize dependencies (repos, exporter, blob storage, etc.) and wrap with logging decorators:
-        // LoggingInvoiceRepo, LoggingClientRepo, LoggingInvoiceExporter, LoggingBlobStorage, LoggingConfigLoader
+        var (invoiceManagement, clientRepo) = await SetupDependenciesAsync(config, logger);
+        if (invoiceManagement == null || clientRepo == null)
+        {
+            logger.LogError("Failed to initialize dependencies. Check config: SellerAddress and SellerBankTransferInfo are required.", new InvalidOperationException("Missing config"));
+            Console.WriteLine("Error: SellerAddress and SellerBankTransferInfo must be configured in appsettings.json.");
+            return;
+        }
 
-        // Run in a loop until exit.
-        // - If args are provided, run based on them
-        // - Otherwise, go into "interactive mode", prompt for command and parameters
-        // Commands: clients add/edit/list, invoices issue/correct/list, help, exit
+        await RunCommandLoopAsync(args, invoiceManagement, clientRepo, logger);
     }
+
+    static async Task<(InvoiceManagement? InvoiceManagement, IClientRepo? ClientRepo)> SetupDependenciesAsync(Config config, ILogger logger)
+    {
+        if (config.App.SellerAddress == null || config.App.SellerBankTransferInfo == null)
+            return (null, null);
+
+        var sellerAddress = ConfigToBillingAddress(config.App.SellerAddress);
+        var bankTransferInfo = ConfigToBankTransferInfo(config.App.SellerBankTransferInfo);
+
+        var dbPath = config.Desktop.DatabasePath;
+        var dbDir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(dbDir))
+            Directory.CreateDirectory(dbDir);
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+
+        await using (var ctx = new AppDbContext(options))
+        {
+            await ctx.Database.EnsureCreatedAsync();
+        }
+
+        AppDbContext ContextFactory() => new AppDbContext(options);
+        var invoiceRepo = new SqliteInvoiceRepo(ContextFactory, config);
+        var clientRepo = new SqliteClientRepo(ContextFactory);
+
+        var blobStorage = new LocalFileSystemBlobStorage(new Dictionary<string, string> { [InvoiceManagement.PdfContentType] = ".pdf" });
+        var invoicesDir = Path.Combine(config.Desktop.BlobStoragePath, "invoices");
+        blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
+
+        var transcriber = new BgAmountTranscriber();
+        var template = await InvoiceHtmlTemplate.LoadAsync(transcriber);
+
+        var chromiumPath = await ResolveChromiumExecutablePathAsync();
+        var exporter = new InvoicePdfExporter(chromiumPath);
+
+        var loggingInvoiceRepo = new LoggingInvoiceRepo(invoiceRepo, logger);
+        var loggingClientRepo = new LoggingClientRepo(clientRepo, logger);
+        var loggingExporter = new LoggingInvoiceExporter(exporter, logger);
+        var loggingBlobStorage = new LoggingBlobStorage(blobStorage, logger);
+
+        var invoiceManagement = new InvoiceManagement(
+            loggingInvoiceRepo,
+            loggingClientRepo,
+            loggingExporter,
+            template,
+            loggingBlobStorage,
+            sellerAddress,
+            bankTransferInfo,
+            InvoicesBucket);
+
+        return (invoiceManagement, loggingClientRepo);
+    }
+
+    static async Task<string?> ResolveChromiumExecutablePathAsync()
+    {
+        var chromiumDir = Path.Combine(AppContext.BaseDirectory, "chromium");
+        if (!Directory.Exists(chromiumDir))
+            return null;
+
+        var fetcher = new BrowserFetcher(new BrowserFetcherOptions { Path = chromiumDir });
+        try
+        {
+            var result = await fetcher.DownloadAsync();
+            return result.GetExecutablePath();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static BillingAddress ConfigToBillingAddress(SellerAddress sa) =>
+        new(sa.Name, sa.RepresentativeName, sa.CompanyIdentifier, sa.VatIdentifier, sa.Address, sa.City, sa.PostalCode, sa.Country);
+
+    static BankTransferInfo ConfigToBankTransferInfo(SellerBankTransferInfo st) =>
+        new(st.Iban, st.BankName, st.Bic);
+
+    static async Task RunCommandLoopAsync(string[] args, InvoiceManagement invoiceManagement, IClientRepo clientRepo, ILogger logger)
+    {
+        if (args.Length > 0)
+        {
+            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, logger);
+            return;
+        }
+
+        while (true)
+        {
+            Console.Write("> ");
+            var line = Console.ReadLine();
+            if (line == null) break;
+
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) continue;
+
+            if (parts[0].Equals("exit", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInfo("Exiting");
+                break;
+            }
+
+            await ExecuteCommandAsync(parts, invoiceManagement, clientRepo, logger);
+        }
+    }
+
+    static async Task ExecuteCommandAsync(string[] args, InvoiceManagement invoiceManagement, IClientRepo clientRepo, ILogger logger)
+    {
+        try
+        {
+            var cmd = args[0].ToLowerInvariant();
+
+            if (cmd == "help")
+            {
+                PrintHelp();
+                return;
+            }
+
+            if (cmd == "exit" && args.Length == 1)
+            {
+                return;
+            }
+
+            if (cmd == "clients")
+            {
+                await RunClientsCommandAsync(args.Skip(1).ToArray(), clientRepo);
+                return;
+            }
+
+            if (cmd == "invoices")
+            {
+                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement);
+                return;
+            }
+
+            Console.WriteLine($"Unknown command: {cmd}. Type 'help' for available commands.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError("Command execution failed", ex);
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static void PrintHelp()
+    {
+        Console.WriteLine("Available commands:");
+        Console.WriteLine("  help                    - Show this help");
+        Console.WriteLine("  exit                    - Exit (interactive mode only)");
+        Console.WriteLine("  clients add             - Add a new client (prompts for fields)");
+        Console.WriteLine("  clients edit            - Edit an existing client");
+        Console.WriteLine("  clients list            - List clients (alphabetically by nickname)");
+        Console.WriteLine("  invoices issue <nickname> <amount> [date]");
+        Console.WriteLine("                          - Issue invoice. Amount: 123.45 or 123,45 (€). Date: dd-MM-yyyy (default: today)");
+        Console.WriteLine("  invoices correct <number> <amount> [date]");
+        Console.WriteLine("                          - Correct an existing invoice");
+        Console.WriteLine("  invoices list           - List recent invoices (newest first)");
+    }
+
+    static async Task RunClientsCommandAsync(string[] args, IClientRepo clientRepo)
+    {
+        if (args.Length == 0)
+        {
+            Console.WriteLine("Usage: clients add | clients edit | clients list");
+            return;
+        }
+
+        var sub = args[0].ToLowerInvariant();
+
+        if (sub == "add")
+        {
+            await ClientsAddAsync(clientRepo);
+            return;
+        }
+
+        if (sub == "edit")
+        {
+            await ClientsEditAsync(args.Skip(1).ToArray(), clientRepo);
+            return;
+        }
+
+        if (sub == "list")
+        {
+            await ClientsListAsync(clientRepo);
+            return;
+        }
+
+        Console.WriteLine($"Unknown subcommand: {sub}. Use: clients add | clients edit | clients list");
+    }
+
+    static async Task ClientsAddAsync(IClientRepo clientRepo)
+    {
+        var nickname = ReadRequired("Nickname");
+        if (nickname == null) return;
+
+        var name = ReadRequired("Company name");
+        if (name == null) return;
+
+        var representativeName = ReadRequired("Representative name");
+        if (representativeName == null) return;
+
+        var companyIdentifier = ReadRequired("Company identifier (EIK/Bulstat)");
+        if (companyIdentifier == null) return;
+
+        var vatIdentifier = ReadOptional("VAT identifier (optional)");
+        var address = ReadRequired("Address");
+        if (address == null) return;
+
+        var city = ReadRequired("City");
+        if (city == null) return;
+
+        var postalCode = ReadRequired("Postal code");
+        if (postalCode == null) return;
+
+        var country = ReadRequired("Country");
+        if (country == null) return;
+
+        var billingAddress = new BillingAddress(name, representativeName, companyIdentifier, vatIdentifier, address, city, postalCode, country);
+        var client = new Client(nickname, billingAddress);
+
+        await clientRepo.AddAsync(client);
+        Console.WriteLine($"Client '{nickname}' added successfully.");
+    }
+
+    static async Task ClientsEditAsync(string[] args, IClientRepo clientRepo)
+    {
+        string? nickname = args.Length > 0 ? args[0] : ReadRequired("Nickname of client to edit");
+        if (string.IsNullOrEmpty(nickname)) return;
+
+        Client client;
+        try
+        {
+            client = await clientRepo.GetAsync(nickname!);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            return;
+        }
+
+        var addr = client.Address;
+        Console.WriteLine($"Current values for '{nickname}':");
+        Console.WriteLine($"  Company: {addr.Name}");
+        Console.WriteLine($"  Representative: {addr.RepresentativeName}");
+        Console.WriteLine($"  EIK: {addr.CompanyIdentifier}");
+        Console.WriteLine($"  VAT: {addr.VatIdentifier ?? "(none)"}");
+        Console.WriteLine($"  Address: {addr.Address}, {addr.City} {addr.PostalCode}, {addr.Country}");
+        Console.WriteLine("Enter new values (empty = keep current):");
+
+        var newNickname = ReadOptional($"Nickname [{nickname}]") ?? nickname;
+        var newName = ReadOptional($"Company name [{addr.Name}]") ?? addr.Name;
+        var newRep = ReadOptional($"Representative name [{addr.RepresentativeName}]") ?? addr.RepresentativeName;
+        var newEik = ReadOptional($"Company identifier [{addr.CompanyIdentifier}]") ?? addr.CompanyIdentifier;
+        var newVat = ReadOptional($"VAT identifier [{addr.VatIdentifier ?? ""}]");
+        if (string.IsNullOrWhiteSpace(newVat)) newVat = addr.VatIdentifier;
+        var newAddr = ReadOptional($"Address [{addr.Address}]") ?? addr.Address;
+        var newCity = ReadOptional($"City [{addr.City}]") ?? addr.City;
+        var newPostal = ReadOptional($"Postal code [{addr.PostalCode}]") ?? addr.PostalCode;
+        var newCountry = ReadOptional($"Country [{addr.Country}]") ?? addr.Country;
+
+        var newBilling = new BillingAddress(newName, newRep, newEik, newVat, newAddr, newCity, newPostal, newCountry);
+        var update = new IClientRepo.ClientUpdate(newNickname, newBilling);
+
+        await clientRepo.UpdateAsync(nickname!, update);
+        Console.WriteLine($"Client updated successfully.");
+    }
+
+    static async Task ClientsListAsync(IClientRepo clientRepo)
+    {
+        var result = await clientRepo.ListAsync(limit: 20);
+        if (result.Items.Count == 0)
+        {
+            Console.WriteLine("No clients.");
+            return;
+        }
+
+        Console.WriteLine($"{"Nickname",-20} {"Company",-30} {"Representative",-25}");
+        Console.WriteLine(new string('-', 75));
+        foreach (var c in result.Items)
+            Console.WriteLine($"{c.Nickname,-20} {Truncate(c.Address.Name, 28),-30} {Truncate(c.Address.RepresentativeName, 23),-25}");
+    }
+
+    static async Task RunInvoicesCommandAsync(string[] args, InvoiceManagement invoiceManagement)
+    {
+        if (args.Length == 0)
+        {
+            Console.WriteLine("Usage: invoices issue | invoices correct | invoices list");
+            return;
+        }
+
+        var sub = args[0].ToLowerInvariant();
+
+        if (sub == "issue")
+        {
+            await InvoicesIssueAsync(args.Skip(1).ToArray(), invoiceManagement);
+            return;
+        }
+
+        if (sub == "correct")
+        {
+            await InvoicesCorrectAsync(args.Skip(1).ToArray(), invoiceManagement);
+            return;
+        }
+
+        if (sub == "list")
+        {
+            await InvoicesListAsync(invoiceManagement);
+            return;
+        }
+
+        Console.WriteLine($"Unknown subcommand: {sub}. Use: invoices issue | invoices correct | invoices list");
+    }
+
+    static async Task InvoicesIssueAsync(string[] args, InvoiceManagement invoiceManagement)
+    {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("Usage: invoices issue <client nickname> <amount> [date]");
+            Console.WriteLine("  amount: e.g. 123.45 or 123,45 (euros)");
+            Console.WriteLine("  date: dd-MM-yyyy (default: today)");
+            return;
+        }
+
+        var nickname = args[0];
+        var amountStr = args[1].Replace(',', '.');
+        if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amountDec) || amountDec < 0)
+        {
+            Console.WriteLine("Invalid amount. Use e.g. 123.45 or 123,45");
+            return;
+        }
+        var amountCents = (int)Math.Round(amountDec * 100);
+
+        DateTime? date = null;
+        if (args.Length >= 3)
+        {
+            if (!DateTime.TryParseExact(args[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            {
+                Console.WriteLine("Invalid date. Use dd-MM-yyyy");
+                return;
+            }
+            date = parsedDate;
+        }
+
+        try
+        {
+            var (invoice, pdfPath) = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date);
+            Console.WriteLine($"Invoice {invoice.Number} created.");
+            Console.WriteLine($"PDF saved to: {pdfPath}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static async Task InvoicesCorrectAsync(string[] args, InvoiceManagement invoiceManagement)
+    {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("Usage: invoices correct <invoice number> <amount> [date]");
+            return;
+        }
+
+        var invoiceNumber = args[0];
+        var amountStr = args[1].Replace(',', '.');
+        if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amountDec) || amountDec < 0)
+        {
+            Console.WriteLine("Invalid amount. Use e.g. 123.45 or 123,45");
+            return;
+        }
+        var amountCents = (int)Math.Round(amountDec * 100);
+
+        DateTime? date = null;
+        if (args.Length >= 3)
+        {
+            if (!DateTime.TryParseExact(args[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            {
+                Console.WriteLine("Invalid date. Use dd-MM-yyyy");
+                return;
+            }
+            date = parsedDate;
+        }
+
+        try
+        {
+            var invoice = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date);
+            Console.WriteLine($"Invoice {invoice.Number} corrected successfully.");
+            Console.WriteLine($"Total: {invoice.TotalAmount.Cents / 100}.{invoice.TotalAmount.Cents % 100:D2} €");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static async Task InvoicesListAsync(InvoiceManagement invoiceManagement)
+    {
+        var result = await invoiceManagement.ListInvoicesAsync(limit: 20);
+        if (result.Items.Count == 0)
+        {
+            Console.WriteLine("No invoices.");
+            return;
+        }
+
+        Console.WriteLine($"{"Number",-10} {"Date",-12} {"Buyer",-30} {"Total (€)",-12}");
+        Console.WriteLine(new string('-', 64));
+        foreach (var inv in result.Items)
+        {
+            var totalStr = $"{inv.TotalAmount.Cents / 100}.{inv.TotalAmount.Cents % 100:D2}";
+            var buyerName = Truncate(inv.Content.BuyerAddress.Name, 28);
+            Console.WriteLine($"{inv.Number,-10} {inv.Content.Date,-12:dd-MM-yyyy} {buyerName,-30} {totalStr,-12}");
+        }
+    }
+
+    static string? ReadRequired(string prompt)
+    {
+        Console.Write($"{prompt}: ");
+        var value = Console.ReadLine()?.Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            Console.WriteLine("This field is required.");
+            return null;
+        }
+        return value;
+    }
+
+    static string? ReadOptional(string prompt)
+    {
+        Console.Write($"{prompt}: ");
+        var value = Console.ReadLine()?.Trim();
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    static string Truncate(string s, int maxLen) =>
+        s.Length <= maxLen ? s : s[..(maxLen - 3)] + "...";
 
     static async Task<Config> LoadAndResolveConfigAsync()
     {

@@ -6,6 +6,9 @@ namespace Accounting;
 
 public class InvoiceManagement
 {
+    /// <summary>MIME type used when storing invoice PDFs in blob storage.</summary>
+    public const string PdfContentType = "application/pdf";
+
     private readonly IInvoiceRepo _invoiceRepo;
     private readonly IClientRepo _clientRepo;
     private readonly IInvoiceExporter _exporter;
@@ -99,6 +102,6 @@ public class InvoiceManagement
     {
         await using var pdfStream = await _exporter.Export(_template, invoice);
         var objectKey = $"invoice-{invoice.Number}";
-        return await _blobStorage.UploadAsync(_invoicesBucket, objectKey, pdfStream, "application/pdf");
+        return await _blobStorage.UploadAsync(_invoicesBucket, objectKey, pdfStream, PdfContentType);
     }
 }

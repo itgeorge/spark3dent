@@ -36,4 +36,15 @@
               IgnoreExitCode="false" />
     </Target>
 
+    <!-- Include Chromium in publish output so deployed app has PDF support without runtime download. -->
+    <Target Name="IncludeChromiumInPublish" AfterTargets="Publish">
+        <PropertyGroup>
+            <_ChromiumSource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(OutputPath)chromium'))</_ChromiumSource>
+        </PropertyGroup>
+        <ItemGroup>
+            <_ChromiumFiles Include="$(_ChromiumSource)\**\*" Condition="Exists('$(_ChromiumSource)')" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_ChromiumFiles)" DestinationFiles="@(_ChromiumFiles->'$(PublishDir)chromium\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(_ChromiumFiles)' != ''" />
+    </Target>
+
 </Project>

@@ -501,7 +501,7 @@ Wire everything together in the CLI with a command loop.
 
 ### Setup & Command Loop
 
-- [ ] **9.1** In `CliProgram.Main`, after config loading and dependency setup:
+- [x] **9.1** In `CliProgram.Main`, after config loading and dependency setup:
   - Initialize `AppDbContext`, run migrations/`EnsureCreated()`
   - Create `SqliteInvoiceRepo`, `SqliteClientRepo`
   - Create `LocalFileSystemBlobStorage`, define bucket for invoices PDFs
@@ -509,7 +509,7 @@ Wire everything together in the CLI with a command loop.
   - Create `InvoicePdfExporter`
   - Create `InvoiceManagement`
   - Wrap all with logging decorators
-- [ ] **9.2** Implement the command loop:
+- [x] **9.2** Implement the command loop:
   - If `args` are provided, parse and execute as a single command, then exit
   - Otherwise, enter interactive mode: display prompt, read line, parse command
     and arguments, execute, repeat until `exit`
@@ -518,44 +518,44 @@ Wire everything together in the CLI with a command loop.
 
 ### Commands
 
-- [ ] **9.3** Implement `help` command:
+- [x] **9.3** Implement `help` command:
   - Display available commands with brief descriptions and parameter formats
-- [ ] **9.4** Implement `exit` command:
+- [x] **9.4** Implement `exit` command:
   - Dispose loggers, exit cleanly
-- [ ] **9.5** Implement `clients add` command:
+- [x] **9.5** Implement `clients add` command:
   - Prompt for: nickname, company name, representative name, company identifier
     (EIK/Bulstat), VAT identifier (optional), address, city, postal code, country
   - Validate nickname is non-empty
   - Call `IClientRepo.AddAsync`
   - Display confirmation
-- [ ] **9.6** Implement `clients edit` command:
+- [x] **9.6** Implement `clients edit` command:
   - Prompt for nickname, fail if client not found
   - Display current values, prompt for each field (empty = keep current)
   - Call `IClientRepo.UpdateAsync`
   - Display confirmation
-- [ ] **9.7** Implement `clients list` command:
+- [x] **9.7** Implement `clients list` command:
   - Call `IClientRepo.ListAsync` with a reasonable limit (e.g. 20)
   - Display clients sorted alphabetically by nickname in a table format
-- [ ] **9.8** Implement `invoices issue` command:
+- [x] **9.8** Implement `invoices issue` command:
   - Parse: `invoices issue <client nickname> <amount> [date]`
   - Parse amount: handle both `.` and `,` as decimal separator, convert to cents
   - Parse date: optional, format `dd-MM-yyyy`, default to today
   - Bank transfer info (IBAN, bank name, BIC) for the pay-grid comes from config
   - Call `InvoiceManagement.IssueInvoiceAsync`
   - Display created invoice number and PDF file path
-- [ ] **9.9** Implement `invoices correct` command:
+- [x] **9.9** Implement `invoices correct` command:
   - Parse: `invoices correct <invoice number> <amount> [date]`
   - Parse amount and date as above
   - Call `InvoiceManagement.CorrectInvoiceAsync`
   - Display updated invoice info
-- [ ] **9.10** Implement `invoices list` command:
+- [x] **9.10** Implement `invoices list` command:
   - Call `InvoiceManagement.ListInvoicesAsync`
   - Display invoices in a table: number, date, buyer name, total amount
   - Sorted by date, newest first
 
 ### CLI Tests (Optional / Manual)
 
-- [ ] **9.11** Manually test the full CLI flow:
+- [x] **9.11** Manually test the full CLI flow:
   - Add a client
   - Issue an invoice for that client
   - List invoices
