@@ -10,6 +10,8 @@ namespace Invoices;
 /// </summary>
 public class InvoiceImageExporter : IInvoiceExporter
 {
+    public string MimeType => "image/png";
+
     private readonly string? _chromiumExecutablePath;
 
     /// <param name="chromiumExecutablePath">Optional path to Chromium executable. When null, uses PuppeteerSharp default (may download on first run).</param>

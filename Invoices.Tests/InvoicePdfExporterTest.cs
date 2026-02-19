@@ -51,6 +51,14 @@ public class InvoicePdfExporterTest
             BankTransferInfo: TestBankTransferInfo));
 
     [Test]
+    public void MimeType_ReturnsApplicationPdf()
+    {
+        var exporter = new InvoicePdfExporter();
+
+        Assert.That(exporter.MimeType, Is.EqualTo("application/pdf"));
+    }
+
+    [Test]
     public async Task Export_WhenGivenValidInvoice_ReturnsNonEmptyStream()
     {
         var template = await InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber());

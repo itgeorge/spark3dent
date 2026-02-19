@@ -30,7 +30,7 @@ class CliProgram
         using var logger = new BufferedLogger(fileLogger, LogBufferSize);
         logger.LogInfo("Spark3Dent started");
 
-        var (invoiceManagement, clientRepo) = await SetupDependenciesAsync(config, logger);
+        var (invoiceManagement, clientRepo, exporter) = await SetupDependenciesAsync(config, logger);
         if (invoiceManagement == null || clientRepo == null)
         {
             logger.LogError("Failed to initialize dependencies. Check config: SellerAddress and SellerBankTransferInfo are required.", new InvalidOperationException("Missing config"));
@@ -38,13 +38,13 @@ class CliProgram
             return;
         }
 
-        await RunCommandLoopAsync(args, invoiceManagement, clientRepo, logger);
+        await RunCommandLoopAsync(args, invoiceManagement, clientRepo, exporter!, logger);
     }
 
-    static async Task<(InvoiceManagement? InvoiceManagement, IClientRepo? ClientRepo)> SetupDependenciesAsync(Config config, ILogger logger)
+    static async Task<(InvoiceManagement? InvoiceManagement, IClientRepo? ClientRepo, IInvoiceExporter? Exporter)> SetupDependenciesAsync(Config config, ILogger logger)
     {
         if (config.App.SellerAddress == null || config.App.SellerBankTransferInfo == null)
-            return (null, null);
+            return (null, null, null);
 
         var sellerAddress = ConfigToBillingAddress(config.App.SellerAddress);
         var bankTransferInfo = ConfigToBankTransferInfo(config.App.SellerBankTransferInfo);
@@ -67,10 +67,6 @@ class CliProgram
         var invoiceRepo = new SqliteInvoiceRepo(ContextFactory, config);
         var clientRepo = new SqliteClientRepo(ContextFactory);
 
-        var blobStorage = new LocalFileSystemBlobStorage(new Dictionary<string, string> { [InvoiceManagement.PdfContentType] = ".pdf" });
-        var invoicesDir = Path.Combine(config.Desktop.BlobStoragePath, "invoices");
-        blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
-
         var transcriber = new BgAmountTranscriber();
         var template = await InvoiceHtmlTemplate.LoadAsync(transcriber);
 
@@ -80,12 +76,15 @@ class CliProgram
         var loggingInvoiceRepo = new LoggingInvoiceRepo(invoiceRepo, logger);
         var loggingClientRepo = new LoggingClientRepo(clientRepo, logger);
         var loggingExporter = new LoggingInvoiceExporter(exporter, logger);
+        var contentTypeMap = BuildContentTypeMap(loggingExporter);
+        var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
+        var invoicesDir = Path.Combine(config.Desktop.BlobStoragePath, "invoices");
+        blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
         var loggingBlobStorage = new LoggingBlobStorage(blobStorage, logger);
 
         var invoiceManagement = new InvoiceManagement(
             loggingInvoiceRepo,
             loggingClientRepo,
-            loggingExporter,
             template,
             loggingBlobStorage,
             sellerAddress,
@@ -93,7 +92,7 @@ class CliProgram
             InvoicesBucket,
             logger);
 
-        return (invoiceManagement, loggingClientRepo);
+        return (invoiceManagement, loggingClientRepo, loggingExporter);
     }
 
     static async Task<string?> ResolveChromiumExecutablePathAsync()
@@ -114,17 +113,35 @@ class CliProgram
         }
     }
 
+    static Dictionary<string, string> BuildContentTypeMap(IInvoiceExporter exporter)
+    {
+        var mimeToExtension = new Dictionary<string, string>
+        {
+            ["application/pdf"] = ".pdf",
+            ["image/png"] = ".png"
+        };
+        var map = new Dictionary<string, string>();
+        if (mimeToExtension.TryGetValue(exporter.MimeType, out var ext))
+            map[exporter.MimeType] = ext;
+        return map;
+    }
+
     static BillingAddress ConfigToBillingAddress(SellerAddress sa) =>
         new(sa.Name, sa.RepresentativeName, sa.CompanyIdentifier, sa.VatIdentifier, sa.Address, sa.City, sa.PostalCode, sa.Country);
 
     static BankTransferInfo ConfigToBankTransferInfo(SellerBankTransferInfo st) =>
         new(st.Iban, st.BankName, st.Bic);
 
-    static async Task RunCommandLoopAsync(string[] args, InvoiceManagement invoiceManagement, IClientRepo clientRepo, ILogger logger)
+    static async Task RunCommandLoopAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IClientRepo clientRepo,
+        IInvoiceExporter exporter,
+        ILogger logger)
     {
         if (args.Length > 0)
         {
-            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, logger);
+            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, exporter, logger);
             return;
         }
 
@@ -143,11 +160,16 @@ class CliProgram
                 break;
             }
 
-            await ExecuteCommandAsync(parts, invoiceManagement, clientRepo, logger);
+            await ExecuteCommandAsync(parts, invoiceManagement, clientRepo, exporter, logger);
         }
     }
 
-    static async Task ExecuteCommandAsync(string[] args, InvoiceManagement invoiceManagement, IClientRepo clientRepo, ILogger logger)
+    static async Task ExecuteCommandAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IClientRepo clientRepo,
+        IInvoiceExporter exporter,
+        ILogger logger)
     {
         try
         {
@@ -172,7 +194,7 @@ class CliProgram
 
             if (cmd == "invoices")
             {
-                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement);
+                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, exporter);
                 return;
             }
 
@@ -323,7 +345,10 @@ class CliProgram
             Console.WriteLine($"{c.Nickname,-20} {Truncate(c.Address.Name, 28),-30} {Truncate(c.Address.RepresentativeName, 23),-25}");
     }
 
-    static async Task RunInvoicesCommandAsync(string[] args, InvoiceManagement invoiceManagement)
+    static async Task RunInvoicesCommandAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IInvoiceExporter exporter)
     {
         if (args.Length == 0)
         {
@@ -335,13 +360,13 @@ class CliProgram
 
         if (sub == "issue")
         {
-            await InvoicesIssueAsync(args.Skip(1).ToArray(), invoiceManagement);
+            await InvoicesIssueAsync(args.Skip(1).ToArray(), invoiceManagement, exporter);
             return;
         }
 
         if (sub == "correct")
         {
-            await InvoicesCorrectAsync(args.Skip(1).ToArray(), invoiceManagement);
+            await InvoicesCorrectAsync(args.Skip(1).ToArray(), invoiceManagement, exporter);
             return;
         }
 
@@ -354,7 +379,10 @@ class CliProgram
         Console.WriteLine($"Unknown subcommand: {sub}. Use: invoices issue | invoices correct | invoices list");
     }
 
-    static async Task InvoicesIssueAsync(string[] args, InvoiceManagement invoiceManagement)
+    static async Task InvoicesIssueAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IInvoiceExporter exporter)
     {
         if (args.Length < 2)
         {
@@ -386,7 +414,7 @@ class CliProgram
 
         try
         {
-            var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date);
+            var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, exporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} created.");
             if (result.ExportSuccessful && result.PdfPath != null)
                 Console.WriteLine($"PDF saved to: {result.PdfPath}");
@@ -399,7 +427,10 @@ class CliProgram
         }
     }
 
-    static async Task InvoicesCorrectAsync(string[] args, InvoiceManagement invoiceManagement)
+    static async Task InvoicesCorrectAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IInvoiceExporter exporter)
     {
         if (args.Length < 2)
         {
@@ -429,7 +460,7 @@ class CliProgram
 
         try
         {
-            var result = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date);
+            var result = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date, exporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} corrected successfully.");
             Console.WriteLine($"Total: {result.Invoice.TotalAmount.Cents / 100}.{result.Invoice.TotalAmount.Cents % 100:D2} €");
             if (!result.ExportSuccessful)

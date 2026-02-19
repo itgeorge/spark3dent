@@ -48,7 +48,7 @@ public class InvoiceManagementTest
             Country: "BG"));
         await fixture.ClientRepo.AddAsync(client);
 
-        var result = await fixture.Management.IssueInvoiceAsync("acme", 150_00, null);
+        var result = await fixture.Management.IssueInvoiceAsync("acme", 150_00, null, fixture.Exporter);
 
         Assert.That(result.Invoice, Is.Not.Null);
         Assert.That(result.Invoice.Number, Is.Not.Null.And.Not.Empty);
@@ -69,7 +69,7 @@ public class InvoiceManagementTest
     {
         var fixture = CreateFixture();
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.Management.IssueInvoiceAsync("nonexistent", 100_00, null));
+            await fixture.Management.IssueInvoiceAsync("nonexistent", 100_00, null, fixture.Exporter));
     }
 
     [Test]
@@ -79,7 +79,7 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
 
-        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null);
+        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.Content.Date.Date, Is.EqualTo(DateTime.UtcNow.Date));
@@ -92,7 +92,7 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
 
-        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null);
+        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.Content.BankTransferInfo, Is.EqualTo(BankInfo));
@@ -123,8 +123,8 @@ public class InvoiceManagementTest
         await fixture.ClientRepo.AddAsync(new Client("acme", acmeAddress));
         await fixture.ClientRepo.AddAsync(new Client("beta", betaAddress));
 
-        var r1 = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
-        var r2 = await fixture.Management.IssueInvoiceAsync("beta", 200_00, new DateTime(2026, 1, 16));
+        var r1 = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        var r2 = await fixture.Management.IssueInvoiceAsync("beta", 200_00, new DateTime(2026, 1, 16), fixture.Exporter);
 
         Assert.That(r1.ExportSuccessful, Is.True);
         Assert.That(r2.ExportSuccessful, Is.True);
@@ -142,8 +142,8 @@ public class InvoiceManagementTest
             var f = await CreateFixtureAsync();
             var client = new Client("acme", ValidBuyerAddress());
             await f.ClientRepo.AddAsync(client);
-            await f.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 20));
-            await f.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 10));
+            await f.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 20), f.Exporter);
+            await f.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 10), f.Exporter);
         });
     }
 
@@ -153,9 +153,9 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
 
-        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20));
+        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
@@ -170,7 +170,7 @@ public class InvoiceManagementTest
     {
         var fixture = CreateFixture();
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.Management.CorrectInvoiceAsync("99999", 100_00, null));
+            await fixture.Management.CorrectInvoiceAsync("99999", 100_00, null, fixture.Exporter));
     }
 
     [Test]
@@ -181,10 +181,10 @@ public class InvoiceManagementTest
             var f = await CreateFixtureAsync();
             var client = new Client("acme", ValidBuyerAddress());
             await f.ClientRepo.AddAsync(client);
-            await f.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
-            await f.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 20));
+            await f.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), f.Exporter);
+            await f.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 20), f.Exporter);
             // Second invoice is number 2. Try to correct it to have date before invoice 1
-            await f.Management.CorrectInvoiceAsync("2", 100_00, new DateTime(2026, 1, 10));
+            await f.Management.CorrectInvoiceAsync("2", 100_00, new DateTime(2026, 1, 10), f.Exporter);
         });
     }
 
@@ -195,9 +195,9 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
         var originalDate = new DateTime(2026, 2, 10);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, originalDate);
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, originalDate, fixture.Exporter);
 
-        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 300_00, date: null);
+        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 300_00, date: null, fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(300_00));
@@ -210,10 +210,10 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 500_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 500_00, new DateTime(2026, 1, 15), fixture.Exporter);
         var newDate = new DateTime(2026, 2, 20);
 
-        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, amountCents: null, newDate);
+        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, amountCents: null, newDate, fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(500_00));
@@ -235,9 +235,9 @@ public class InvoiceManagementTest
             Country: "BG");
         var client = new Client("acme", buyerAddr);
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
 
-        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20));
+        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.Content.BuyerAddress.Name, Is.EqualTo("Unique Buyer Corp"));
@@ -251,11 +251,11 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
         Assert.That(issueResult.PdfPath, Is.Not.Null);
         Assert.That(File.ReadAllText(issueResult.PdfPath!), Does.Contain("amount 10000"));
 
-        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 777_00, new DateTime(2026, 1, 20));
+        var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 777_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(777_00));
@@ -270,9 +270,9 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 250_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 250_00, new DateTime(2026, 1, 15), fixture.Exporter);
 
-        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number);
+        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
@@ -288,10 +288,10 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
-        await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 999_00, new DateTime(2026, 1, 25));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 999_00, new DateTime(2026, 1, 25), fixture.Exporter);
 
-        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number);
+        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(result.ExportSuccessful, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(999_00));
@@ -304,7 +304,7 @@ public class InvoiceManagementTest
     {
         var fixture = CreateFixture();
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.Management.ReExportInvoiceAsync("99999"));
+            await fixture.Management.ReExportInvoiceAsync("99999", fixture.Exporter));
     }
 
     [Test]
@@ -313,11 +313,11 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null);
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
         Assert.That(issueResult.PdfPath, Is.Not.Null);
         Assert.That(File.Exists(issueResult.PdfPath!), Is.True);
 
-        var reExportResult = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number);
+        var reExportResult = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(reExportResult.ExportSuccessful, Is.True);
         Assert.That(reExportResult.PdfPath, Is.EqualTo(issueResult.PdfPath));
@@ -330,9 +330,9 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
-        await fixture.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 20));
-        await fixture.Management.IssueInvoiceAsync("acme", 300_00, new DateTime(2026, 1, 25));
+        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 300_00, new DateTime(2026, 1, 25), fixture.Exporter);
 
         var result = await fixture.Management.ListInvoicesAsync(10);
 
@@ -361,7 +361,7 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
 
-        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
+        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
 
         Assert.That(result.Invoice, Is.Not.Null);
         Assert.That(result.Invoice.Number, Is.Not.Null.And.Not.Empty);
@@ -381,10 +381,10 @@ public class InvoiceManagementTest
         await fixture.InitializeAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
         var originalNumber = issueResult.Invoice.Number;
 
-        var result = await fixture.Management.CorrectInvoiceAsync(originalNumber, 200_00, new DateTime(2026, 1, 20));
+        var result = await fixture.Management.CorrectInvoiceAsync(originalNumber, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
         Assert.That(result.Invoice.Number, Is.EqualTo(originalNumber));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(200_00));
@@ -403,9 +403,9 @@ public class InvoiceManagementTest
         await fixture.InitializeAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
 
-        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number);
+        var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(100_00));
@@ -421,11 +421,11 @@ public class InvoiceManagementTest
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15));
-        await fixture.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 16));
-        await fixture.Management.IssueInvoiceAsync("acme", 300_00, new DateTime(2026, 1, 17));
-        await fixture.Management.IssueInvoiceAsync("acme", 400_00, new DateTime(2026, 1, 18));
-        await fixture.Management.IssueInvoiceAsync("acme", 500_00, new DateTime(2026, 1, 19));
+        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 16), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 300_00, new DateTime(2026, 1, 17), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 400_00, new DateTime(2026, 1, 18), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 500_00, new DateTime(2026, 1, 19), fixture.Exporter);
 
         var result = await fixture.Management.ListInvoicesAsync(2);
 
@@ -454,6 +454,7 @@ public class InvoiceManagementTest
 
     private static TestFixture CreateFixture(IInvoiceExporter? exporter = null)
     {
+        var exp = exporter ?? new FakeInvoiceExporter();
         var invoiceRepo = new FakeInvoiceRepo();
         var clientRepo = new FakeClientRepo();
         var tempDir = Path.Combine(Path.GetTempPath(), "InvoiceManagementTests", Guid.NewGuid().ToString());
@@ -465,7 +466,6 @@ public class InvoiceManagementTest
         var management = new InvoiceManagement(
             invoiceRepo,
             clientRepo,
-            exporter ?? new FakeInvoiceExporter(),
             template,
             blobStorage,
             SellerAddress,
@@ -473,7 +473,7 @@ public class InvoiceManagementTest
             InvoicesBucket,
             new CapturingLogger(),
             LineItemDescription);
-        return new TestFixture(invoiceRepo, clientRepo, management, tempDir);
+        return new TestFixture(invoiceRepo, clientRepo, management, exp, tempDir);
     }
 
     private static TestFixture CreateFixtureWithExporter(IInvoiceExporter exporter, out CapturingLogger logger)
@@ -490,7 +490,6 @@ public class InvoiceManagementTest
         var management = new InvoiceManagement(
             invoiceRepo,
             clientRepo,
-            exporter,
             template,
             blobStorage,
             SellerAddress,
@@ -498,7 +497,7 @@ public class InvoiceManagementTest
             InvoicesBucket,
             logger,
             LineItemDescription);
-        return new TestFixture(invoiceRepo, clientRepo, management, tempDir);
+        return new TestFixture(invoiceRepo, clientRepo, management, exporter, tempDir);
     }
 
     private sealed class TestFixture
@@ -506,13 +505,20 @@ public class InvoiceManagementTest
         public FakeInvoiceRepo InvoiceRepo { get; }
         public FakeClientRepo ClientRepo { get; }
         public InvoiceManagement Management { get; }
+        public IInvoiceExporter Exporter { get; }
         private readonly string _tempDir;
 
-        public TestFixture(FakeInvoiceRepo invoiceRepo, FakeClientRepo clientRepo, InvoiceManagement management, string tempDir)
+        public TestFixture(
+            FakeInvoiceRepo invoiceRepo,
+            FakeClientRepo clientRepo,
+            InvoiceManagement management,
+            IInvoiceExporter exporter,
+            string tempDir)
         {
             InvoiceRepo = invoiceRepo;
             ClientRepo = clientRepo;
             Management = management;
+            Exporter = exporter;
             _tempDir = tempDir;
         }
 
@@ -531,6 +537,8 @@ public class InvoiceManagementTest
     /// </summary>
     private sealed class FakeInvoiceExporter : IInvoiceExporter
     {
+        public string MimeType => "application/pdf";
+
         public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice)
         {
             var ms = new MemoryStream();
@@ -547,6 +555,8 @@ public class InvoiceManagementTest
 
     private sealed class ThrowingExporter : IInvoiceExporter
     {
+        public string MimeType => "application/pdf";
+
         public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice) =>
             throw new InvalidOperationException("Exporter failed");
     }

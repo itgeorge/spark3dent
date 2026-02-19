@@ -70,6 +70,8 @@ public class LoggingInvoiceExporterTest
 
     private sealed class FakeExporter : IInvoiceExporter
     {
+        public string MimeType => "application/pdf";
+
         public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice)
         {
             var ms = new MemoryStream();
@@ -81,6 +83,8 @@ public class LoggingInvoiceExporterTest
 
     private sealed class ThrowingExporter : IInvoiceExporter
     {
+        public string MimeType => "application/pdf";
+
         public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice) =>
             throw new InvalidOperationException("Exporter failed");
     }

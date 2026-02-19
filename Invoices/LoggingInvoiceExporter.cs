@@ -4,6 +4,8 @@ namespace Invoices;
 
 public class LoggingInvoiceExporter : IInvoiceExporter
 {
+    public string MimeType => _inner.MimeType;
+
     private readonly IInvoiceExporter _inner;
     private readonly ILogger _logger;
 

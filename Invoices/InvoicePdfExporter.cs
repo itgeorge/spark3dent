@@ -11,6 +11,8 @@ namespace Invoices;
 /// </summary>
 public class InvoicePdfExporter : IInvoiceExporter
 {
+    public string MimeType => "application/pdf";
+
     private readonly string? _chromiumExecutablePath;
 
     /// <param name="chromiumExecutablePath">Optional path to Chromium executable. When null, uses PuppeteerSharp default (may download on first run).</param>

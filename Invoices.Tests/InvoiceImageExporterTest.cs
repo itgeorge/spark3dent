@@ -48,6 +48,14 @@ public class InvoiceImageExporterTest
             BankTransferInfo: TestBankTransferInfo));
 
     [Test]
+    public void MimeType_ReturnsImagePng()
+    {
+        var exporter = new InvoiceImageExporter();
+
+        Assert.That(exporter.MimeType, Is.EqualTo("image/png"));
+    }
+
+    [Test]
     public async Task Export_WhenGivenValidInvoice_ReturnsNonEmptyStream()
     {
         var template = await InvoiceHtmlTemplate.LoadAsync(new BgAmountTranscriber());
