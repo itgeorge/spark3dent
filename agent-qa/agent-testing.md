@@ -381,6 +381,41 @@ dotnet run --project QaHarness -- staging-dir
 Print the staging directory path so the developer can inspect it manually.
 Do NOT run `cleanup`.
 
+### 5.8 Document Failures for Debug Agent
+
+Create a failure report file that a different agent can use to investigate and fix
+the issues. This file will be passed to the debug/fix agent as context.
+
+**Step 1 — Create the file with staging context**
+
+Run the harness `agenterrorreport` command. It creates `agent-qa/failures/<yyyyMMdd>-<hhmm>.md`
+with a header and a **Staging Directory** section containing the path and a short
+description. The command prints the full file path to stdout so the agent can pick
+it up:
+
+```
+dotnet run --project QaHarness -- agenterrorreport
+```
+
+Or, to pass the staging directory explicitly (e.g. if state is unavailable):
+
+```
+dotnet run --project QaHarness -- agenterrorreport <staging-dir>
+```
+
+**Step 2 — Continue writing the description**
+
+Use the printed file path and append (or edit) the following sections:
+
+1. **Issue summary** — Which scenario(s) failed, exception type, exit code, and any retry behavior.
+2. **Reproduction steps** — Exact command(s) that failed, full stdout/stderr (including stack trace), and execution context (staging path, command order, concurrency).
+3. **Investigation** — Relevant code locations (file paths and line numbers from stack traces), model/schema details, and a hypothesized root cause.
+4. **Data for debugging** — Automated test results, scenarios that passed, staging directory path, and links to relevant docs or prior issues.
+5. **Suggested fix directions** — Concrete approaches to try (e.g. mutex, exception handling, migrations).
+6. **Verification checklist** — Steps the fix agent should run to confirm the fix (e.g. re-run playbook, stress-test concurrency).
+
+See `agent-qa/failures/20260221-0130.md` for a worked example.
+
 ---
 
 ## Notes for the Testing Agent
@@ -408,3 +443,5 @@ Do NOT run `cleanup`.
 - **Each `run` invocation is a separate process.** The CLI runs one command per
   invocation, not a REPL session. Each call starts fresh, reads the DB, does its
   work, and exits.
+- **When verdict is RED**, run `agenterrorreport` then continue writing the
+  failure report per section 5.8 so another agent can debug and fix the issues.

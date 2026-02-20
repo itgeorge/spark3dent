@@ -38,6 +38,7 @@ internal static class QaHarnessProgram
             "list-files" => ListFiles(rest),
             "cleanup" => Cleanup(),
             "staging-dir" => StagingDir(),
+            "agenterrorreport" => AgentErrorReport(rest),
             _ => Error($"Unknown command: {command}. Run without arguments for usage.")
         };
     }
@@ -61,6 +62,7 @@ internal static class QaHarnessProgram
         Console.WriteLine("  list-files [subdir]                     Recursive file listing of staging dir");
         Console.WriteLine("  cleanup                                 Delete staging dir and state file");
         Console.WriteLine("  staging-dir                             Print current staging dir path");
+        Console.WriteLine("  agenterrorreport [staging-dir]          Create failures-...md file for debug agent (uses state if dir omitted)");
     }
 
     // ---------------------------------------------------------------
@@ -423,6 +425,48 @@ internal static class QaHarnessProgram
         var stagingDir = ReadStagingDir();
         if (stagingDir == null) return 1;
         Console.WriteLine(stagingDir);
+        return 0;
+    }
+
+    // ---------------------------------------------------------------
+    // agenterrorreport
+    // ---------------------------------------------------------------
+    static int AgentErrorReport(string[] args)
+    {
+        var stagingDir = args.Length > 0 ? args[0].Trim() : ReadStagingDir();
+        if (string.IsNullOrEmpty(stagingDir))
+            return Error("No staging directory. Usage: agenterrorreport [staging-dir]");
+        if (!Directory.Exists(stagingDir))
+            return Error($"Staging directory not found: {stagingDir}");
+
+        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmm");
+        var fileName = $"{timestamp}.md";
+        var failuresDir = Path.Combine(SolutionRoot, "agent-qa", "failures");
+        var filePath = Path.Combine(failuresDir, fileName);
+
+        Directory.CreateDirectory(failuresDir);
+
+        var content = $@"# Agent Testing Failure Report
+
+**Date:** {DateTime.Now:yyyy-MM-dd}
+**Timestamp:** {timestamp}
+**Source:** `agent-qa/agent-testing.md` playbook execution
+**Verdict:** RED
+
+---
+
+## Staging Directory
+
+{stagingDir}
+
+The staging directory contains the failed deployment: published CLI (`app/`), database (`data/`), blob storage (`blobs/`), and logs (`logs/`). Inspect these artifacts to reproduce and debug the issues. Do not run `cleanup` — the staging directory is preserved for investigation.
+
+---
+
+";
+        File.WriteAllText(filePath, content, Encoding.UTF8);
+
+        Console.WriteLine(Path.GetFullPath(filePath));
         return 0;
     }
 
