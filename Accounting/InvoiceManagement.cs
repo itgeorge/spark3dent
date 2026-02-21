@@ -6,11 +6,7 @@ namespace Accounting;
 
 public record ExportResult(bool Success, string? Path);
 
-public record InvoiceOperationResult(
-    Invoice Invoice,
-    bool ExportSuccessful,
-    string? PdfPath,
-    ExportResult ExportResult);
+public record InvoiceOperationResult(Invoice Invoice, ExportResult ExportResult);
 
 public class InvoiceManagement
 {
@@ -138,10 +134,6 @@ public class InvoiceManagement
 
     private static InvoiceOperationResult ToInvoiceOperationResult(Invoice invoice, ExportResult exportResult)
     {
-        return new InvoiceOperationResult(
-            invoice,
-            exportResult.Success,
-            exportResult.Path,
-            exportResult);
+        return new InvoiceOperationResult(invoice, exportResult);
     }
 }

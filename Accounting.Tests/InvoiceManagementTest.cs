@@ -44,9 +44,9 @@ public class InvoiceManagementTest
         var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
 
         Assert.That(result.Invoice.Number, Is.EqualTo("1"));
-        Assert.That(result.ExportSuccessful, Is.True);
-        Assert.That(result.PdfPath, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.PdfPath), Is.EqualTo("invoice-000001.pdf"));
+        Assert.That(result.ExportResult.Success, Is.True);
+        Assert.That(result.ExportResult.Path, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.ExportResult.Path), Is.EqualTo("invoice-000001.pdf"));
     }
 
     [Test]
@@ -60,9 +60,9 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
-        Assert.That(result.PdfPath, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.PdfPath), Is.EqualTo("invoice-00000001.pdf"));
+        Assert.That(result.ExportResult.Success, Is.True);
+        Assert.That(result.ExportResult.Path, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.ExportResult.Path), Is.EqualTo("invoice-00000001.pdf"));
     }
 
     [Test]
@@ -77,9 +77,9 @@ public class InvoiceManagementTest
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
         Assert.That(result.Invoice.Number, Is.EqualTo("1"));
-        Assert.That(result.ExportSuccessful, Is.True);
-        Assert.That(result.PdfPath, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.PdfPath), Is.EqualTo("invoice-000001.pdf"));
+        Assert.That(result.ExportResult.Success, Is.True);
+        Assert.That(result.ExportResult.Path, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.ExportResult.Path), Is.EqualTo("invoice-000001.pdf"));
     }
 
     [Test]
@@ -106,9 +106,9 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice.Content.SellerAddress, Is.EqualTo(SellerAddress));
         Assert.That(result.Invoice.Content.LineItems, Has.Length.EqualTo(1));
         Assert.That(result.Invoice.Content.LineItems[0].Description, Is.EqualTo(LineItemDescription));
-        Assert.That(result.ExportSuccessful, Is.True);
-        Assert.That(result.PdfPath, Is.Not.Null.And.Not.Empty);
-        Assert.That(File.Exists(result.PdfPath), Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
+        Assert.That(result.ExportResult.Path, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(result.ExportResult.Path), Is.True);
         var stored = await fixture.InvoiceRepo.GetAsync(result.Invoice.Number);
         Assert.That(stored.Number, Is.EqualTo(result.Invoice.Number));
     }
@@ -130,7 +130,7 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.Content.Date.Date, Is.EqualTo(DateTime.UtcNow.Date));
     }
 
@@ -143,7 +143,7 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.Content.BankTransferInfo, Is.EqualTo(BankInfo));
     }
 
@@ -175,8 +175,8 @@ public class InvoiceManagementTest
         var r1 = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
         var r2 = await fixture.Management.IssueInvoiceAsync("beta", 200_00, new DateTime(2026, 1, 16), fixture.Exporter);
 
-        Assert.That(r1.ExportSuccessful, Is.True);
-        Assert.That(r2.ExportSuccessful, Is.True);
+        Assert.That(r1.ExportResult.Success, Is.True);
+        Assert.That(r2.ExportResult.Success, Is.True);
         Assert.That(r1.Invoice.Content.BuyerAddress.Name, Is.EqualTo("ACME EOOD"));
         Assert.That(r1.Invoice.Content.BuyerAddress.Address, Is.EqualTo("Acme St 1"));
         Assert.That(r2.Invoice.Content.BuyerAddress.Name, Is.EqualTo("Beta LLC"));
@@ -206,7 +206,7 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(200_00));
         Assert.That(result.Invoice.Content.Date, Is.EqualTo(new DateTime(2026, 1, 20)));
@@ -248,7 +248,7 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 300_00, date: null, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(300_00));
         Assert.That(result.Invoice.Content.Date, Is.EqualTo(originalDate));
     }
@@ -264,7 +264,7 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, amountCents: null, newDate, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(500_00));
         Assert.That(result.Invoice.Content.Date, Is.EqualTo(newDate));
     }
@@ -288,7 +288,7 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.Content.BuyerAddress.Name, Is.EqualTo("Unique Buyer Corp"));
         Assert.That(result.Invoice.Content.BuyerAddress.Address, Is.EqualTo("Unique St 99"));
         Assert.That(result.Invoice.Content.BuyerAddress.City, Is.EqualTo("Varna"));
@@ -301,15 +301,15 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
         var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
-        Assert.That(issueResult.PdfPath, Is.Not.Null);
-        Assert.That(File.ReadAllText(issueResult.PdfPath!), Does.Contain("amount 10000"));
+        Assert.That(issueResult.ExportResult.Path, Is.Not.Null);
+        Assert.That(File.ReadAllText(issueResult.ExportResult.Path!), Does.Contain("amount 10000"));
 
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 777_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(777_00));
-        Assert.That(result.PdfPath, Is.Not.Null);
-        var pdfContent = File.ReadAllText(result.PdfPath!);
+        Assert.That(result.ExportResult.Path, Is.Not.Null);
+        var pdfContent = File.ReadAllText(result.ExportResult.Path!);
         Assert.That(pdfContent, Does.Contain("amount 77700"));
     }
 
@@ -323,12 +323,12 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(250_00));
-        Assert.That(result.PdfPath, Is.Not.Null.And.Not.Empty);
-        Assert.That(File.Exists(result.PdfPath), Is.True);
-        Assert.That(File.ReadAllText(result.PdfPath!), Does.Contain("invoice 1"));
+        Assert.That(result.ExportResult.Path, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(result.ExportResult.Path), Is.True);
+        Assert.That(File.ReadAllText(result.ExportResult.Path!), Does.Contain("invoice 1"));
     }
 
     [Test]
@@ -342,10 +342,10 @@ public class InvoiceManagementTest
 
         var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
-        Assert.That(result.ExportSuccessful, Is.True);
+        Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(999_00));
-        Assert.That(result.PdfPath, Is.Not.Null);
-        Assert.That(File.ReadAllText(result.PdfPath!), Does.Contain("amount 99900"));
+        Assert.That(result.ExportResult.Path, Is.Not.Null);
+        Assert.That(File.ReadAllText(result.ExportResult.Path!), Does.Contain("amount 99900"));
     }
 
     [Test]
@@ -363,14 +363,14 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
         var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
-        Assert.That(issueResult.PdfPath, Is.Not.Null);
-        Assert.That(File.Exists(issueResult.PdfPath!), Is.True);
+        Assert.That(issueResult.ExportResult.Path, Is.Not.Null);
+        Assert.That(File.Exists(issueResult.ExportResult.Path!), Is.True);
 
         var reExportResult = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
-        Assert.That(reExportResult.ExportSuccessful, Is.True);
-        Assert.That(reExportResult.PdfPath, Is.EqualTo(issueResult.PdfPath));
-        Assert.That(File.Exists(reExportResult.PdfPath!), Is.True);
+        Assert.That(reExportResult.ExportResult.Success, Is.True);
+        Assert.That(reExportResult.ExportResult.Path, Is.EqualTo(issueResult.ExportResult.Path));
+        Assert.That(File.Exists(reExportResult.ExportResult.Path!), Is.True);
     }
 
     [Test]
@@ -415,8 +415,8 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice, Is.Not.Null);
         Assert.That(result.Invoice.Number, Is.Not.Null.And.Not.Empty);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(100_00));
-        Assert.That(result.ExportSuccessful, Is.False);
-        Assert.That(result.PdfPath, Is.Null);
+        Assert.That(result.ExportResult.Success, Is.False);
+        Assert.That(result.ExportResult.Path, Is.Null);
         var stored = await fixture.InvoiceRepo.GetAsync(result.Invoice.Number);
         Assert.That(stored.Number, Is.EqualTo(result.Invoice.Number));
         Assert.That(logger.ErrorEntries, Has.Count.EqualTo(1));
@@ -437,8 +437,8 @@ public class InvoiceManagementTest
 
         Assert.That(result.Invoice.Number, Is.EqualTo(originalNumber));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(200_00));
-        Assert.That(result.ExportSuccessful, Is.False);
-        Assert.That(result.PdfPath, Is.Null);
+        Assert.That(result.ExportResult.Success, Is.False);
+        Assert.That(result.ExportResult.Path, Is.Null);
         var stored = await fixture.InvoiceRepo.GetAsync(originalNumber);
         Assert.That(stored.TotalAmount.Cents, Is.EqualTo(200_00));
         Assert.That(logger.ErrorEntries, Has.Count.GreaterThanOrEqualTo(1));
@@ -458,8 +458,8 @@ public class InvoiceManagementTest
 
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(100_00));
-        Assert.That(result.ExportSuccessful, Is.False);
-        Assert.That(result.PdfPath, Is.Null);
+        Assert.That(result.ExportResult.Success, Is.False);
+        Assert.That(result.ExportResult.Path, Is.Null);
         Assert.That(logger.ErrorEntries, Has.Count.GreaterThanOrEqualTo(1));
         Assert.That(logger.ErrorEntries.Any(e => e.Message.Contains("export failed")), Is.True);
     }

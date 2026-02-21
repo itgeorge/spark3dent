@@ -431,15 +431,15 @@ class CliProgram
         {
             var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, pdfExporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} created.");
-            if (result.ExportSuccessful && result.PdfPath != null)
-                Console.WriteLine($"PDF saved to: {result.PdfPath}");
+            if (result.ExportResult.Success && result.ExportResult.Path != null)
+                Console.WriteLine($"PDF saved to: {result.ExportResult.Path}");
             else
                 Console.WriteLine("Warning: PDF export failed.");
 
             if (exportPng && imageExporter != null)
             {
                 var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
-                if (pngResult.ExportSuccessful && pngResult.ExportResult.Path != null)
+                if (pngResult.ExportResult.Success && pngResult.ExportResult.Path != null)
                     Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Path}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
@@ -491,13 +491,13 @@ class CliProgram
             var result = await invoiceManagement.CorrectInvoiceAsync(invoiceNumber, amountCents, date, pdfExporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} corrected successfully.");
             Console.WriteLine($"Total: {result.Invoice.TotalAmount.Cents / 100}.{result.Invoice.TotalAmount.Cents % 100:D2} €");
-            if (!result.ExportSuccessful)
+            if (!result.ExportResult.Success)
                 Console.WriteLine("Warning: PDF export failed.");
 
             if (exportPng && imageExporter != null)
             {
                 var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
-                if (pngResult.ExportSuccessful && pngResult.ExportResult.Path != null)
+                if (pngResult.ExportResult.Success && pngResult.ExportResult.Path != null)
                     Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Path}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
