@@ -431,16 +431,16 @@ class CliProgram
         {
             var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, pdfExporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} created.");
-            if (result.ExportResult.Success && result.ExportResult.Path != null)
-                Console.WriteLine($"PDF saved to: {result.ExportResult.Path}");
+            if (result.ExportResult.Success && result.ExportResult.Uri != null)
+                Console.WriteLine($"PDF saved to: {result.ExportResult.Uri}");
             else
                 Console.WriteLine("Warning: PDF export failed.");
 
             if (exportPng && imageExporter != null)
             {
                 var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
-                if (pngResult.ExportResult.Success && pngResult.ExportResult.Path != null)
-                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Path}");
+                if (pngResult.ExportResult.Success && pngResult.ExportResult.Uri != null)
+                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Uri}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
             }
@@ -497,8 +497,8 @@ class CliProgram
             if (exportPng && imageExporter != null)
             {
                 var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
-                if (pngResult.ExportResult.Success && pngResult.ExportResult.Path != null)
-                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Path}");
+                if (pngResult.ExportResult.Success && pngResult.ExportResult.Uri != null)
+                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Uri}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
             }

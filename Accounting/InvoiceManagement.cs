@@ -4,7 +4,8 @@ using Utilities;
 
 namespace Accounting;
 
-public record ExportResult(bool Success, string? Path);
+/// <summary>Export result: Uri may be a file path, cloud storage path, or data URI (e.g. data:image/png;base64,...).</summary>
+public record ExportResult(bool Success, string? Uri);
 
 public record InvoiceOperationResult(Invoice Invoice, ExportResult ExportResult);
 
@@ -94,6 +95,53 @@ public class InvoiceManagement
         return ToInvoiceOperationResult(invoice, exportResult);
     }
 
+    /// <summary>
+    /// Creates a preview export for a future invoice with the next invoice number.
+    /// Exports to image format only and returns a base64 data URI for use in HTML (e.g. img src).
+    /// Works in both local and cloud environments without file system access.
+    /// </summary>
+    /// <param name="clientNickname">The client nickname.</param>
+    /// <param name="amountCents">The amount in cents.</param>
+    /// <param name="date">Optional invoice date; defaults to today.</param>
+    /// <param name="imageExporter">The image exporter (e.g. image/png).</param>
+    /// <returns>Preview result with base64 data URI, or failure.</returns>
+    /// <exception cref="InvalidOperationException">When the client is not found.</exception>
+    public async Task<ExportResult> PreviewInvoiceAsync(
+        string clientNickname,
+        int amountCents,
+        DateTime? date,
+        IInvoiceExporter imageExporter)
+    {
+        if (imageExporter.MimeType != "image/png" && imageExporter.MimeType != "image/jpeg")
+            throw new ArgumentException("Preview requires an image exporter (image/png or image/jpeg).", nameof(imageExporter));
+
+        var client = await _clientRepo.GetAsync(clientNickname);
+        var invoiceDate = date ?? DateTime.UtcNow.Date;
+
+        var latest = await _invoiceRepo.LatestAsync(1);
+        var nextNumber = latest.Items.Count == 0
+            ? "1"
+            : (long.Parse(latest.Items[0].Number) + 1).ToString();
+
+        var content = BuildInvoiceContent(invoiceDate, client.Address, amountCents);
+        var invoice = new Invoice(nextNumber, content);
+
+        try
+        {
+            await using var stream = await imageExporter.Export(_template, invoice);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            var dataUri = $"data:{imageExporter.MimeType};base64,{base64}";
+            return new ExportResult(true, dataUri);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Invoice preview export failed", ex);
+            return new ExportResult(false, null);
+        }
+    }
+
     public Task<QueryResult<Invoice>> ListInvoicesAsync(int limit)
     {
         return _invoiceRepo.LatestAsync(limit);
@@ -122,8 +170,8 @@ public class InvoiceManagement
                 ? invoice.Number
                 : invoice.Number.PadLeft(_invoiceNumberPadding, '0');
             var objectKey = $"invoice-{formattedNumber}";
-            var path = await _blobStorage.UploadAsync(_invoicesBucket, objectKey, stream, exporter.MimeType);
-            return new ExportResult(true, path);
+            var uri = await _blobStorage.UploadAsync(_invoicesBucket, objectKey, stream, exporter.MimeType);
+            return new ExportResult(true, uri);
         }
         catch (Exception ex)
         {

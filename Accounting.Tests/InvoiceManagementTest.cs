@@ -45,8 +45,8 @@ public class InvoiceManagementTest
 
         Assert.That(result.Invoice.Number, Is.EqualTo("1"));
         Assert.That(result.ExportResult.Success, Is.True);
-        Assert.That(result.ExportResult.Path, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.ExportResult.Path), Is.EqualTo("invoice-000001.pdf"));
+        Assert.That(result.ExportResult.Uri, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.ExportResult.Uri), Is.EqualTo("invoice-000001.pdf"));
     }
 
     [Test]
@@ -61,8 +61,8 @@ public class InvoiceManagementTest
         var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(result.ExportResult.Success, Is.True);
-        Assert.That(result.ExportResult.Path, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.ExportResult.Path), Is.EqualTo("invoice-00000001.pdf"));
+        Assert.That(result.ExportResult.Uri, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.ExportResult.Uri), Is.EqualTo("invoice-00000001.pdf"));
     }
 
     [Test]
@@ -78,8 +78,8 @@ public class InvoiceManagementTest
 
         Assert.That(result.Invoice.Number, Is.EqualTo("1"));
         Assert.That(result.ExportResult.Success, Is.True);
-        Assert.That(result.ExportResult.Path, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.ExportResult.Path), Is.EqualTo("invoice-000001.pdf"));
+        Assert.That(result.ExportResult.Uri, Is.Not.Null);
+        Assert.That(Path.GetFileName(result.ExportResult.Uri), Is.EqualTo("invoice-000001.pdf"));
     }
 
     [Test]
@@ -107,8 +107,8 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice.Content.LineItems, Has.Length.EqualTo(1));
         Assert.That(result.Invoice.Content.LineItems[0].Description, Is.EqualTo(LineItemDescription));
         Assert.That(result.ExportResult.Success, Is.True);
-        Assert.That(result.ExportResult.Path, Is.Not.Null.And.Not.Empty);
-        Assert.That(File.Exists(result.ExportResult.Path), Is.True);
+        Assert.That(result.ExportResult.Uri, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(result.ExportResult.Uri), Is.True);
         var stored = await fixture.InvoiceRepo.GetAsync(result.Invoice.Number);
         Assert.That(stored.Number, Is.EqualTo(result.Invoice.Number));
     }
@@ -301,15 +301,15 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
         var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
-        Assert.That(issueResult.ExportResult.Path, Is.Not.Null);
-        Assert.That(File.ReadAllText(issueResult.ExportResult.Path!), Does.Contain("amount 10000"));
+        Assert.That(issueResult.ExportResult.Uri, Is.Not.Null);
+        Assert.That(File.ReadAllText(issueResult.ExportResult.Uri!), Does.Contain("amount 10000"));
 
         var result = await fixture.Management.CorrectInvoiceAsync(issueResult.Invoice.Number, 777_00, new DateTime(2026, 1, 20), fixture.Exporter);
 
         Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(777_00));
-        Assert.That(result.ExportResult.Path, Is.Not.Null);
-        var pdfContent = File.ReadAllText(result.ExportResult.Path!);
+        Assert.That(result.ExportResult.Uri, Is.Not.Null);
+        var pdfContent = File.ReadAllText(result.ExportResult.Uri!);
         Assert.That(pdfContent, Does.Contain("amount 77700"));
     }
 
@@ -326,9 +326,9 @@ public class InvoiceManagementTest
         Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(250_00));
-        Assert.That(result.ExportResult.Path, Is.Not.Null.And.Not.Empty);
-        Assert.That(File.Exists(result.ExportResult.Path), Is.True);
-        Assert.That(File.ReadAllText(result.ExportResult.Path!), Does.Contain("invoice 1"));
+        Assert.That(result.ExportResult.Uri, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(result.ExportResult.Uri), Is.True);
+        Assert.That(File.ReadAllText(result.ExportResult.Uri!), Does.Contain("invoice 1"));
     }
 
     [Test]
@@ -344,8 +344,8 @@ public class InvoiceManagementTest
 
         Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(999_00));
-        Assert.That(result.ExportResult.Path, Is.Not.Null);
-        Assert.That(File.ReadAllText(result.ExportResult.Path!), Does.Contain("amount 99900"));
+        Assert.That(result.ExportResult.Uri, Is.Not.Null);
+        Assert.That(File.ReadAllText(result.ExportResult.Uri!), Does.Contain("amount 99900"));
     }
 
     [Test]
@@ -363,14 +363,14 @@ public class InvoiceManagementTest
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
         var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
-        Assert.That(issueResult.ExportResult.Path, Is.Not.Null);
-        Assert.That(File.Exists(issueResult.ExportResult.Path!), Is.True);
+        Assert.That(issueResult.ExportResult.Uri, Is.Not.Null);
+        Assert.That(File.Exists(issueResult.ExportResult.Uri!), Is.True);
 
         var reExportResult = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(reExportResult.ExportResult.Success, Is.True);
-        Assert.That(reExportResult.ExportResult.Path, Is.EqualTo(issueResult.ExportResult.Path));
-        Assert.That(File.Exists(reExportResult.ExportResult.Path!), Is.True);
+        Assert.That(reExportResult.ExportResult.Uri, Is.EqualTo(issueResult.ExportResult.Uri));
+        Assert.That(File.Exists(reExportResult.ExportResult.Uri!), Is.True);
     }
 
     [Test]
@@ -416,7 +416,7 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice.Number, Is.Not.Null.And.Not.Empty);
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(100_00));
         Assert.That(result.ExportResult.Success, Is.False);
-        Assert.That(result.ExportResult.Path, Is.Null);
+        Assert.That(result.ExportResult.Uri, Is.Null);
         var stored = await fixture.InvoiceRepo.GetAsync(result.Invoice.Number);
         Assert.That(stored.Number, Is.EqualTo(result.Invoice.Number));
         Assert.That(logger.ErrorEntries, Has.Count.EqualTo(1));
@@ -438,7 +438,7 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice.Number, Is.EqualTo(originalNumber));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(200_00));
         Assert.That(result.ExportResult.Success, Is.False);
-        Assert.That(result.ExportResult.Path, Is.Null);
+        Assert.That(result.ExportResult.Uri, Is.Null);
         var stored = await fixture.InvoiceRepo.GetAsync(originalNumber);
         Assert.That(stored.TotalAmount.Cents, Is.EqualTo(200_00));
         Assert.That(logger.ErrorEntries, Has.Count.GreaterThanOrEqualTo(1));
@@ -459,7 +459,7 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice.Number, Is.EqualTo(issueResult.Invoice.Number));
         Assert.That(result.Invoice.TotalAmount.Cents, Is.EqualTo(100_00));
         Assert.That(result.ExportResult.Success, Is.False);
-        Assert.That(result.ExportResult.Path, Is.Null);
+        Assert.That(result.ExportResult.Uri, Is.Null);
         Assert.That(logger.ErrorEntries, Has.Count.GreaterThanOrEqualTo(1));
         Assert.That(logger.ErrorEntries.Any(e => e.Message.Contains("export failed")), Is.True);
     }
@@ -482,6 +482,69 @@ public class InvoiceManagementTest
         Assert.That(result.Items[0].Number, Is.EqualTo("5"));
         Assert.That(result.Items[1].Number, Is.EqualTo("4"));
         Assert.That(result.NextStartAfter, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task PreviewInvoiceAsync_WhenNoInvoicesExist_ThenUsesNumber1AndReturnsBase64DataUri()
+    {
+        var fixture = await CreateFixtureAsync();
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        var imageExporter = new FakeImageExporter();
+
+        var result = await fixture.Management.PreviewInvoiceAsync("acme", 150_00, new DateTime(2026, 2, 1), imageExporter);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Uri, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Uri, Does.StartWith("data:image/png;base64,"));
+        var base64Part = result.Uri!.Replace("data:image/png;base64,", "");
+        var decoded = Convert.FromBase64String(base64Part);
+        var text = System.Text.Encoding.UTF8.GetString(decoded);
+        Assert.That(text, Does.Contain("invoice 1"));
+    }
+
+    [Test]
+    public async Task PreviewInvoiceAsync_WhenInvoicesExist_ThenUsesNextNumber()
+    {
+        var fixture = await CreateFixtureAsync();
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
+        var imageExporter = new FakeImageExporter();
+
+        var result = await fixture.Management.PreviewInvoiceAsync("acme", 300_00, new DateTime(2026, 2, 1), imageExporter);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Uri, Is.Not.Null);
+        Assert.That(result.Uri, Does.StartWith("data:image/png;base64,"));
+        var base64Part = result.Uri!.Replace("data:image/png;base64,", "");
+        var decoded = Convert.FromBase64String(base64Part);
+        var text = System.Text.Encoding.UTF8.GetString(decoded);
+        Assert.That(text, Does.Contain("invoice 3").Or.Contain("amount 30000"));
+    }
+
+    [Test]
+    public void PreviewInvoiceAsync_WhenNonExistingClient_ThenThrows()
+    {
+        var fixture = CreateFixture();
+        var imageExporter = new FakeImageExporter();
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Management.PreviewInvoiceAsync("nonexistent", 100_00, null, imageExporter));
+    }
+
+    [Test]
+    public async Task PreviewInvoiceAsync_WhenExporterThrows_ThenReturnsExportFailed()
+    {
+        var fixture = await CreateFixtureAsync();
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        var throwingImageExporter = new ThrowingImageExporter();
+
+        var result = await fixture.Management.PreviewInvoiceAsync("acme", 100_00, new DateTime(2026, 2, 1), throwingImageExporter);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Uri, Is.Null);
     }
 
     private static BillingAddress ValidBuyerAddress() => new(
@@ -610,5 +673,34 @@ public class InvoiceManagementTest
 
         public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice) =>
             throw new InvalidOperationException("Exporter failed");
+    }
+
+    /// <summary>
+    /// Fake image exporter for PreviewInvoice tests. Produces PNG-like content with invoice number and amount.
+    /// </summary>
+    private sealed class FakeImageExporter : IInvoiceExporter
+    {
+        public string MimeType => "image/png";
+
+        public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice)
+        {
+            var ms = new MemoryStream();
+            var writer = new StreamWriter(ms);
+            writer.Write("fake png for invoice ");
+            writer.Write(invoice.Number);
+            writer.Write(" amount ");
+            writer.Write(invoice.TotalAmount.Cents);
+            writer.Flush();
+            ms.Position = 0;
+            return Task.FromResult<Stream>(ms);
+        }
+    }
+
+    private sealed class ThrowingImageExporter : IInvoiceExporter
+    {
+        public string MimeType => "image/png";
+
+        public Task<Stream> Export(InvoiceHtmlTemplate template, Invoice invoice) =>
+            throw new InvalidOperationException("Image exporter failed");
     }
 }
