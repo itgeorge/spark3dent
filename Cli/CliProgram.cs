@@ -61,7 +61,7 @@ class CliProgram
 
         await using (var ctx = new AppDbContext(options))
         {
-            await ctx.Database.EnsureCreatedAsync();
+            await ctx.Database.MigrateAsync();
         }
 
         AppDbContext ContextFactory() => new AppDbContext(options);

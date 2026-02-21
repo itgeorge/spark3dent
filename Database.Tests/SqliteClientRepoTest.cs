@@ -24,7 +24,7 @@ public class SqliteClientRepoTest : Accounting.Tests.ClientRepoContractTest
 
         await using (var ctx = new Database.AppDbContext(options))
         {
-            await ctx.Database.EnsureCreatedAsync();
+            await ctx.Database.MigrateAsync();
         }
 
         var contextFactory = () => new Database.AppDbContext(options);

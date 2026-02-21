@@ -28,7 +28,7 @@ public class SqliteInvoiceRepoTest : Invoices.Tests.InvoiceRepoContractTest
 
         await using (var ctx = new Database.AppDbContext(options))
         {
-            await ctx.Database.EnsureCreatedAsync();
+            await ctx.Database.MigrateAsync();
         }
 
         _contextFactory = () => new Database.AppDbContext(options);
@@ -121,7 +121,7 @@ public class SqliteInvoiceRepoTest : Invoices.Tests.InvoiceRepoContractTest
             .UseSqlite($"Data Source={dbPath}")
             .Options;
         await using (var ctx = new Database.AppDbContext(options))
-            await ctx.Database.EnsureCreatedAsync();
+            await ctx.Database.MigrateAsync();
         var config = new Config { App = new AppConfig { StartInvoiceNumber = startInvoiceNumber } };
         var repo = new SqliteInvoiceRepo(() => new Database.AppDbContext(options), config);
         return (repo, dbPath);

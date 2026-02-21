@@ -414,7 +414,7 @@ Use the printed file path and append (or edit) the following sections:
 5. **Suggested fix directions** — Concrete approaches to try (e.g. mutex, exception handling, migrations).
 6. **Verification checklist** — Steps the fix agent should run to confirm the fix (e.g. re-run playbook, stress-test concurrency).
 
-See `agent-qa/failures/20260221-0130.md` for a worked example.
+See `agent-qa/failures/20260221-0130.resolved.md` for a worked example.
 
 ---
 
