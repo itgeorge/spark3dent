@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Accounting;
@@ -226,6 +227,8 @@ class CliProgram
         Console.WriteLine("  clients list            - List clients (alphabetically by nickname)");
         Console.WriteLine("  invoices issue <nickname> <amount> [date]");
         Console.WriteLine("                          - Issue invoice. Amount: 123.45 or 123,45 (€). Date: dd-MM-yyyy (default: today)");
+        Console.WriteLine("  invoices preview <nickname> <amount> [date]");
+        Console.WriteLine("                          - Preview future invoice in browser (no invoice created)");
         Console.WriteLine("  invoices correct <number> <amount> [date]");
         Console.WriteLine("                          - Correct an existing invoice");
         Console.WriteLine("  invoices issue/correct  - Add --exportPng to also export PNG image (in addition to PDF)");
@@ -287,8 +290,7 @@ class CliProgram
         var postalCode = ReadRequired("Postal code");
         if (postalCode == null) return;
 
-        var country = ReadRequired("Country");
-        if (country == null) return;
+        var country = ReadOptional("Country (optional, default: България)") ?? "България";
 
         var billingAddress = new BillingAddress(name, representativeName, companyIdentifier, vatIdentifier, address, city, postalCode, country);
         var client = new Client(nickname, billingAddress);
@@ -363,7 +365,7 @@ class CliProgram
     {
         if (args.Length == 0)
         {
-            Console.WriteLine("Usage: invoices issue | invoices correct | invoices list");
+            Console.WriteLine("Usage: invoices issue | invoices correct | invoices preview | invoices list");
             return;
         }
 
@@ -381,13 +383,19 @@ class CliProgram
             return;
         }
 
+        if (sub == "preview")
+        {
+            await InvoicesPreviewAsync(args.Skip(1).ToArray(), invoiceManagement, imageExporter);
+            return;
+        }
+
         if (sub == "list")
         {
             await InvoicesListAsync(invoiceManagement);
             return;
         }
 
-        Console.WriteLine($"Unknown subcommand: {sub}. Use: invoices issue | invoices correct | invoices list");
+        Console.WriteLine($"Unknown subcommand: {sub}. Use: invoices issue | invoices correct | invoices preview | invoices list");
     }
 
     static async Task InvoicesIssueAsync(
@@ -443,6 +451,82 @@ class CliProgram
                     Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Uri}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static async Task InvoicesPreviewAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IInvoiceExporter? imageExporter)
+    {
+        if (imageExporter == null)
+        {
+            Console.WriteLine("Error: Image exporter not available. Preview requires Chromium.");
+            return;
+        }
+
+        var (_, positional) = CliOptsParser.ParseWithPositional(args.ToList());
+
+        if (positional.Count < 2)
+        {
+            Console.WriteLine("Usage: invoices preview <client nickname> <amount> [date]");
+            Console.WriteLine("  amount: e.g. 123.45 or 123,45 (euros)");
+            Console.WriteLine("  date: dd-MM-yyyy (default: today)");
+            return;
+        }
+
+        var nickname = positional[0];
+        var amountStr = positional[1].Replace(',', '.');
+        if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amountDec) || amountDec < 0)
+        {
+            Console.WriteLine("Invalid amount. Use e.g. 123.45 or 123,45");
+            return;
+        }
+        var amountCents = (int)Math.Round(amountDec * 100);
+
+        DateTime? date = null;
+        if (positional.Count >= 3)
+        {
+            if (!DateTime.TryParseExact(positional[2], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            {
+                Console.WriteLine("Invalid date. Use dd-MM-yyyy");
+                return;
+            }
+            date = parsedDate;
+        }
+
+        try
+        {
+            var result = await invoiceManagement.PreviewInvoiceAsync(nickname, amountCents, date, imageExporter);
+            if (!result.Success || result.Uri == null)
+            {
+                Console.WriteLine("Preview export failed.");
+                return;
+            }
+
+            var htmlPath = Path.Combine(Path.GetTempPath(), $"spark3dent-preview-{Guid.NewGuid():N}.html");
+            var html = $"""
+                <!DOCTYPE html>
+                <html><head><meta charset="utf-8"><title>Invoice Preview</title></head>
+                <body style="margin:0"><img src="{result.Uri}" alt="Invoice preview" style="max-width:100%"/></body>
+                </html>
+                """;
+            await File.WriteAllTextAsync(htmlPath, html);
+            Console.WriteLine(htmlPath);
+
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = htmlPath, UseShellExecute = true });
+                Console.WriteLine("Preview opened in browser.");
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Could not open browser automatically. Open the file above manually.");
             }
         }
         catch (InvalidOperationException ex)
