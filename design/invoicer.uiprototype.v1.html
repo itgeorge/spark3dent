@@ -483,11 +483,6 @@
     .tabs{
       display:flex;
       gap:8px;
-      padding: 6px;
-      background: rgba(255,255,255,.6);
-      border:1px solid rgba(226,232,240,.8);
-      border-radius: 14px;
-      width: fit-content;
     }
     .tab{
       border:none;
@@ -1470,6 +1465,29 @@
       }
     });
 
+    // ---- Copy structured details ----
+    document.addEventListener("click", (e)=>{
+      if(!e.target.closest("#btnCopyDetails")) return;
+      e.preventDefault();
+      const c = clients.find(x=>x.nickname === selectedClientNickname) ?? clients[0];
+      const amtCents = parseAmountToCents($("#inputAmount").value);
+      const date = $("#inputDate").value || new Date().toISOString().slice(0,10);
+      const mode = editorMode;
+      const number = (mode === "correct" ? ($("#inputNumber").value || "—") : "(auto)");
+      const payload = {
+        Invoice: { Number: number, Date: date, TotalCents: amtCents != null ? amtCents : "—" },
+        Flags: { Mode: mode, ExportPng: $("#chkExportPng").checked },
+        BuyerAddress: { Name: c.name, RepresentativeName: c.rep, CompanyIdentifier: c.companyId, VatIdentifier: c.vatId, Address: c.address, City: c.city, PostalCode: c.postal, Country: c.country },
+        LineItems: [{ Description: "Services", Amount: { Cents: amtCents ?? 0, Currency: "Eur" } }]
+      };
+      const text = JSON.stringify(payload, null, 2);
+      navigator.clipboard.writeText(text).then(()=>{
+        toast("Copied to clipboard");
+      }).catch(()=>{
+        toast("Copy failed");
+      });
+    });
+
     // ---- Tabs ----
     $$(".tab").forEach(btn => {
       btn.addEventListener("click", ()=>{
@@ -1603,7 +1621,10 @@
               <h2>Structured details</h2>
               <div class="hint">Helpful for debugging data mapping</div>
             </div>
-            <span class="chip">MOCK</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="btn small" type="button" id="btnCopyDetails" title="Copy debug info to clipboard">Copy to clipboard</button>
+              <span class="chip">MOCK</span>
+            </div>
           </div>
           <div class="card-body" style="padding:14px;">
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
