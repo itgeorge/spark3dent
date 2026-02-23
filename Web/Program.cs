@@ -1,3 +1,7 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
 using AppSetup;
 using Utilities;
 
@@ -16,10 +20,34 @@ if (setup == null)
     throw new InvalidOperationException("SellerAddress and SellerBankTransferInfo must be configured in appsettings.json.");
 }
 
+// Find a free port on localhost
+int port;
+using (var listener = new TcpListener(IPAddress.Loopback, 0))
+{
+    listener.Start();
+    port = ((IPEndPoint)listener.LocalEndpoint).Port;
+}
+
+var url = $"http://127.0.0.1:{port}";
+
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls(url);
+
 var app = builder.Build();
 
-// setup.InvoiceManagement, setup.ClientRepo, etc. available for API endpoints (Phase 2/3)
-app.MapGet("/", () => Results.Ok("Spark3Dent Web - Phase 1"));
+// Serve embedded UI at GET /
+var webAssembly = Assembly.GetExecutingAssembly();
+app.MapGet("/", async () =>
+{
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("index.html", webAssembly);
+    return Results.Content(html, "text/html; charset=utf-8");
+});
 
-app.Run();
+await app.StartAsync();
+
+Console.WriteLine($"Spark3Dent Web running at {url}");
+Console.WriteLine("Press Ctrl+C to stop.");
+
+Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+
+await app.WaitForShutdownAsync();

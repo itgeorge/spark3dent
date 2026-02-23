@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: phase-2
     content: "Phase 2: Server startup with free port discovery, localhost-only binding, browser auto-open, and embedded UI serving"
-    status: pending
+    status: completed
   - id: phase-3
     content: "Phase 3: Implement all REST API endpoints (clients CRUD, invoices list/issue/correct/preview/pdf-download)"
     status: pending
@@ -191,16 +191,16 @@ Add an `IsCorrected` flag to the domain model so the API can report whether an i
 
 ---
 
-## [ ] Phase 2: Server Startup & Browser Launch
+## [x] Phase 2: Server Startup & Browser Launch
 
-- [ ] **2.1** Implement the server startup in `Web/Program.cs`:
+- [x] **2.1** Implement the server startup in `Web/Program.cs`:
   - Use `WebApplication.CreateBuilder()` with ASP.NET Core minimal API
   - **Bind to localhost only**: use `builder.WebHost.UseUrls($"http://127.0.0.1:{port}")` where `port` is dynamically found
   - Find a free port: bind a `TcpListener` to port 0, read the assigned port, then close the listener before starting Kestrel on that port
   - After `app.Start()` (non-blocking), open the default browser: `Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true })`
   - Then `await app.WaitForShutdownAsync()` to keep running until Ctrl+C
   - Console output: print the URL and "Press Ctrl+C to stop"
-- [ ] **2.2** Serve the UI HTML:
+- [x] **2.2** Serve the UI HTML:
   - The UI file will be embedded as a resource in `Web/wwwroot/index.html`
   - Map `GET /` to return the embedded HTML with `Content-Type: text/html; charset=utf-8`
   - Use `EmbeddedResourceLoader` (from Utilities) or `Assembly.GetManifestResourceStream`
