@@ -203,6 +203,15 @@
     .btn.primary:hover{
       background: linear-gradient(180deg, rgba(124,58,237,.95), rgba(108,43,230,.95));
     }
+    .btn.primary-teal{
+      border-color: rgba(34,193,195,.35);
+      background: linear-gradient(180deg, #22c1c3, #1aacae);
+      color:white;
+      box-shadow: 0 10px 22px rgba(34,193,195,.25);
+    }
+    .btn.primary-teal:hover{
+      background: linear-gradient(180deg, rgba(34,193,195,.95), rgba(26,172,174,.95));
+    }
     .btn.small{
       padding: 8px 10px;
       font-size: 12px;
@@ -486,7 +495,7 @@
       background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,1));
       display:flex;
       gap: 10px;
-      justify-content:flex-end;
+      justify-content:space-between;
     }
 
     /* Preview */
@@ -773,6 +782,45 @@
       color: var(--muted2);
     }
 
+    /* Nav tabs */
+    .nav-tabs{
+      background: rgba(248,250,252,.9);
+      border-bottom: 1px solid rgba(226,232,240,.8);
+      padding: 0 18px;
+    }
+    .nav-tabs-inner{
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0;
+    }
+    .nav-tab{
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted2);
+      cursor: pointer;
+      position: relative;
+      transition: color .15s ease;
+    }
+    .nav-tab:hover{
+      color: var(--text);
+    }
+    .nav-tab.active{
+      color: var(--text);
+    }
+    .nav-tab.active::after{
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background: var(--a2);
+    }
+
     /* Responsive */
     @media (max-width: 980px){
       .grid-2{ grid-template-columns: 1fr; }
@@ -798,6 +846,15 @@
         <div class="actions">
           <button class="btn" id="btnTopSettings" title="Placeholder">⚙︎</button>
         </div>
+      </div>
+    </div>
+
+    <div class="nav-tabs">
+      <div class="nav-tabs-inner">
+        <button class="nav-tab active" data-nav="dashboard">Home</button>
+        <button class="nav-tab" data-nav="allClients">Clients</button>
+        <button class="nav-tab" data-nav="allInvoices">Invoices</button>
+        <button class="nav-tab" data-nav="editor">Issue</button>
       </div>
     </div>
 
@@ -829,7 +886,7 @@
                 <h2>Clients with recent invoices</h2>
                 <div class="hint">Your clients, latest first</div>
               </div>
-              <button class="btn small" id="btnNewClient">＋ New client</button>
+              <button class="btn small primary-teal" id="btnNewClient">＋ New client</button>
             </div>
             <div class="card-body">
               <div id="clientList" class="list"></div>
@@ -850,8 +907,8 @@
               <div class="hint">Your latest issued invoices. Click a row to review</div>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-              <button class="btn small primary" id="btnNewFromAllInvoices">＋ New invoice</button>
               <button class="btn" id="btnBackFromAllInvoices">Back</button>
+              <button class="btn small primary" id="btnNewFromAllInvoices">＋ New invoice</button>
             </div>
           </div>
           <div class="card-body">
@@ -869,8 +926,8 @@
               <div class="hint">Your clients, latest first</div>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-              <button class="btn small" id="btnNewClientFromAll">＋ New client</button>
               <button class="btn" id="btnBackFromAllClients">Back</button>
+              <button class="btn small primary-teal" id="btnNewClientFromAll">＋ New client</button>
             </div>
           </div>
           <div class="card-body">
@@ -1155,6 +1212,14 @@
       if(view === "allClients"){
         renderClients(applyClientSearch(clients), $("#clientListAll"));
       }
+      updateNavTabs(view);
+    }
+
+    function updateNavTabs(activeView){
+      $$(".nav-tab").forEach(tab => {
+        const nav = tab.dataset.nav;
+        tab.classList.toggle("active", nav === activeView);
+      });
     }
 
     // ---- Render dashboard lists ----
@@ -1219,7 +1284,7 @@
           <div class="client-right">
             <div class="last">Last invoice: <b>${lastInvoiceDateFor(c.nickname) ?? "—"}</b></div>
             <div class="client-actions">
-              <button class="btn small icon" title="Edit client" data-action="edit" data-client="${c.nickname}">✎</button>
+              <button class="btn small" title="Edit client" data-action="edit" data-client="${c.nickname}">✎ Edit Client</button>
               <button class="btn small primary" data-action="new" data-client="${c.nickname}">＋ New invoice</button>
             </div>
           </div>
@@ -1417,6 +1482,17 @@
 
     // Top buttons
     $("#btnNewFromInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
+
+    // Nav tabs
+    $$(".nav-tab").forEach(tab => {
+      tab.addEventListener("click", ()=>{
+        const nav = tab.dataset.nav;
+        if(nav === "dashboard") setView("dashboard");
+        else if(nav === "allClients") setView("allClients");
+        else if(nav === "allInvoices") setView("allInvoices");
+        else if(nav === "editor") openEditorIssue(selectedClientNickname);
+      });
+    });
 
     // View all / Back
     $("#btnViewAllInvoices").addEventListener("click", ()=> setView("allInvoices"));
