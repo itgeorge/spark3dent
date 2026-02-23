@@ -253,7 +253,7 @@
     .row{
       position:relative;
       display:grid;
-      grid-template-columns: 160px 1fr auto;
+      grid-template-columns: 70px 140px 1fr 72px minmax(90px, auto);
       gap: 12px;
       padding: 12px 14px;
       border:none;
@@ -273,6 +273,10 @@
       background: rgba(124,58,237,.06);
     }
 
+    .row-status{
+      display:flex;
+      align-items:center;
+    }
     .meta{
       display:flex;
       flex-direction:column;
@@ -293,6 +297,10 @@
     .main{
       min-width:0;
     }
+    .row-download{
+      display:flex;
+      align-items:center;
+    }
     .main .primaryline{
       font-weight: 700;
       font-size: 13px;
@@ -312,12 +320,14 @@
     .right{
       display:flex;
       align-items:center;
+      justify-content:flex-end;
       gap: 10px;
       white-space:nowrap;
     }
     .amount{
       font-weight: 800;
       letter-spacing:.2px;
+      flex-shrink:0;
     }
 
     .chip{
@@ -328,6 +338,7 @@
       border:1px solid rgba(226,232,240,.95);
       color: var(--muted);
       background: rgba(248,250,252,.8);
+      white-space: nowrap;
     }
     .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
     .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
@@ -821,13 +832,12 @@
       background: var(--a2);
     }
 
-    /* Responsive */
-    @media (max-width: 980px){
+    /* Responsive - breakpoint raised so invoice rows have room before overflow */
+    @media (max-width: 1100px){
       .grid-2{ grid-template-columns: 1fr; }
       .editor{ grid-template-columns: 1fr; }
       .brand{ min-width: 160px; }
-      .row{ grid-template-columns: 140px 1fr; }
-      .right{ grid-column: 1 / -1; justify-content:space-between; }
+      .row{ grid-template-columns: 70px 120px 1fr 64px minmax(90px, auto); }
     }
   </style>
 </head>
@@ -974,22 +984,7 @@
               </div>
 
               <div class="field">
-                <label>Options</label>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                  <label style="display:flex; gap:8px; align-items:center; font-weight:700; color:var(--text);">
-                    <input type="checkbox" id="chkExportPng" />
-                    Export PNG too
-                  </label>
-                  <span class="chip ok" id="previewStatus">Preview: ready</span>
-                </div>
-              </div>
-
-              <div class="field">
-                <label>Quick actions</label>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                  <button class="btn small" id="btnPreviewPdf">Preview PDF</button>
-                  <button class="btn small" id="btnOpenExplorer">Show in Explorer</button>
-                </div>
+                <span class="chip ok" id="previewStatus">Preview: ready</span>
               </div>
             </div>
 
@@ -1007,9 +1002,12 @@
                   <div class="t">Invoice preview</div>
                   <div class="s" id="previewCaption">—</div>
                 </div>
-                <div class="tabs" role="tablist" aria-label="Preview tabs">
-                  <button class="tab active" data-tab="preview">Preview</button>
-                  <button class="tab" data-tab="details">Details</button>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <button class="btn small" id="btnDownloadPdf" style="display:none;" title="Download PDF">Download PDF</button>
+                  <div class="tabs" role="tablist" aria-label="Preview tabs">
+                    <button class="tab active" data-tab="preview" id="tabPreviewBtn">Preview</button>
+                    <button class="tab" data-tab="details">Details</button>
+                  </div>
                 </div>
               </div>
 
@@ -1155,7 +1153,7 @@
     const invoices = [
       { number: "000128", date: "2026-02-20", client: "acme", buyer: "ACME Consulting OOD", cents: 123450, status: "Issued", file: "Invoice_000128.pdf" },
       { number: "000127", date: "2026-02-18", client: "nimbus", buyer: "Nimbus Labs Ltd", cents: 9900, status: "Issued", file: "Invoice_000127.pdf" },
-      { number: "000126", date: "2026-02-12", client: "orbit", buyer: "Orbit Systems AD", cents: 250000, status: "Corrected", file: "Invoice_000126_corrected.pdf" },
+      { number: "000126", date: "2026-02-12", client: "orbit", buyer: "Orbit Systems AD", cents: 250000, status: "Edited", file: "Invoice_000126_corrected.pdf" },
       { number: "000125", date: "2026-02-01", client: "acme", buyer: "ACME Consulting OOD", cents: 49900, status: "Issued", file: "Invoice_000125.pdf" },
     ];
 
@@ -1233,10 +1231,13 @@
         row.tabIndex = 0;
         row.dataset.number = inv.number;
 
-        const chipClass = inv.status === "Corrected" ? "chip fix" : "chip ok";
-        const chipText = inv.status.toUpperCase();
+        const chipClass = (inv.status === "Corrected" || inv.status === "Edited") ? "chip fix" : "chip ok";
+        const chipText = (inv.status === "Corrected" || inv.status === "Edited") ? "EDITED" : "ISSUED";
 
         row.innerHTML = `
+          <div class="row-status">
+            <span class="${chipClass}">${chipText}</span>
+          </div>
           <div class="meta">
             <div class="invno">#${inv.number}</div>
             <div class="date">${formatDateISO(inv.date)}</div>
@@ -1245,16 +1246,22 @@
             <div class="primaryline">${inv.client}</div>
             <div class="secondaryline">${inv.buyer}</div>
           </div>
+          <div class="row-download">
+            <button class="btn small" title="Download PDF" data-action="download" data-file="${inv.file}">⬇ PDF</button>
+          </div>
           <div class="right">
-            <span class="${chipClass}">${chipText}</span>
             <span class="amount">€ ${centsToEur(inv.cents)}</span>
           </div>
         `;
 
+        row.querySelector('button[data-action="download"]').addEventListener("click", (e)=>{
+          e.stopPropagation();
+          toast(`(mock) Download: ${inv.file}`);
+        });
         row.addEventListener("click", ()=> openEditorCorrect(inv.number));
 
         row.addEventListener("keydown", (e)=>{
-          if(e.key === "Enter"){
+          if(e.key === "Enter" && !e.target.closest("button")){
             e.preventDefault();
             openEditorCorrect(inv.number);
           }
@@ -1356,6 +1363,8 @@
       $("#btnIssue").textContent = "Issue";
       $("#fieldInvoiceNumber").classList.add("hidden");
       $("#inputNumber").value = "";
+      $("#tabPreviewBtn").textContent = "Preview";
+      $("#btnDownloadPdf").style.display = "none";
       setDefaults();
       setView("editor");
       rebuildPreview();
@@ -1374,6 +1383,8 @@
       $("#btnIssue").textContent = "Save correction";
       $("#fieldInvoiceNumber").classList.remove("hidden");
 
+      $("#tabPreviewBtn").textContent = "View";
+      $("#btnDownloadPdf").style.display = "";
       setDefaults(inv);
       setView("editor");
       rebuildPreview();
@@ -1397,7 +1408,6 @@
         $("#inputDate").value = isoToday;
       }
 
-      $("#chkExportPng").checked = false;
     }
 
     function updateClientPill(){
@@ -1425,8 +1435,7 @@
     });
 
     function performSave(){
-      const png = $("#chkExportPng").checked;
-      toast(`(mock) ${editorMode === "issue" ? "Issued" : "Corrected"} • ${png ? "PDF+PNG" : "PDF"} `);
+      toast(`(mock) ${editorMode === "issue" ? "Issued" : "Corrected"} • PDF`);
       closeConfirmSaveModal();
       setView("dashboard");
     }
@@ -1503,8 +1512,7 @@
     $("#btnNewClientFromAll").addEventListener("click", openNewClientModal);
 
     // Placeholder actions
-    $("#btnPreviewPdf").addEventListener("click", ()=> toast("(mock) Preview PDF in browser"));
-    $("#btnOpenExplorer").addEventListener("click", ()=> toast("(mock) Open output folder & select file"));
+    $("#btnDownloadPdf").addEventListener("click", ()=> toast("(mock) Download PDF"));
 
     // ---- Client picker modal ----
     function openClientPickerModal(){
@@ -1623,7 +1631,7 @@
       const number = (mode === "correct" ? ($("#inputNumber").value || "—") : "(auto)");
       const payload = {
         Invoice: { Number: number, Date: date, TotalCents: amtCents != null ? amtCents : "—" },
-        Flags: { Mode: mode, ExportPng: $("#chkExportPng").checked },
+        Flags: { Mode: mode },
         BuyerAddress: { Name: c.name, RepresentativeName: c.rep, CompanyIdentifier: c.companyId, VatIdentifier: c.vatId, Address: c.address, City: c.city, PostalCode: c.postal, Country: c.country },
         LineItems: [{ Description: "Services", Amount: { Cents: amtCents ?? 0, Currency: "Eur" } }]
       };
@@ -1658,7 +1666,7 @@
       }, 120);
     }, 120);
 
-    ["#inputNumber", "#inputAmount", "#inputDate", "#chkExportPng"].forEach(sel=>{
+    ["#inputNumber", "#inputAmount", "#inputDate"].forEach(sel=>{
       const el = $(sel);
       el.addEventListener("input", rebuildPreview);
       el.addEventListener("change", rebuildPreview);
@@ -1787,7 +1795,6 @@
                 <div class="boxt">Flags</div>
                 <div class="kv">
                   <div>Mode</div><b>${mode}</b>
-                  <div>Export PNG</div><b>${$("#chkExportPng").checked ? "true" : "false"}</b>
                 </div>
               </div>
             </div>
