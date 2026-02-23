@@ -1,13 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
 using Accounting;
-using Configuration;
-using Database;
+using AppSetup;
 using Invoices;
-using Microsoft.EntityFrameworkCore;
-using PuppeteerSharp;
-using Storage;
 using Utilities;
 
 namespace Cli;
@@ -15,15 +10,13 @@ namespace Cli;
 class CliProgram
 {
     private const int LogBufferSize = 20;
-    private const string InvoicesBucket = "invoices";
-    private const int InvoiceNumberPadding = 10;
 
     static async Task Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
-        var config = await LoadAndResolveConfigAsync();
+        var config = await AppBootstrap.LoadAndResolveConfigAsync();
 
         var logDir = config.Desktop.LogDirectory;
         Directory.CreateDirectory(logDir);
@@ -32,113 +25,16 @@ class CliProgram
         using var logger = new BufferedLogger(fileLogger, LogBufferSize);
         logger.LogInfo("Spark3Dent started");
 
-        var (invoiceManagement, clientRepo, pdfExporter, imageExporter) = await SetupDependenciesAsync(config, logger);
-        if (invoiceManagement == null || clientRepo == null)
+        var setup = await AppBootstrap.SetupDependenciesAsync(config, logger);
+        if (setup == null)
         {
             logger.LogError("Failed to initialize dependencies. Check config: SellerAddress and SellerBankTransferInfo are required.", new InvalidOperationException("Missing config"));
             Console.WriteLine("Error: SellerAddress and SellerBankTransferInfo must be configured in appsettings.json.");
             return;
         }
 
-        await RunCommandLoopAsync(args, invoiceManagement, clientRepo, pdfExporter!, imageExporter, logger);
+        await RunCommandLoopAsync(args, setup.InvoiceManagement, setup.ClientRepo, setup.PdfExporter, setup.ImageExporter, logger);
     }
-
-    static async Task<(InvoiceManagement? InvoiceManagement, IClientRepo? ClientRepo, IInvoiceExporter? PdfExporter, IInvoiceExporter? ImageExporter)> SetupDependenciesAsync(Config config, ILogger logger)
-    {
-        if (config.App.SellerAddress == null || config.App.SellerBankTransferInfo == null)
-            return (null, null, null, null);
-
-        var sellerAddress = ConfigToBillingAddress(config.App.SellerAddress);
-        var bankTransferInfo = ConfigToBankTransferInfo(config.App.SellerBankTransferInfo);
-
-        var dbPath = config.Desktop.DatabasePath;
-        var dbDir = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrEmpty(dbDir))
-            Directory.CreateDirectory(dbDir);
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite($"Data Source={dbPath}")
-            .Options;
-
-        await using (var ctx = new AppDbContext(options))
-        {
-            await ctx.Database.MigrateAsync();
-        }
-
-        AppDbContext ContextFactory() => new AppDbContext(options);
-        var invoiceRepo = new SqliteInvoiceRepo(ContextFactory, config);
-        var clientRepo = new SqliteClientRepo(ContextFactory);
-
-        var transcriber = new BgAmountTranscriber();
-        var template = await InvoiceHtmlTemplate.LoadAsync(transcriber, invoiceNumberPadding: InvoiceNumberPadding);
-
-        var chromiumPath = await ResolveChromiumExecutablePathAsync();
-        var pdfExporter = new InvoicePdfExporter(chromiumPath);
-        var imageExporter = new InvoiceImageExporter(chromiumPath);
-
-        var loggingInvoiceRepo = new LoggingInvoiceRepo(invoiceRepo, logger);
-        var loggingClientRepo = new LoggingClientRepo(clientRepo, logger);
-        var loggingPdfExporter = new LoggingInvoiceExporter(pdfExporter, logger);
-        var loggingImageExporter = new LoggingInvoiceExporter(imageExporter, logger);
-        var contentTypeMap = BuildContentTypeMap(loggingPdfExporter, loggingImageExporter);
-        var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
-        var invoicesDir = Path.Combine(config.Desktop.BlobStoragePath, "invoices");
-        blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
-        var loggingBlobStorage = new LoggingBlobStorage(blobStorage, logger);
-
-        var invoiceManagement = new InvoiceManagement(
-            loggingInvoiceRepo,
-            loggingClientRepo,
-            template,
-            loggingBlobStorage,
-            sellerAddress,
-            bankTransferInfo,
-            InvoicesBucket,
-            logger,
-            invoiceNumberPadding: InvoiceNumberPadding);
-
-        return (invoiceManagement, loggingClientRepo, loggingPdfExporter, loggingImageExporter);
-    }
-
-    static async Task<string?> ResolveChromiumExecutablePathAsync()
-    {
-        var chromiumDir = Path.Combine(AppContext.BaseDirectory, "chromium");
-        if (!Directory.Exists(chromiumDir))
-            return null;
-
-        var fetcher = new BrowserFetcher(new BrowserFetcherOptions { Path = chromiumDir });
-        try
-        {
-            var result = await fetcher.DownloadAsync();
-            return result.GetExecutablePath();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    static Dictionary<string, string> BuildContentTypeMap(IInvoiceExporter pdfExporter, IInvoiceExporter imageExporter)
-    {
-        var mimeToExtension = new Dictionary<string, string>
-        {
-            ["application/pdf"] = ".pdf",
-            ["image/png"] = ".png"
-        };
-        var map = new Dictionary<string, string>();
-        foreach (var exporter in new[] { pdfExporter, imageExporter })
-        {
-            if (mimeToExtension.TryGetValue(exporter.MimeType, out var ext))
-                map[exporter.MimeType] = ext;
-        }
-        return map;
-    }
-
-    static BillingAddress ConfigToBillingAddress(SellerAddress sa) =>
-        new(sa.Name, sa.RepresentativeName, sa.CompanyIdentifier, sa.VatIdentifier, sa.Address, sa.City, sa.PostalCode, sa.Country);
-
-    static BankTransferInfo ConfigToBankTransferInfo(SellerBankTransferInfo st) =>
-        new(st.Iban, st.BankName, st.Bic);
 
     static async Task RunCommandLoopAsync(
         string[] args,
@@ -633,47 +529,4 @@ class CliProgram
 
     static string Truncate(string s, int maxLen) =>
         s.Length <= maxLen ? s : s[..(maxLen - 3)] + "...";
-
-    static async Task<Config> LoadAndResolveConfigAsync()
-    {
-        var loader = new JsonAppSettingsLoader();
-        var config = await loader.LoadAsync();
-
-        var defaultsUsed = false;
-        var desktop = config.Desktop;
-
-        if (string.IsNullOrEmpty(desktop.DatabasePath))
-        {
-            desktop.DatabasePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Spark3Dent", "spark3dent.db");
-            defaultsUsed = true;
-        }
-
-        if (string.IsNullOrEmpty(desktop.BlobStoragePath))
-        {
-            desktop.BlobStoragePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "Spark3Dent");
-            defaultsUsed = true;
-        }
-
-        if (string.IsNullOrEmpty(desktop.LogDirectory))
-        {
-            desktop.LogDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Spark3Dent", "logs");
-            defaultsUsed = true;
-        }
-
-        if (defaultsUsed)
-        {
-            var appSettingsPath = loader.GetAppSettingsPath();
-            var json = JsonSerializer.Serialize(new { App = config.App, Desktop = desktop },
-                new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(appSettingsPath, json);
-        }
-
-        return config;
-    }
 }

@@ -7,10 +7,10 @@ todos:
     status: completed
   - id: phase-1
     content: "Phase 1: Extract shared AppSetup project from CliProgram, refactor CLI to use it, wire into Web/Program.cs"
-    status: pending
+    status: completed
   - id: phase-1b
     content: "Phase 1B: Add invoice correction tracking (IsCorrected flag) across domain, tests, fakes, DB entity, migration, and repos"
-    status: pending
+    status: completed
   - id: phase-2
     content: "Phase 2: Server startup with free port discovery, localhost-only binding, browser auto-open, and embedded UI serving"
     status: pending
@@ -106,7 +106,7 @@ graph TB
 
 ---
 
-## [ ] Phase 1: Dependency Setup (extract shared logic)
+## [x] Phase 1: Dependency Setup (extract shared logic)
 
 The dependency initialization in [Cli/CliProgram.cs](Cli/CliProgram.cs) lines 46-101 (`SetupDependenciesAsync`) and lines 637-678 (`LoadAndResolveConfigAsync`) should be reusable by the Web project. Rather than duplicating this logic, extract it into a shared project.
 
@@ -130,20 +130,20 @@ The dependency initialization in [Cli/CliProgram.cs](Cli/CliProgram.cs) lines 46
 
 ---
 
-## [ ] Phase 1B: Invoice Correction Tracking
+## [x] Phase 1B: Invoice Correction Tracking
 
 Add an `IsCorrected` flag to the domain model so the API can report whether an invoice has been corrected. This change touches every layer: domain record, contract tests, fake repo, DB entity, mapping, migration, and SQLite repo.
 
 ### Domain Model
 
-- [ ] **1B.1** Add `IsCorrected` property to `Invoice` in [Invoices/Invoice.cs](Invoices/Invoice.cs):
+- [x] **1B.1** Add `IsCorrected` property to `Invoice` in [Invoices/Invoice.cs](Invoices/Invoice.cs):
   - Add a `bool IsCorrected` property (default `false`)
   - The `Invoice` constructor currently takes `(string number, InvoiceContent content)`. Extend it to accept an optional `bool isCorrected = false` parameter, keeping backward compatibility with all existing call sites
   - `IsCorrected` is set to `true` when an invoice is updated via `IInvoiceRepo.UpdateAsync` -- the repos are responsible for this, not the caller
 
 ### Contract Tests
 
-- [ ] **1B.2** Update [Invoices.Tests/InvoiceRepoContractTest.cs](Invoices.Tests/InvoiceRepoContractTest.cs):
+- [x] **1B.2** Update [Invoices.Tests/InvoiceRepoContractTest.cs](Invoices.Tests/InvoiceRepoContractTest.cs):
   - Update `AssertInvoicesEqual` to also compare `IsCorrected`
   - Add test: `Create_GivenValidContent_WhenCreatingInvoice_ThenIsCorrectedIsFalse` -- verify a newly created invoice has `IsCorrected == false`
   - Add test: `Update_GivenExistingInvoice_WhenUpdatingInvoice_ThenIsCorrectedIsTrue` -- create an invoice, call `UpdateAsync`, retrieve it, verify `IsCorrected == true`
@@ -152,14 +152,14 @@ Add an `IsCorrected` flag to the domain model so the API can report whether an i
 
 ### Fake Repo
 
-- [ ] **1B.3** Update [Invoices.Tests/Fakes/FakeInvoiceRepo.cs](Invoices.Tests/Fakes/FakeInvoiceRepo.cs):
+- [x] **1B.3** Update [Invoices.Tests/Fakes/FakeInvoiceRepo.cs](Invoices.Tests/Fakes/FakeInvoiceRepo.cs):
   - `CreateAsync`: store invoices with `IsCorrected = false` (already the default)
   - `UpdateAsync`: set `IsCorrected = true` when replacing the stored invoice: `_storage[number] = new Invoice(number, content, isCorrected: true);`
-- [ ] **1B.4** Run fake repo contract tests to verify the new tests pass: `dotnet test Invoices.Tests --filter FakeInvoiceRepoTest`
+- [x] **1B.4** Run fake repo contract tests to verify the new tests pass: `dotnet test Invoices.Tests --filter FakeInvoiceRepoTest`
 
 ### DB Entity & Mapping
 
-- [ ] **1B.5** Add `IsCorrected` column to [Database/Entities/InvoiceEntity.cs](Database/Entities/InvoiceEntity.cs):
+- [x] **1B.5** Add `IsCorrected` column to [Database/Entities/InvoiceEntity.cs](Database/Entities/InvoiceEntity.cs):
   - `public bool IsCorrected { get; set; }` (defaults to `false`)
 - [ ] **1B.6** Update [Database/InvoiceMapping.cs](Database/InvoiceMapping.cs):
   - `ToDomain`: pass `entity.IsCorrected` to the `Invoice` constructor
@@ -168,26 +168,26 @@ Add an `IsCorrected` flag to the domain model so the API can report whether an i
 
 ### Migration
 
-- [ ] **1B.7** Confirm [Database.Tests/PendingModelChangesTest.cs](Database.Tests/PendingModelChangesTest.cs) fails (model has a new column with no migration): `dotnet test Database.Tests --filter PendingModelChangesTest` -- expect failure
-- [ ] **1B.8** Add the migration: `dotnet ef migrations add AddInvoiceIsCorrected --project Database --startup-project Cli`
-- [ ] **1B.9** Confirm `PendingModelChangesTest` now passes: `dotnet test Database.Tests --filter PendingModelChangesTest`
+- [x] **1B.7** Confirm [Database.Tests/PendingModelChangesTest.cs](Database.Tests/PendingModelChangesTest.cs) fails (model has a new column with no migration): `dotnet test Database.Tests --filter PendingModelChangesTest` -- expect failure
+- [x] **1B.8** Add the migration: `dotnet ef migrations add AddInvoiceIsCorrected --project Database --startup-project Cli`
+- [x] **1B.9** Confirm `PendingModelChangesTest` now passes: `dotnet test Database.Tests --filter PendingModelChangesTest`
 
 ### SQLite Repo
 
-- [ ] **1B.10** Update `UpdateAsync` in [Database/SqliteInvoiceRepo.cs](Database/SqliteInvoiceRepo.cs):
+- [x] **1B.10** Update `UpdateAsync` in [Database/SqliteInvoiceRepo.cs](Database/SqliteInvoiceRepo.cs):
   - After `InvoiceMapping.ApplyContent(entity, content)` (line 102), add `entity.IsCorrected = true;`
   - This ensures any call to `UpdateAsync` marks the invoice as corrected
 
 ### SQLite-Specific Tests
 
-- [ ]  **1B.11** Add tests in [Database.Tests/SqliteInvoiceRepoTest.cs](Database.Tests/SqliteInvoiceRepoTest.cs):
+- [x] **1B.11** Add tests in [Database.Tests/SqliteInvoiceRepoTest.cs](Database.Tests/SqliteInvoiceRepoTest.cs):
   - `IsCorrected_GivenFreshDb_WhenCreatingInvoice_ThenIsCorrectedIsFalseInDb` -- create an invoice, query the raw `InvoiceEntity`, verify `IsCorrected == false`
   - `IsCorrected_GivenExistingInvoice_WhenUpdating_ThenIsCorrectedIsTrueInDb` -- create, update, query raw entity, verify `IsCorrected == true`
   - `IsCorrected_GivenMigratedDbWithExistingInvoices_ThenDefaultsToFalse` -- verify the migration defaults existing rows to `false` (important for production data predating this migration)
 
 ### Verify
 
-- [ ] **1B.12** Run all tests: `dotnet test Spark3Dent.sln` -- all contract tests (fake + SQLite), migration tests, and all existing tests should pass
+- [x] **1B.12** Run all tests: `dotnet test Spark3Dent.sln` -- all contract tests (fake + SQLite), migration tests, and all existing tests should pass
 
 ---
 

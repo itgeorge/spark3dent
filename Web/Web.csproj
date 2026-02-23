@@ -28,6 +28,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\AppSetup\AppSetup.csproj" />
         <ProjectReference Include="..\ChromiumFetcher\ChromiumFetcher.csproj">
             <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
         </ProjectReference>
