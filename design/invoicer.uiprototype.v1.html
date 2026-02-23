@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="bg">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -342,6 +342,16 @@
     }
     .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
     .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
+
+    .date-display{
+      margin-top: 6px;
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .date-display-placeholder{
+      color: var(--muted2);
+    }
 
     /* Clients list */
     .client-item{
@@ -979,8 +989,9 @@
               </div>
 
               <div class="field">
-                <label>Date</label>
+                <label for="inputDate">Date</label>
                 <input class="input" id="inputDate" type="date" />
+                <div id="dateDisplay" class="date-display" aria-live="polite"></div>
               </div>
 
               <div class="field">
@@ -1179,7 +1190,26 @@
       const [y,m,d] = iso.split("-");
       return `${d}.${m}.${y}`;
     }
-
+    function formatDateBulgarianWithWeekday(iso){
+      if(!iso) return "";
+      const [y,m,d] = iso.split("-");
+      const date = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+      const weekday = new Intl.DateTimeFormat("bg-BG", { weekday: "long" }).format(date);
+      const dateStr = new Intl.DateTimeFormat("bg-BG", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+      const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+      return `${cap(weekday)}, ${dateStr}`;
+    }
+    function updateDateDisplay(){
+      const iso = $("#inputDate").value;
+      const el = $("#dateDisplay");
+      if(iso){
+        el.textContent = formatDateBulgarianWithWeekday(iso);
+        el.classList.remove("date-display-placeholder");
+      } else {
+        el.textContent = "Select date";
+        el.classList.add("date-display-placeholder");
+      }
+    }
     function toast(msg){
       const t = $("#toast");
       t.textContent = msg;
@@ -1407,7 +1437,7 @@
         $("#inputAmount").value = "";
         $("#inputDate").value = isoToday;
       }
-
+      updateDateDisplay();
     }
 
     function updateClientPill(){
@@ -1671,6 +1701,11 @@
       el.addEventListener("input", rebuildPreview);
       el.addEventListener("change", rebuildPreview);
     });
+    $("#inputDate").addEventListener("input", updateDateDisplay);
+    $("#inputDate").addEventListener("change", updateDateDisplay);
+    $("#dateDisplay").addEventListener("click", e => {
+      $("#inputDate").showPicker();
+    });
 
     function parseAmountToCents(str){
       // Accept 123.45 or 123,45; tolerate spaces
@@ -1841,6 +1876,7 @@
       // set date input default to today for smoother first open
       const today = new Date().toISOString().slice(0,10);
       $("#inputDate").value = today;
+      updateDateDisplay();
 
     }
 
