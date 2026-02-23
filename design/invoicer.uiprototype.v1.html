@@ -217,6 +217,23 @@
       border-radius: 10px;
     }
 
+    .view-all-link{
+      display:block;
+      width:100%;
+      padding:10px 14px;
+      border:none;
+      background:transparent;
+      color:var(--muted2);
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+      text-align:center;
+      transition:color .15s ease;
+    }
+    .view-all-link:hover{
+      color:var(--text);
+    }
+
     /* Lists */
     .list{
       display:flex;
@@ -774,12 +791,11 @@
         <div class="brand" id="btnBrand" role="button" tabindex="0" title="Back to dashboard">
           <div class="logo" aria-hidden="true"></div>
           <div>
-            <h1>Invoicer <span class="sub">Design 1 mock • light theme</span></h1>
+            <h1>Invoicer <span class="sub">Issue & review invoices, add/edit clients</span></h1>
           </div>
         </div>
 
         <div class="actions">
-          <button class="btn primary" id="btnTopNew">＋ New invoice</button>
           <button class="btn" id="btnTopSettings" title="Placeholder">⚙︎</button>
         </div>
       </div>
@@ -794,12 +810,15 @@
             <div class="card-head">
               <div class="title">
                 <h2>Latest invoices</h2>
-                <div class="hint">Newest first • select a row for actions</div>
+                <div class="hint">Your latest issued invoices. Click a row to review</div>
               </div>
               <button class="btn small primary" id="btnNewFromInvoices">＋ New invoice</button>
             </div>
             <div class="card-body">
               <div id="invoiceList" class="list"></div>
+              <div style="border-top:1px solid rgba(226,232,240,.7);">
+                <button class="view-all-link" type="button" id="btnViewAllInvoices">view all</button>
+              </div>
             </div>
           </div>
 
@@ -808,13 +827,54 @@
             <div class="card-head">
               <div class="title">
                 <h2>Clients with recent invoices</h2>
-                <div class="hint">Quick issue flow from client context</div>
+                <div class="hint">Your clients, latest first</div>
               </div>
               <button class="btn small" id="btnNewClient">＋ New client</button>
             </div>
             <div class="card-body">
               <div id="clientList" class="list"></div>
+              <div style="border-top:1px solid rgba(226,232,240,.7);">
+                <button class="view-all-link" type="button" id="btnViewAllClients">view all</button>
+              </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALL INVOICES -->
+      <div id="viewAllInvoices" class="hidden">
+        <div class="card" style="max-width:100%;">
+          <div class="card-head">
+            <div class="title">
+              <h2>All invoices</h2>
+              <div class="hint">Your latest issued invoices. Click a row to review</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn small primary" id="btnNewFromAllInvoices">＋ New invoice</button>
+              <button class="btn" id="btnBackFromAllInvoices">Back</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="invoiceListAll" class="list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALL CLIENTS -->
+      <div id="viewAllClients" class="hidden">
+        <div class="card" style="max-width:100%;">
+          <div class="card-head">
+            <div class="title">
+              <h2>All clients</h2>
+              <div class="hint">Your clients, latest first</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn small" id="btnNewClientFromAll">＋ New client</button>
+              <button class="btn" id="btnBackFromAllClients">Back</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="clientListAll" class="list"></div>
           </div>
         </div>
       </div>
@@ -1082,19 +1142,24 @@
 
     function setView(view){
       const dash = $("#viewDashboard");
+      const allInv = $("#viewAllInvoices");
+      const allCli = $("#viewAllClients");
       const ed = $("#viewEditor");
-      if(view === "dashboard"){
-        dash.classList.remove("hidden");
-        ed.classList.add("hidden");
-      }else{
-        dash.classList.add("hidden");
-        ed.classList.remove("hidden");
+      dash.classList.toggle("hidden", view !== "dashboard");
+      allInv.classList.toggle("hidden", view !== "allInvoices");
+      allCli.classList.toggle("hidden", view !== "allClients");
+      ed.classList.toggle("hidden", view !== "editor");
+      if(view === "allInvoices"){
+        renderInvoices(applySearch(invoices), $("#invoiceListAll"));
+      }
+      if(view === "allClients"){
+        renderClients(applyClientSearch(clients), $("#clientListAll"));
       }
     }
 
     // ---- Render dashboard lists ----
-    function renderInvoices(list){
-      const root = $("#invoiceList");
+    function renderInvoices(list, rootEl){
+      const root = rootEl || $("#invoiceList");
       root.innerHTML = "";
 
       list.forEach(inv => {
@@ -1138,8 +1203,8 @@
       }
     }
 
-    function renderClients(list){
-      const root = $("#clientList");
+    function renderClients(list, rootEl){
+      const root = rootEl || $("#clientList");
       root.innerHTML = "";
 
       list.forEach(c => {
@@ -1180,7 +1245,7 @@
 
     // ---- Search ----
     function applySearch(items){
-      const q = ($("#searchBox").value || "").trim().toLowerCase();
+      const q = (($("#searchBox") && $("#searchBox").value) || "").trim().toLowerCase();
       if(!q) return items;
 
       // Search across invoice number, client nickname, buyer name
@@ -1192,7 +1257,7 @@
     }
 
     function applyClientSearch(items){
-      const q = ($("#searchBox").value || "").trim().toLowerCase();
+      const q = (($("#searchBox") && $("#searchBox").value) || "").trim().toLowerCase();
       if(!q) return items;
       return items.filter(c =>
         c.nickname.toLowerCase().includes(q) ||
@@ -1209,11 +1274,9 @@
         $("#searchBox").focus();
       }
       if(e.key === "Escape"){
-        // Escape returns to dashboard (mock)
-        if(!$("#viewEditor").classList.contains("hidden")){
-          setView("dashboard");
-          toast("Back to dashboard");
-        }
+        if(!$("#viewEditor").classList.contains("hidden")) goToDashboard();
+        else if(!$("#viewAllInvoices").classList.contains("hidden")) goToDashboard();
+        else if(!$("#viewAllClients").classList.contains("hidden")) goToDashboard();
       }
     });
 
@@ -1284,15 +1347,15 @@
       toast("Back to dashboard");
     });
 
-    $("#btnBrand").addEventListener("click", ()=>{
+    function goToDashboard(){
       setView("dashboard");
       toast("Back to dashboard");
-    });
+    }
+    $("#btnBrand").addEventListener("click", goToDashboard);
     $("#btnBrand").addEventListener("keydown", (e)=>{
       if(e.key === "Enter" || e.key === " "){
         e.preventDefault();
-        setView("dashboard");
-        toast("Back to dashboard");
+        goToDashboard();
       }
     });
 
@@ -1353,8 +1416,15 @@
     });
 
     // Top buttons
-    $("#btnTopNew").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
     $("#btnNewFromInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
+
+    // View all / Back
+    $("#btnViewAllInvoices").addEventListener("click", ()=> setView("allInvoices"));
+    $("#btnViewAllClients").addEventListener("click", ()=> setView("allClients"));
+    $("#btnBackFromAllInvoices").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+    $("#btnBackFromAllClients").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+    $("#btnNewFromAllInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
+    $("#btnNewClientFromAll").addEventListener("click", openNewClientModal);
 
     // Placeholder actions
     $("#btnPreviewPdf").addEventListener("click", ()=> toast("(mock) Preview PDF in browser"));
@@ -1452,6 +1522,7 @@
       };
       clients.push(newClient);
       renderClients(applyClientSearch(clients));
+      renderClients(applyClientSearch(clients), $("#clientListAll"));
       closeNewClientModal();
       toast(`(mock) Client "${nickname}" saved`);
     });
