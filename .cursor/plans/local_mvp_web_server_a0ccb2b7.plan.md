@@ -4,7 +4,7 @@ overview: Wire the UI prototype to the existing backend by creating an ASP.NET C
 todos:
   - id: phase-0
     content: "Phase 0: Create Web project, add to solution, configure for single-file publish and embedded UI"
-    status: pending
+    status: completed
   - id: phase-1
     content: "Phase 1: Extract shared AppSetup project from CliProgram, refactor CLI to use it, wire into Web/Program.cs"
     status: pending
@@ -88,7 +88,7 @@ graph TB
 
 ---
 
-## [ ] Phase 0: Project Setup
+## [x] Phase 0: Project Setup
 
 - **0.1** Create a new `Web` project directory with `Web.csproj`:
   - Target: `net9.0`, OutputType: `Exe`
@@ -101,6 +101,8 @@ graph TB
 - **0.2** Add `Web` project to [Spark3Dent.sln](Spark3Dent.sln)
 - **0.3** Create `Web/appsettings.json` -- copy from [Cli/appsettings.json](Cli/appsettings.json) (identical config)
 - **0.4** Verify the solution builds: `dotnet build Spark3Dent.sln`
+
+**Note:** `PublishSingleFile` and `SelfContained` are conditional on `RuntimeIdentifier` so that `dotnet build` succeeds (avoids NETSDK1150 with ChromiumFetcher). Single-file publish works with `dotnet publish Web -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`.
 
 ---
 

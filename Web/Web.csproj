@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <!-- Single-file publish when -r is specified; avoid SelfContained during build to prevent NETSDK1150 with ChromiumFetcher -->
+        <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+        <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Update="appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="wwwroot\index.html" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\ChromiumFetcher\ChromiumFetcher.csproj">
+            <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+        </ProjectReference>
+        <ProjectReference Include="..\Configuration\Configuration.csproj" />
+        <ProjectReference Include="..\Invoices\Invoices.csproj" />
+        <ProjectReference Include="..\Accounting\Accounting.csproj" />
+        <ProjectReference Include="..\Database\Database.csproj" />
+        <ProjectReference Include="..\Storage\Storage.csproj" />
+        <ProjectReference Include="..\Utilities\Utilities.csproj" />
+    </ItemGroup>
+
+    <!-- Bundle Chromium at build time so the app does not download at runtime.
+         Uses PuppeteerSharp BrowserFetcher.DefaultRevision (tied to PuppeteerSharp package version). -->
+    <Target Name="BundleChromium" AfterTargets="Build">
+        <PropertyGroup>
+            <_ChromiumOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(OutputPath)chromium'))</_ChromiumOutputPath>
+        </PropertyGroup>
+        <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\ChromiumFetcher\ChromiumFetcher.csproj&quot; --no-build -c $(Configuration) -- &quot;$(_ChromiumOutputPath)&quot;"
+              WorkingDirectory="$(MSBuildProjectDirectory)\.."
+              IgnoreExitCode="false" />
+    </Target>
+
+    <!-- Include Chromium in publish output so deployed app has PDF support without runtime download. -->
+    <Target Name="IncludeChromiumInPublish" AfterTargets="Publish">
+        <PropertyGroup>
+            <_ChromiumSource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(OutputPath)chromium'))</_ChromiumSource>
+        </PropertyGroup>
+        <ItemGroup>
+            <_ChromiumFiles Include="$(_ChromiumSource)\**\*" Condition="Exists('$(_ChromiumSource)')" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_ChromiumFiles)" DestinationFiles="@(_ChromiumFiles->'$(PublishDir)chromium\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(_ChromiumFiles)' != ''" />
+    </Target>
+
+</Project>
