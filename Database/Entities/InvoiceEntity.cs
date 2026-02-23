@@ -32,5 +32,7 @@ public class InvoiceEntity
     public string BankName { get; set; } = string.Empty;
     public string BankBic { get; set; } = string.Empty;
 
+    public bool IsCorrected { get; set; }
+
     public ICollection<InvoiceLineItemEntity> LineItems { get; set; } = new List<InvoiceLineItemEntity>();
 }

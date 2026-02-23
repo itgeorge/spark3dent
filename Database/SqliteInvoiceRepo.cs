@@ -100,6 +100,7 @@ public class SqliteInvoiceRepo : IInvoiceRepo
             }
 
             InvoiceMapping.ApplyContent(entity, content);
+            entity.IsCorrected = true;
             await c.SaveChangesAsync();
         });
     }

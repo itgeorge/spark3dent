@@ -47,13 +47,15 @@ public record Invoice
     //  filtering by BillingAddress.CompanyIdentifier - so we should think this over more carefully once we need it
     public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems, BankTransferInfo BankTransferInfo);
 
-    public Invoice(string number, InvoiceContent content)
+    public Invoice(string number, InvoiceContent content, bool isCorrected = false)
     {
         Number = number;
         Content = content;
+        IsCorrected = isCorrected;
     }
 
     public string Number { get; }
     public InvoiceContent Content { get; }
+    public bool IsCorrected { get; }
     public Amount TotalAmount => Content.LineItems.Aggregate(Amount.Zero(Currency.Eur), (acc, li) => acc + li.Amount);
 }

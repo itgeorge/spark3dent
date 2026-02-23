@@ -73,7 +73,7 @@ public class InvoiceManagement
         var updatedContent = BuildInvoiceContent(newDate, existing.Content.BuyerAddress, newAmount);
 
         await _invoiceRepo.UpdateAsync(invoiceNumber, updatedContent);
-        var updatedInvoice = new Invoice(invoiceNumber, updatedContent);
+        var updatedInvoice = new Invoice(invoiceNumber, updatedContent, isCorrected: true);
         var exportResult = await ExportAndStoreAsync(updatedInvoice, exporter);
         return ToInvoiceOperationResult(updatedInvoice, exportResult);
     }

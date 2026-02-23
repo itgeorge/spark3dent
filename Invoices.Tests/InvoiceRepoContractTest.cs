@@ -34,6 +34,17 @@ public abstract class InvoiceRepoContractTest
     }
 
     [Test]
+    public async Task Create_GivenValidContent_WhenCreatingInvoice_ThenIsCorrectedIsFalse()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+
+        var created = await fixture.Repo.CreateAsync(content);
+
+        Assert.That(created.IsCorrected, Is.False);
+    }
+
+    [Test]
     public async Task Create_GivenValidContent_WhenCreatingInvoice_ThenInvoiceIsRetrievable()
     {
         var fixture = await SetUpAsync();
@@ -122,7 +133,51 @@ public abstract class InvoiceRepoContractTest
         await fixture.Repo.UpdateAsync(created.Number, updatedContent);
 
         var retrieved = await fixture.GetInvoiceAsync(created.Number);
-        AssertInvoicesEqual(new Invoice(created.Number, updatedContent), retrieved);
+        AssertInvoicesEqual(new Invoice(created.Number, updatedContent, isCorrected: true), retrieved);
+    }
+
+    [Test]
+    public async Task Update_GivenExistingInvoice_WhenUpdatingInvoice_ThenIsCorrectedIsTrue()
+    {
+        var fixture = await SetUpAsync();
+        var created = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent());
+        var updatedContent = BuildValidInvoiceContent(buyerAddress: created.Content.BuyerAddress with { Name = "Other Buyer" });
+
+        await fixture.Repo.UpdateAsync(created.Number, updatedContent);
+
+        var retrieved = await fixture.GetInvoiceAsync(created.Number);
+        Assert.That(retrieved.IsCorrected, Is.True);
+    }
+
+    [Test]
+    public async Task Update_GivenExistingInvoice_WhenUpdatingInvoiceMultipleTimes_ThenIsCorrectedRemainsTrue()
+    {
+        var fixture = await SetUpAsync();
+        var created = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent());
+        var updatedContent1 = BuildValidInvoiceContent(buyerAddress: created.Content.BuyerAddress with { Name = "First Update" });
+        var updatedContent2 = BuildValidInvoiceContent(buyerAddress: created.Content.BuyerAddress with { Name = "Second Update" });
+
+        await fixture.Repo.UpdateAsync(created.Number, updatedContent1);
+        await fixture.Repo.UpdateAsync(created.Number, updatedContent2);
+
+        var retrieved = await fixture.GetInvoiceAsync(created.Number);
+        Assert.That(retrieved.IsCorrected, Is.True);
+    }
+
+    [Test]
+    public async Task Create_WhenCreatingMultipleInvoices_ThenOnlyUpdatedOneIsCorrected()
+    {
+        var fixture = await SetUpAsync();
+        var created1 = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent());
+        var created2 = await fixture.SetUpInvoiceAsync(BuildValidInvoiceContent(date: created1.Content.Date.AddDays(1)));
+        var updatedContent = BuildValidInvoiceContent(buyerAddress: created1.Content.BuyerAddress with { Name = "Updated Buyer" });
+
+        await fixture.Repo.UpdateAsync(created1.Number, updatedContent);
+
+        var retrieved1 = await fixture.GetInvoiceAsync(created1.Number);
+        var retrieved2 = await fixture.GetInvoiceAsync(created2.Number);
+        Assert.That(retrieved1.IsCorrected, Is.True);
+        Assert.That(retrieved2.IsCorrected, Is.False);
     }
 
     [Test]
@@ -137,7 +192,7 @@ public abstract class InvoiceRepoContractTest
 
         var changed = await fixture.GetInvoiceAsync(created1.Number);
         var unchanged = await fixture.GetInvoiceAsync(created2.Number);
-        AssertInvoicesEqual(new Invoice(created1.Number, updatedContent), changed);
+        AssertInvoicesEqual(new Invoice(created1.Number, updatedContent, isCorrected: true), changed);
         AssertInvoicesEqual(created2, unchanged);
     }
 
@@ -187,13 +242,13 @@ public abstract class InvoiceRepoContractTest
         var updatedContent1 = BuildValidInvoiceContent(date: middle.Content.Date.AddDays(1));
         await fixture.Repo.UpdateAsync(middle.Number, updatedContent1);
         var retrieved = await fixture.GetInvoiceAsync(middle.Number);
-        AssertInvoicesEqual(new Invoice(middle.Number, updatedContent1), retrieved);
+        AssertInvoicesEqual(new Invoice(middle.Number, updatedContent1, isCorrected: true), retrieved);
 
         // update 1 day back but still after the older invoice
         var updatedContent2 = BuildValidInvoiceContent(date: newer.Content.Date.AddDays(-1));
         await fixture.Repo.UpdateAsync(middle.Number, updatedContent2);
         retrieved = await fixture.GetInvoiceAsync(middle.Number);
-        AssertInvoicesEqual(new Invoice(middle.Number, updatedContent2), retrieved);
+        AssertInvoicesEqual(new Invoice(middle.Number, updatedContent2, isCorrected: true), retrieved);
     }
 
     [Test]
@@ -383,6 +438,7 @@ public abstract class InvoiceRepoContractTest
     protected static void AssertInvoicesEqual(Invoice expected, Invoice actual)
     {
         Assert.That(actual.Number, Is.EqualTo(expected.Number));
+        Assert.That(actual.IsCorrected, Is.EqualTo(expected.IsCorrected));
         AssertInvoiceContentsEqual(expected.Content, actual.Content);
     }
 

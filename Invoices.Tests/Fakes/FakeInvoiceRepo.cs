@@ -76,7 +76,7 @@ public class FakeInvoiceRepo : IInvoiceRepo
                     throw new InvalidOperationException(
                         $"Invoice date {content.Date:yyyy-MM-dd} cannot be after the next invoice date {next.Content.Date:yyyy-MM-dd}.");
 
-                _storage[number] = new Invoice(number, content);
+                _storage[number] = new Invoice(number, content, isCorrected: true);
             }
         });
     }

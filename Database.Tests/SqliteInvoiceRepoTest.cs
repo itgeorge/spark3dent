@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Configuration;
 using Invoices;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using NUnit.Framework;
 
 namespace Database.Tests;
@@ -89,6 +91,75 @@ public class SqliteInvoiceRepoTest : Invoices.Tests.InvoiceRepoContractTest
         var created = await repo2.CreateAsync(BuildValidInvoiceContent(date: DateTime.UtcNow.AddDays(1)));
 
         Assert.That(created.Number, Is.EqualTo("2"), "Sequence table is source of truth, not config");
+    }
+
+    [Test]
+    public async Task IsCorrected_GivenFreshDb_WhenCreatingInvoice_ThenIsCorrectedIsFalseInDb()
+    {
+        var (repo, dbPath) = await CreateFreshRepoAsync(startInvoiceNumber: 1);
+        var content = BuildValidInvoiceContent();
+        var created = await repo.CreateAsync(content);
+
+        await using var ctx = new Database.AppDbContext(new DbContextOptionsBuilder<Database.AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options);
+        var entity = await ctx.Invoices.FirstOrDefaultAsync(i => i.Number == created.Number);
+
+        Assert.That(entity, Is.Not.Null);
+        Assert.That(entity!.IsCorrected, Is.False);
+    }
+
+    [Test]
+    public async Task IsCorrected_GivenExistingInvoice_WhenUpdating_ThenIsCorrectedIsTrueInDb()
+    {
+        var (repo, dbPath) = await CreateFreshRepoAsync(startInvoiceNumber: 1);
+        var content = BuildValidInvoiceContent();
+        var created = await repo.CreateAsync(content);
+        var updatedContent = BuildValidInvoiceContent(buyerAddress: content.BuyerAddress with { Name = "Updated Buyer" });
+
+        await repo.UpdateAsync(created.Number, updatedContent);
+
+        await using var ctx = new Database.AppDbContext(new DbContextOptionsBuilder<Database.AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options);
+        var entity = await ctx.Invoices.FirstOrDefaultAsync(i => i.Number == created.Number);
+
+        Assert.That(entity, Is.Not.Null);
+        Assert.That(entity!.IsCorrected, Is.True);
+    }
+
+    [Test]
+    public async Task IsCorrected_GivenMigratedDbWithExistingInvoices_ThenDefaultsToFalse()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "Spark3Dent", "SqliteInvoiceRepoTest", $"{Guid.NewGuid():N}.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+        var options = new DbContextOptionsBuilder<Database.AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+
+        await using (var ctx = new Database.AppDbContext(options))
+        {
+            var migrator = ctx.GetService<IMigrator>();
+            migrator.Migrate("20260221002115_InitialCreate");
+
+            await ctx.Database.ExecuteSqlRawAsync(
+                "INSERT INTO Invoices (Number, NumberNumeric, Date, SellerName, SellerRepresentativeName, SellerCompanyIdentifier, SellerVatIdentifier, SellerAddress, SellerCity, SellerPostalCode, SellerCountry, BuyerName, BuyerRepresentativeName, BuyerCompanyIdentifier, BuyerVatIdentifier, BuyerAddress, BuyerCity, BuyerPostalCode, BuyerCountry, BankIban, BankName, BankBic) VALUES ('1', 1, '2024-01-01', 'S', 'S', 'S', NULL, 'S', 'S', 'S', 'S', 'B', 'B', 'B', NULL, 'B', 'B', 'B', 'B', 'BG00', 'Bank', 'BIC')");
+        }
+
+        await using (var ctx = new Database.AppDbContext(options))
+        {
+            var migrator = ctx.GetService<IMigrator>();
+            migrator.Migrate();
+        }
+
+        await using (var ctx = new Database.AppDbContext(options))
+        {
+            var entity = await ctx.Invoices.FirstOrDefaultAsync(i => i.Number == "1");
+            Assert.That(entity, Is.Not.Null);
+            Assert.That(entity!.IsCorrected, Is.False, "Migration should default existing rows to false");
+        }
+
+        try { if (File.Exists(dbPath)) File.Delete(dbPath); } catch { }
     }
 
     [Test]
