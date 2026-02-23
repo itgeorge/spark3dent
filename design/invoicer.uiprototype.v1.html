@@ -343,14 +343,52 @@
     .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
     .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
 
+    .date-field-wrap{
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .date-display-cell{
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
     .date-display{
-      margin-top: 6px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.95);
       font-size: 15px;
       color: var(--text);
       line-height: 1.5;
+      cursor: pointer;
     }
     .date-display-placeholder{
       color: var(--muted2);
+    }
+    .date-input-overlay{
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      font-size: 16px;
+    }
+    .date-edit-btn{
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.95);
+      font-size: 15px;
+      cursor: pointer;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .date-edit-btn:hover{
+      border-color: rgba(124,58,237,.25);
+    }
+    .date-field-wrap.date-picker-disabled .date-display,
+    .date-field-wrap.date-picker-disabled .date-edit-btn{
+      pointer-events: none;
+      opacity: 0.7;
     }
 
     /* Clients list */
@@ -990,8 +1028,13 @@
 
               <div class="field">
                 <label for="inputDate">Date</label>
-                <input class="input" id="inputDate" type="date" />
-                <div id="dateDisplay" class="date-display" aria-live="polite"></div>
+                <div class="date-field-wrap" id="dateFieldWrap">
+                  <div class="date-display-cell">
+                    <div id="dateDisplay" class="date-display" aria-live="polite"></div>
+                    <input class="date-input-overlay" id="inputDate" type="date" title="Click to open date picker" />
+                  </div>
+                  <button class="date-edit-btn" id="btnEditDate" type="button" title="Change date">✎</button>
+                </div>
               </div>
 
               <div class="field">
@@ -1703,9 +1746,35 @@
     });
     $("#inputDate").addEventListener("input", updateDateDisplay);
     $("#inputDate").addEventListener("change", updateDateDisplay);
-    $("#dateDisplay").addEventListener("click", e => {
+
+    let datePickerReenableTimer = null;
+    let datePickerCloseHandler = null;
+
+    function scheduleDatePickerReenable(){
+      clearTimeout(datePickerReenableTimer);
+      datePickerReenableTimer = setTimeout(() => {
+        $("#dateFieldWrap").classList.remove("date-picker-disabled");
+        if(datePickerCloseHandler){
+          document.removeEventListener("mousedown", datePickerCloseHandler);
+          datePickerCloseHandler = null;
+        }
+      }, 100);
+    }
+
+    function openDatePicker(){
+      $("#dateFieldWrap").classList.add("date-picker-disabled");
       $("#inputDate").showPicker();
-    });
+
+      // Blur is unreliable when clicking outside the native picker; use document mousedown instead
+      datePickerCloseHandler = () => scheduleDatePickerReenable();
+      setTimeout(() => {
+        document.addEventListener("mousedown", datePickerCloseHandler);
+      }, 0);
+    }
+    $("#inputDate").addEventListener("change", scheduleDatePickerReenable);
+
+    $("#dateDisplay").addEventListener("click", openDatePicker);
+    $("#btnEditDate").addEventListener("click", openDatePicker);
 
     function parseAmountToCents(str){
       // Accept 123.45 or 123,45; tolerate spaces
