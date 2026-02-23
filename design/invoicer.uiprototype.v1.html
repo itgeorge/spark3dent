@@ -69,6 +69,7 @@
       align-items:center;
       gap:10px;
       min-width: 220px;
+      cursor: pointer;
     }
     .logo{
       width:34px;height:34px;
@@ -233,6 +234,7 @@
       border-bottom: 1px solid rgba(226,232,240,.7);
       border-radius: 0;
       background: transparent;
+      cursor: pointer;
       transition: background .15s ease;
     }
     .row:last-child{
@@ -303,24 +305,6 @@
     }
     .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
     .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
-
-    .row-actions{
-      position:absolute;
-      right: 10px;
-      top: 10px;
-      display:flex;
-      gap:8px;
-      opacity:0;
-      transform: translateY(-3px);
-      pointer-events:none;
-      transition: opacity .15s ease, transform .15s ease;
-    }
-    .row:hover .row-actions,
-    .row.selected .row-actions{
-      opacity:1;
-      transform:none;
-      pointer-events:auto;
-    }
 
     /* Clients list */
     .client-item{
@@ -784,7 +768,6 @@
       .brand{ min-width: 160px; }
       .row{ grid-template-columns: 140px 1fr; }
       .right{ grid-column: 1 / -1; justify-content:space-between; }
-      .row-actions{ position: static; opacity:1; transform:none; pointer-events:auto; margin-top:8px; }
     }
   </style>
 </head>
@@ -793,7 +776,7 @@
     <!-- Top bar -->
     <div class="topbar">
       <div class="topbar-inner">
-        <div class="brand">
+        <div class="brand" id="btnBrand" role="button" tabindex="0" title="Back to dashboard">
           <div class="logo" aria-hidden="true"></div>
           <div>
             <h1>Invoicer <span class="sub">Design 1 mock • light theme</span></h1>
@@ -864,7 +847,7 @@
               </div>
 
               <div class="field" id="fieldInvoiceNumber">
-                <label>Invoice number (correct mode)</label>
+                <label>Invoice number (review/correct mode)</label>
                 <input class="input" id="inputNumber" placeholder="e.g. 000123" />
               </div>
 
@@ -899,7 +882,7 @@
             </div>
 
             <div class="sticky-footer">
-              <button class="btn" id="btnCancel">Cancel</button>
+              <button class="btn" id="btnCancel">Back</button>
               <button class="btn primary" id="btnIssue">Issue</button>
             </div>
           </div>
@@ -996,6 +979,24 @@
         </div>
         <div class="modal-body">
           <div class="list" id="clientPickerList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm save modal -->
+    <div class="modal-overlay" id="modalConfirmSave" aria-hidden="true">
+      <div class="modal" role="dialog" aria-labelledby="modalConfirmSaveTitle" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="modalConfirmSaveTitle">Confirm</h3>
+          <button class="btn small" type="button" id="modalConfirmSaveClose" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="modalConfirmSaveText" style="margin:0; font-size:14px; line-height:1.5;"></p>
+          <p style="margin:12px 0 0 0; font-weight:700;">Are you sure?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="modalConfirmSaveNo">No</button>
+          <button class="btn primary" id="modalConfirmSaveYes">Yes</button>
         </div>
       </div>
     </div>
@@ -1123,32 +1124,14 @@
             <span class="${chipClass}">${chipText}</span>
             <span class="amount">€ ${centsToEur(inv.cents)}</span>
           </div>
-
-          <div class="row-actions" aria-label="Row actions">
-            <button class="btn icon" title="Correct invoice" data-action="correct">✎</button>
-            <button class="btn icon" title="Show in Explorer" data-action="explorer">📁</button>
-            <button class="btn icon" title="Preview" data-action="preview">👁</button>
-          </div>
         `;
 
-        row.addEventListener("click", (e) => {
-          const actionBtn = e.target.closest("button[data-action]");
-          if(actionBtn){
-            const act = actionBtn.dataset.action;
-            if(act === "correct") openEditorCorrect(inv.number);
-            if(act === "explorer") toast(`(mock) Open Explorer and select: ${inv.file}`);
-            if(act === "preview") toast(`(mock) Preview: ${inv.file}`);
-            return;
-          }
-          selectedInvoiceNumber = inv.number;
-          renderInvoices(applySearch(invoices));
-        });
+        row.addEventListener("click", ()=> openEditorCorrect(inv.number));
 
         row.addEventListener("keydown", (e)=>{
           if(e.key === "Enter"){
-            selectedInvoiceNumber = inv.number;
-            toast(`Selected invoice #${inv.number}`);
-            renderInvoices(applySearch(invoices));
+            e.preventDefault();
+            openEditorCorrect(inv.number);
           }
         });
 
@@ -1261,9 +1244,9 @@
       const inv = invoices.find(x=>x.number === invoiceNumber);
       selectedClientNickname = inv ? inv.client : selectedClientNickname;
 
-      $("#editorTitle").textContent = "Correct invoice";
+      $("#editorTitle").textContent = "Review / Correct";
       $("#editorSubtitle").textContent = "Adjust details and re-issue correction";
-      $("#modeChip").textContent = "CORRECT";
+      $("#modeChip").textContent = "REVIEW / CORRECT";
       $("#modeChip").className = "chip fix";
       $("#btnIssue").textContent = "Save correction";
       $("#fieldInvoiceNumber").classList.remove("hidden");
@@ -1303,14 +1286,32 @@
 
     $("#btnCancel").addEventListener("click", ()=>{
       setView("dashboard");
-      toast("Cancelled");
+      toast("Back to dashboard");
     });
 
-    $("#btnIssue").addEventListener("click", ()=>{
+    $("#btnBrand").addEventListener("click", ()=>{
+      setView("dashboard");
+      toast("Back to dashboard");
+    });
+    $("#btnBrand").addEventListener("keydown", (e)=>{
+      if(e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        setView("dashboard");
+        toast("Back to dashboard");
+      }
+    });
+
+    function performSave(){
+      const png = $("#chkExportPng").checked;
+      toast(`(mock) ${editorMode === "issue" ? "Issued" : "Corrected"} • ${png ? "PDF+PNG" : "PDF"} `);
+      closeConfirmSaveModal();
+      setView("dashboard");
+    }
+
+    function openConfirmSaveModal(){
       const number = ($("#inputNumber").value || "").trim();
       const amount = ($("#inputAmount").value || "").trim();
       const date = ($("#inputDate").value || "").trim();
-      const png = $("#chkExportPng").checked;
 
       if(editorMode === "correct" && !number){
         toast("Enter invoice number");
@@ -1328,8 +1329,32 @@
         return;
       }
 
-      toast(`(mock) ${editorMode === "issue" ? "Issued" : "Corrected"} • ${png ? "PDF+PNG" : "PDF"} `);
-      setView("dashboard");
+      const c = clients.find(x=>x.nickname === selectedClientNickname) ?? clients[0];
+      const summary = editorMode === "issue"
+        ? `Issue invoice for ${c.nickname} (${c.name}) for € ${amount}.`
+        : `Save correction for invoice #${number} for ${c.nickname} (${c.name}) for € ${amount}.`;
+      $("#modalConfirmSaveText").textContent = summary;
+      $("#modalConfirmSave").classList.add("show");
+      $("#modalConfirmSave").setAttribute("aria-hidden", "false");
+    }
+
+    function closeConfirmSaveModal(){
+      $("#modalConfirmSave").classList.remove("show");
+      $("#modalConfirmSave").setAttribute("aria-hidden", "true");
+    }
+
+    $("#btnIssue").addEventListener("click", openConfirmSaveModal);
+    $("#modalConfirmSaveYes").addEventListener("click", performSave);
+    $("#modalConfirmSaveNo").addEventListener("click", closeConfirmSaveModal);
+    $("#modalConfirmSaveClose").addEventListener("click", closeConfirmSaveModal);
+    $("#modalConfirmSave").addEventListener("click", (e)=>{
+      if(e.target === $("#modalConfirmSave")) closeConfirmSaveModal();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && $("#modalConfirmSave").classList.contains("show")){
+        e.stopPropagation();
+        closeConfirmSaveModal();
+      }
     });
 
     // Top buttons
@@ -1642,12 +1667,6 @@
       const today = new Date().toISOString().slice(0,10);
       $("#inputDate").value = today;
 
-      // Open correct invoice from selection by double-click (mock)
-      $("#invoiceList").addEventListener("dblclick", (e)=>{
-        const row = e.target.closest(".row");
-        if(!row) return;
-        openEditorCorrect(row.dataset.number);
-      });
     }
 
     init();
