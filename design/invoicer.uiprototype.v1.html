@@ -522,6 +522,11 @@
       box-shadow: var(--focus);
       border-color: rgba(124,58,237,.35);
     }
+    .input.input-readonly{
+      background: rgba(248,250,252,.9);
+      color: var(--muted2);
+      cursor: not-allowed;
+    }
     .readonly{
       display:flex;
       gap:10px;
@@ -1370,7 +1375,7 @@
           </div>
         `;
         el.querySelector('button[data-action="edit"]').addEventListener("click", ()=>{
-          toast(`(mock) Edit client: ${c.nickname}`);
+          openEditClientModal(c.nickname);
         });
         el.querySelector('button[data-action="new"]').addEventListener("click", ()=>{
           openEditorIssue(c.nickname);
@@ -1639,8 +1644,14 @@
       }
     });
 
-    // ---- New Client modal ----
+    // ---- New/Edit Client modal ----
+    let clientModalMode = "new"; // "new" | "edit"
+    let clientModalEditNickname = null;
+
     function openNewClientModal(){
+      clientModalMode = "new";
+      clientModalEditNickname = null;
+      $("#modalNewClientTitle").textContent = "New client";
       $("#clientNickname").value = "";
       $("#clientName").value = "";
       $("#clientRep").value = "";
@@ -1650,10 +1661,35 @@
       $("#clientCity").value = "";
       $("#clientPostal").value = "";
       $("#clientCountry").value = "";
+      $("#clientNickname").readOnly = false;
+      $("#clientNickname").classList.remove("input-readonly");
       $("#modalNewClient").classList.add("show");
       $("#modalNewClient").setAttribute("aria-hidden", "false");
       $("#clientNickname").focus();
     }
+
+    function openEditClientModal(nickname){
+      const c = clients.find(x => x.nickname === nickname);
+      if(!c){ toast("Client not found"); return; }
+      clientModalMode = "edit";
+      clientModalEditNickname = nickname;
+      $("#modalNewClientTitle").textContent = "Edit client";
+      $("#clientNickname").value = c.nickname;
+      $("#clientName").value = c.name || "";
+      $("#clientRep").value = c.rep || "";
+      $("#clientCompanyId").value = c.companyId || "";
+      $("#clientVatId").value = c.vatId || "";
+      $("#clientAddress").value = c.address || "";
+      $("#clientCity").value = c.city || "";
+      $("#clientPostal").value = c.postal || "";
+      $("#clientCountry").value = c.country || "";
+      $("#clientNickname").readOnly = true;
+      $("#clientNickname").classList.add("input-readonly");
+      $("#modalNewClient").classList.add("show");
+      $("#modalNewClient").setAttribute("aria-hidden", "false");
+      $("#clientName").focus();
+    }
+
     function closeNewClientModal(){
       $("#modalNewClient").classList.remove("show");
       $("#modalNewClient").setAttribute("aria-hidden", "true");
@@ -1666,7 +1702,7 @@
       const name = $("#clientName").value.trim();
       if(!nickname){ toast("Enter nickname"); $("#clientNickname").focus(); return; }
       if(!name){ toast("Enter company name"); $("#clientName").focus(); return; }
-      const newClient = {
+      const clientData = {
         nickname,
         name,
         rep: $("#clientRep").value.trim() || null,
@@ -1677,7 +1713,12 @@
         postal: $("#clientPostal").value.trim() || null,
         country: $("#clientCountry").value.trim() || null,
       };
-      clients.push(newClient);
+      if(clientModalMode === "edit"){
+        const idx = clients.findIndex(x => x.nickname === clientModalEditNickname);
+        if(idx >= 0){ clients[idx] = clientData; }
+      } else {
+        clients.push(clientData);
+      }
       renderClients(applyClientSearch(clients));
       renderClients(applyClientSearch(clients), $("#clientListAll"));
       closeNewClientModal();
