@@ -313,8 +313,8 @@ public static class Api
         {
             try
             {
-                var stream = await invMgmt.GetInvoicePdfStreamAsync(number);
-                return Results.File(stream, "application/pdf", $"Invoice_{number}.pdf");
+                var (stream, downloadFileName) = await invMgmt.GetInvoicePdfStreamAsync(number);
+                return Results.File(stream, "application/pdf", downloadFileName);
             }
             catch (InvalidOperationException)
             {

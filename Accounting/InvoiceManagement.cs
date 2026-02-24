@@ -168,16 +168,15 @@ public class InvoiceManagement
     }
 
     /// <summary>
-    /// Opens the PDF stream for an invoice. Throws FileNotFoundException if the PDF was not exported.
+    /// Opens the PDF stream for an invoice and returns the suggested download filename.
+    /// Throws FileNotFoundException if the PDF was not exported.
     /// </summary>
-    public async Task<Stream> GetInvoicePdfStreamAsync(string number)
+    public async Task<(Stream Stream, string DownloadFileName)> GetInvoicePdfStreamAsync(string number)
     {
-        _ = await _invoiceRepo.GetAsync(number);
-        var formattedNumber = number.Length >= _invoiceNumberPadding
-            ? number
-            : number.PadLeft(_invoiceNumberPadding, '0');
-        var objectKey = $"invoice-{formattedNumber}";
-        return await _blobStorage.OpenReadAsync(_invoicesBucket, objectKey);
+        var invoice = await _invoiceRepo.GetAsync(number);
+        var (objectKey, filename) = BuildInvoiceObjectKey(invoice.Number, invoice.Content.Date, _invoiceNumberPadding);
+        var stream = await _blobStorage.OpenReadAsync(_invoicesBucket, objectKey);
+        return (stream, filename);
     }
 
     private Invoice.InvoiceContent BuildInvoiceContent(DateTime date, BillingAddress buyerAddress, int amountCents)
@@ -194,15 +193,23 @@ public class InvoiceManagement
             BankTransferInfo: _bankTransferInfo);
     }
 
+    private static (string ObjectKey, string Filename) BuildInvoiceObjectKey(string invoiceNumber, DateTime invoiceDate, int invoiceNumberPadding)
+    {
+        var formattedNumber = invoiceNumber.Length >= invoiceNumberPadding
+            ? invoiceNumber
+            : invoiceNumber.PadLeft(invoiceNumberPadding, '0');
+        var dateStr = invoiceDate.ToString("yyyy-MM-dd");
+        var objectKey = $"{invoiceDate:yyyy-MM}/invoice-{formattedNumber}-date-{dateStr}";
+        var filename = $"invoice-{formattedNumber}-date-{dateStr}.pdf";
+        return (objectKey, filename);
+    }
+
     private async Task<ExportResult> ExportAndStoreAsync(Invoice invoice, IInvoiceExporter exporter)
     {
         try
         {
             await using var stream = await exporter.Export(_template, invoice);
-            var formattedNumber = invoice.Number.Length >= _invoiceNumberPadding
-                ? invoice.Number
-                : invoice.Number.PadLeft(_invoiceNumberPadding, '0');
-            var objectKey = $"invoice-{formattedNumber}";
+            var (objectKey, _) = BuildInvoiceObjectKey(invoice.Number, invoice.Content.Date, _invoiceNumberPadding);
             var uri = await _blobStorage.UploadAsync(_invoicesBucket, objectKey, stream, exporter.MimeType);
             return new ExportResult(true, uri);
         }

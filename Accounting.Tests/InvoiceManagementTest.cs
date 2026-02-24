@@ -34,39 +34,43 @@ public class InvoiceManagementTest
     private static readonly string LineItemDescription = "Зъботехнически услуги";
 
     [Test]
-    public async Task IssueInvoiceAsync_GivenInvoiceNumberPadding_WhenIssuing_ThenFileStoredWithPaddedNumber()
+    public async Task IssueInvoiceAsync_GivenInvoiceNumberPadding_WhenIssuing_ThenFileStoredWithPaddedNumberAndDateInYyyyMmDirectory()
     {
         const int padding = 6;
         var fixture = await CreateFixtureAsync(invoiceNumberPadding: padding);
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
+        var invoiceDate = new DateTime(2026, 1, 15);
 
-        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
+        var result = await fixture.Management.IssueInvoiceAsync("acme", 100_00, invoiceDate, fixture.Exporter);
 
         Assert.That(result.Invoice.Number, Is.EqualTo("1"));
         Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.ExportResult.DataOrUri, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.ExportResult.DataOrUri), Is.EqualTo("invoice-000001.pdf"));
+        Assert.That(Path.GetFileName(result.ExportResult.DataOrUri), Is.EqualTo("invoice-000001-date-2026-01-15.pdf"));
+        Assert.That(result.ExportResult.DataOrUri, Does.Contain("2026-01"));
     }
 
     [Test]
-    public async Task ReExportInvoiceAsync_GivenInvoiceNumberPadding_WhenReExporting_ThenFileStoredWithPaddedNumber()
+    public async Task ReExportInvoiceAsync_GivenInvoiceNumberPadding_WhenReExporting_ThenFileStoredWithPaddedNumberAndDateInYyyyMmDirectory()
     {
         const int padding = 8;
         var fixture = await CreateFixtureAsync(invoiceNumberPadding: padding);
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
-        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, null, fixture.Exporter);
+        var invoiceDate = new DateTime(2026, 2, 10);
+        var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 100_00, invoiceDate, fixture.Exporter);
 
         var result = await fixture.Management.ReExportInvoiceAsync(issueResult.Invoice.Number, fixture.Exporter);
 
         Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.ExportResult.DataOrUri, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.ExportResult.DataOrUri), Is.EqualTo("invoice-00000001.pdf"));
+        Assert.That(Path.GetFileName(result.ExportResult.DataOrUri), Is.EqualTo("invoice-00000001-date-2026-02-10.pdf"));
+        Assert.That(result.ExportResult.DataOrUri, Does.Contain("2026-02"));
     }
 
     [Test]
-    public async Task CorrectInvoiceAsync_GivenInvoiceNumberPadding_WhenCorrecting_ThenFileStoredWithPaddedNumber()
+    public async Task CorrectInvoiceAsync_GivenInvoiceNumberPadding_WhenCorrecting_ThenFileStoredWithPaddedNumberAndCorrectedDateInYyyyMmDirectory()
     {
         const int padding = 6;
         var fixture = await CreateFixtureAsync(invoiceNumberPadding: padding);
@@ -79,7 +83,8 @@ public class InvoiceManagementTest
         Assert.That(result.Invoice.Number, Is.EqualTo("1"));
         Assert.That(result.ExportResult.Success, Is.True);
         Assert.That(result.ExportResult.DataOrUri, Is.Not.Null);
-        Assert.That(Path.GetFileName(result.ExportResult.DataOrUri), Is.EqualTo("invoice-000001.pdf"));
+        Assert.That(Path.GetFileName(result.ExportResult.DataOrUri), Is.EqualTo("invoice-000001-date-2026-01-20.pdf"));
+        Assert.That(result.ExportResult.DataOrUri, Does.Contain("2026-01"));
     }
 
     [Test]
@@ -576,21 +581,25 @@ public class InvoiceManagementTest
     }
 
     [Test]
-    public async Task GetInvoicePdfStreamAsync_GivenExistingInvoiceWithPdf_WhenGetting_ThenReturnsReadableStreamWithPdfContent()
+    public async Task GetInvoicePdfStreamAsync_GivenExistingInvoiceWithPdf_WhenGetting_ThenReturnsReadableStreamWithPdfContentAndExportFormattedFilename()
     {
         var fixture = await CreateFixtureAsync();
         var client = new Client("acme", ValidBuyerAddress());
         await fixture.ClientRepo.AddAsync(client);
         var issueResult = await fixture.Management.IssueInvoiceAsync("acme", 150_00, new DateTime(2026, 2, 15), fixture.Exporter);
 
-        await using var stream = await fixture.Management.GetInvoicePdfStreamAsync(issueResult.Invoice.Number);
+        var (stream, downloadFileName) = await fixture.Management.GetInvoicePdfStreamAsync(issueResult.Invoice.Number);
 
+        Assert.That(downloadFileName, Is.EqualTo("invoice-0000000001-date-2026-02-15.pdf"));
         Assert.That(stream, Is.Not.Null);
         Assert.That(stream.CanRead, Is.True);
-        using var reader = new StreamReader(stream);
-        var content = await reader.ReadToEndAsync();
-        Assert.That(content, Does.Contain("invoice 1"));
-        Assert.That(content, Does.Contain("amount 15000"));
+        await using (stream)
+        {
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            Assert.That(content, Does.Contain("invoice 1"));
+            Assert.That(content, Does.Contain("amount 15000"));
+        }
     }
 
     [Test]
