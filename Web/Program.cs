@@ -3,9 +3,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using AppSetup;
+using Configuration;
+using Microsoft.Extensions.Configuration;
 using Utilities;
 
-var config = await AppBootstrap.LoadAndResolveConfigAsync();
+var builder = WebApplication.CreateBuilder(args);
+
+var config = await LoadConfigAsync(builder.Configuration);
 
 var logDir = config.Desktop.LogDirectory;
 Directory.CreateDirectory(logDir);
@@ -20,22 +24,12 @@ if (setup == null)
     throw new InvalidOperationException("SellerAddress and SellerBankTransferInfo must be configured in appsettings.json.");
 }
 
-// Find a free port on localhost
-int port;
-using (var listener = new TcpListener(IPAddress.Loopback, 0))
-{
-    listener.Start();
-    port = ((IPEndPoint)listener.LocalEndpoint).Port;
-}
-
+var port = GetPort(builder.Configuration);
 var url = $"http://127.0.0.1:{port}";
-
-var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(url);
 
 var app = builder.Build();
 
-// Serve embedded UI at GET /
 var webAssembly = Assembly.GetExecutingAssembly();
 app.MapGet("/", async () =>
 {
@@ -43,11 +37,49 @@ app.MapGet("/", async () =>
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
+Web.Api.MapRoutes(app, setup);
+
 await app.StartAsync();
 
-Console.WriteLine($"Spark3Dent Web running at {url}");
-Console.WriteLine("Press Ctrl+C to stop.");
+var isInteractive = IsInteractiveMode(builder.Environment);
+if (isInteractive)
+{
+    Console.WriteLine($"Spark3Dent Web running at {url}");
+    Console.WriteLine("Press Ctrl+C to stop.");
+    Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+    await app.WaitForShutdownAsync();
+}
 
-Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+static int GetPort(IConfiguration configuration)
+{
+    var portStr = configuration["Port"] ?? Environment.GetEnvironmentVariable("PORT");
+    if (int.TryParse(portStr, out var port) && port >= 0)
+        return port;
+    using var listener = new TcpListener(IPAddress.Loopback, 0);
+    listener.Start();
+    return ((IPEndPoint)listener.LocalEndpoint).Port;
+}
 
-await app.WaitForShutdownAsync();
+/// <summary>
+/// Interactive mode = browser launch + WaitForShutdown.
+/// Use "Development" for local dev; "Mvp" for initial business deployment; "Test"/"Production" for headless.
+/// </summary>
+static bool IsInteractiveMode(IWebHostEnvironment env) =>
+    !string.Equals(env.EnvironmentName, "Test", StringComparison.OrdinalIgnoreCase) &&
+    !string.Equals(env.EnvironmentName, "Production", StringComparison.OrdinalIgnoreCase);
+
+static async Task<Config> LoadConfigAsync(IConfiguration configuration)
+{
+    var testDbPath = configuration["Test:DatabasePath"];
+    if (!string.IsNullOrEmpty(testDbPath))
+    {
+        var config = configuration.Get<Config>() ?? await AppBootstrap.LoadAndResolveConfigAsync();
+        config.Desktop.DatabasePath = testDbPath;
+        config.Desktop.BlobStoragePath = configuration["Test:BlobStoragePath"] ?? Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
+        config.Desktop.LogDirectory = configuration["Test:LogDirectory"] ?? Path.GetTempPath();
+        return config;
+    }
+    return await AppBootstrap.LoadAndResolveConfigAsync();
+}
+
+public partial class Program { }

@@ -16,10 +16,10 @@ todos:
     status: completed
   - id: phase-3
     content: "Phase 3: Implement all REST API endpoints (clients CRUD, invoices list/issue/correct/preview/pdf-download)"
-    status: pending
+    status: completed
   - id: phase-3b
     content: "Phase 3B: API integration tests -- WebApplicationFactory-based tests for parameter validation, status codes, and response shapes"
-    status: pending
+    status: completed
   - id: phase-4
     content: "Phase 4: Transform UI prototype -- replace mock data/operations with real API fetch calls"
     status: pending
@@ -207,74 +207,74 @@ Add an `IsCorrected` flag to the domain model so the API can report whether an i
 
 ---
 
-## [ ] Phase 3: API Endpoints
+## [x] Phase 3: API Endpoints
 
 All endpoints return JSON. Error responses use a consistent format: `{ "error": "message" }` with appropriate HTTP status codes.
 
-### [ ] Clients API
+### [x] Clients API
 
-- [ ] **3.1** `GET /api/clients?limit={limit}` -- List clients
+- [x] **3.1** `GET /api/clients?limit={limit}` -- List clients
   - Calls `IClientRepo.ListAsync(limit)`
   - Returns: `{ "items": [{ "nickname", "name", "representativeName", "companyIdentifier", "vatIdentifier", "address", "city", "postalCode", "country" }] }`
   - Maps from `Client` domain record to JSON DTO
-- [ ] **3.2** `GET /api/clients/{nickname}` -- Get a single client
+- [x] **3.2** `GET /api/clients/{nickname}` -- Get a single client
   - Calls `IClientRepo.GetAsync(nickname)`
   - Returns the client DTO or 404
-- [ ] **3.3** `POST /api/clients` -- Add a new client
+- [x] **3.3** `POST /api/clients` -- Add a new client
   - Request body: `{ "nickname", "name", "representativeName", "companyIdentifier", "vatIdentifier", "address", "city", "postalCode", "country" }`
   - Validate required fields: nickname, name, representativeName, companyIdentifier, address, city, postalCode
   - Calls `IClientRepo.AddAsync(client)`
   - Returns 201 with the created client DTO, or 409 if duplicate nickname
-- [ ] **3.4** `PUT /api/clients/{nickname}` -- Update an existing client
+- [x] **3.4** `PUT /api/clients/{nickname}` -- Update an existing client
   - Request body: same fields as POST (all optional except what's being changed)
   - Calls `IClientRepo.UpdateAsync(nickname, update)`
   - Returns 200 with updated client DTO, or 404
 
-### Invoices API
+### [x] Invoices API
 
-- [ ] **3.5** `GET /api/invoices?limit={limit}` -- List invoices
+- [x] **3.5** `GET /api/invoices?limit={limit}` -- List invoices
   - Calls `InvoiceManagement.ListInvoicesAsync(limit)`
   - Returns: `{ "items": [{ "number", "date", "clientNickname", "buyerName", "totalCents", "status" }] }`
   - The `clientNickname` is derived from `BuyerAddress.Name` matching against the client list (or stored as a field if we add it)
   - The `status` field: "Issued" for all (correction tracking can be added later; for now the UI shows "EDITED" for corrected invoices based on presence of `_corrected` in the filename or a separate flag)
-- [ ] **3.6** `GET /api/invoices/{number}` -- Get a single invoice
+- [x] **3.6** `GET /api/invoices/{number}` -- Get a single invoice
   - Calls `IInvoiceRepo.GetAsync(number)` (through InvoiceManagement or directly)
   - Returns full invoice details or 404
-- [ ] **3.7** `POST /api/invoices/issue` -- Issue a new invoice
+- [x] **3.7** `POST /api/invoices/issue` -- Issue a new invoice
   - Request body: `{ "clientNickname": "acme", "amountCents": 12345, "date": "2026-02-20" }`
   - `date` is optional (defaults to today)
   - Calls `InvoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, pdfExporter)`
   - Also exports PNG via `ReExportInvoiceAsync` if image exporter is available
   - Returns: `{ "invoice": { "number", "date", "totalCents" }, "pdfUri": "...", "pngUri": "..." }`
-- [ ] **3.8** `POST /api/invoices/correct` -- Correct an existing invoice
+- [x] **3.8** `POST /api/invoices/correct` -- Correct an existing invoice
   - Request body: `{ "invoiceNumber": "000123", "amountCents": 12345, "date": "2026-02-20" }`
   - Calls `InvoiceManagement.CorrectInvoiceAsync(number, amountCents, date, pdfExporter)`
   - Returns same shape as issue
-- [ ] **3.9** `POST /api/invoices/preview` -- Preview an invoice (no persistence)
+- [x] **3.9** `POST /api/invoices/preview` -- Preview an invoice (no persistence)
   - Request body: `{ "clientNickname": "acme", "amountCents": 12345, "date": "2026-02-20", "format": "html" }`
   - `format` is optional, defaults to `"html"`. Allowed values: `"html"`, `"png"`
   - `**format=html`** (default): Calls a new `InvoiceManagement.PreviewInvoiceHtmlAsync(nickname, amountCents, date)` method that builds the invoice and calls `InvoiceHtmlTemplate.Render(invoice)`. Returns the rendered HTML directly with `Content-Type: text/html; charset=utf-8`. This does **not** require Chromium.
   - `**format=png`**: Calls `InvoiceManagement.PreviewInvoiceAsync(nickname, amountCents, date, imageExporter)` as before. Returns `Content-Type: image/png` with the image bytes (or JSON `{ "imageDataUri": "data:image/png;base64,..." }` if preferred). Requires Chromium; returns 503 if unavailable.
   - Add `PreviewInvoiceHtmlAsync` to [Accounting/InvoiceManagement.cs](Accounting/InvoiceManagement.cs): reuses the same logic as `PreviewInvoiceAsync` (get client, determine next number, build content, create Invoice) but calls `_template.Render(invoice)` instead of going through the image exporter. Returns the HTML string.
-- [ ] **3.10** `GET /api/invoices/{number}/pdf` -- Download the PDF for an invoice
+- [x] **3.10** `GET /api/invoices/{number}/pdf` -- Download the PDF for an invoice
   - Reads the PDF from blob storage via `IBlobStorage.OpenReadAsync("invoices", objectKey)`
   - Returns the PDF stream with `Content-Type: application/pdf` and `Content-Disposition: attachment; filename="Invoice_{number}.pdf"`
 
 ---
 
-## [ ] Phase 3B: API Integration Tests
+## [x] Phase 3B: API Integration Tests
 
 Automated tests that exercise the running API over HTTP, verifying parameter validation, HTTP status codes, error response format, and correct response shapes. Uses `WebApplicationFactory` to spin up an in-memory test server backed by a temporary SQLite database.
 
-### [ ] Project Setup
+### [x] Project Setup
 
-- [ ] **3B.1** Create `Web.Tests/Web.Tests.csproj`:
+- [x] **3B.1** Create `Web.Tests/Web.Tests.csproj`:
   - Target: `net9.0`, `IsPackable: false`
   - NuGet: `Microsoft.AspNetCore.Mvc.Testing` (latest 9.x), `Microsoft.NET.Test.Sdk` (18.0.1), `NUnit` (4.4.0), `NUnit3TestAdapter` (6.1.0)
   - Project references: `Web`, `Utilities.Tests` (for test helpers like `CapturingLogger`)
   - Add to [Spark3Dent.sln](Spark3Dent.sln)
-- [ ] **3B.2** Add `public partial class Program { }` at the bottom of `Web/Program.cs` so `WebApplicationFactory<Program>` can discover the entry point
-- [ ] **3B.3** Create a `Web.Tests/ApiTestFixture.cs` base class:
+- [x] **3B.2** Add `public partial class Program { }` at the bottom of `Web/Program.cs` so `WebApplicationFactory<Program>` can discover the entry point
+- [x] **3B.3** Create a `Web.Tests/ApiTestFixture.cs` base class:
   - Inherits `WebApplicationFactory<Program>`
   - Overrides `ConfigureWebHost` to:
     - Use a per-test temporary SQLite database file (unique path per test run, cleaned up on dispose)
@@ -282,9 +282,9 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
     - Skip or mock Chromium-dependent exporters (set Chromium path to null so export returns graceful failure)
   - Provides a convenience `HttpClient` property and helper methods for common assertions (e.g., `AssertJsonError(response, expectedStatusCode)`)
 
-### Client API Tests
+### [x] Client API Tests
 
-- [ ] **3B.4** `ClientApiTests.cs` -- test the full client lifecycle:
+- [x] **3B.4** `ClientApiTests.cs` -- test the full client lifecycle:
   - `GET /api/clients` on empty DB returns 200 with `{ "items": [] }`
   - `POST /api/clients` with valid body returns 201 and the created client DTO
   - `POST /api/clients` with duplicate nickname returns 409 with `{ "error": "..." }`
@@ -296,9 +296,9 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
   - `PUT /api/clients/{nickname}` for non-existing client returns 404
   - `GET /api/clients` after adding multiple clients returns them all (verify list response shape and ordering)
 
-### Invoice API Tests
+### [x] Invoice API Tests
 
-- [ ] **3B.5** `InvoiceApiTests.cs` -- test invoice operations (seed a client first in each test):
+- [x] **3B.5** `InvoiceApiTests.cs` -- test invoice operations (seed a client first in each test):
   - `GET /api/invoices` on empty DB returns 200 with `{ "items": [] }`
   - `POST /api/invoices/issue` with valid body returns 200/201 with invoice number, date, totalCents
   - `POST /api/invoices/issue` with non-existing clientNickname returns 400 or 404 with error message
@@ -313,9 +313,9 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
   - `POST /api/invoices/correct` for non-existing invoice number returns 404
   - `GET /api/invoices` after issuing multiple invoices returns them newest-first
 
-### Preview & PDF Download Tests
+### [x] Preview & PDF Download Tests
 
-- [ ] **3B.6** `InvoiceExportApiTests.cs` -- test export-related endpoints:
+- [x] **3B.6** `InvoiceExportApiTests.cs` -- test export-related endpoints:
   - **HTML preview (no Chromium needed -- these always run):**
     - `POST /api/invoices/preview` with `format=html` (or omitted, since html is default) returns 200 with `Content-Type: text/html` and a non-empty HTML body
     - The returned HTML contains expected invoice data (invoice number, buyer name, amount) -- verify with string matching or HTML parsing
@@ -330,17 +330,17 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
     - `GET /api/invoices/{number}/pdf` when PDF was not exported (Chromium unavailable) returns 404 or appropriate error
     - (Optional, if Chromium is available in CI) `GET /api/invoices/{number}/pdf` returns `Content-Type: application/pdf` with non-empty body
 
-### Error Format Consistency
+### [x] Error Format Consistency
 
-- [ ] **3B.7** `ErrorFormatTests.cs` -- verify all error responses follow the same shape:
+- [x] **3B.7** `ErrorFormatTests.cs` -- verify all error responses follow the same shape:
   - All 400 responses contain `{ "error": "..." }` with a non-empty message
   - All 404 responses contain `{ "error": "..." }`
   - Verify the `Content-Type` is `application/json` for all error responses
   - Verify that unexpected paths (e.g., `GET /api/nonexistent`) return 404
 
-### Run
+### [x] Run
 
-- [ ] **3B.8** Run all API tests: `dotnet test Web.Tests`
+- [x] **3B.8** Run all API tests: `dotnet test Web.Tests`
 
 ---
 

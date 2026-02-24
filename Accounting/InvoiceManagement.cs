@@ -4,8 +4,8 @@ using Utilities;
 
 namespace Accounting;
 
-/// <summary>Export result: Uri may be a file path, cloud storage path, or data URI (e.g. data:image/png;base64,...).</summary>
-public record ExportResult(bool Success, string? Uri);
+/// <summary>Export result: DataOrUri is whatever the exporter produces - may be an HTML or other string data, or if a uri: a file path, cloud storage path, or data URI (e.g. data:image/png;base64,...).</summary>
+public record ExportResult(bool Success, string? DataOrUri);
 
 public record InvoiceOperationResult(Invoice Invoice, ExportResult ExportResult);
 
@@ -97,24 +97,20 @@ public class InvoiceManagement
 
     /// <summary>
     /// Creates a preview export for a future invoice with the next invoice number.
-    /// Exports to image format only and returns a base64 data URI for use in HTML (e.g. img src).
-    /// Works in both local and cloud environments without file system access.
+    /// Supports HTML (no Chromium) or image (PNG/JPEG, requires Chromium) exporters.
     /// </summary>
     /// <param name="clientNickname">The client nickname.</param>
     /// <param name="amountCents">The amount in cents.</param>
     /// <param name="date">Optional invoice date; defaults to today.</param>
-    /// <param name="imageExporter">The image exporter (e.g. image/png).</param>
-    /// <returns>Preview result with base64 data URI, or failure.</returns>
+    /// <param name="exporter">The exporter (e.g. InvoiceHtmlExporter, InvoiceImageExporter).</param>
+    /// <returns>For HTML: ExportResult with Uri = raw HTML. For image: ExportResult with Uri = data:image/...;base64,...</returns>
     /// <exception cref="InvalidOperationException">When the client is not found.</exception>
     public async Task<ExportResult> PreviewInvoiceAsync(
         string clientNickname,
         int amountCents,
         DateTime? date,
-        IInvoiceExporter imageExporter)
+        IInvoiceExporter exporter)
     {
-        if (imageExporter.MimeType != "image/png" && imageExporter.MimeType != "image/jpeg")
-            throw new ArgumentException("Preview requires an image exporter (image/png or image/jpeg).", nameof(imageExporter));
-
         var client = await _clientRepo.GetAsync(clientNickname);
         var invoiceDate = date ?? DateTime.UtcNow.Date;
 
@@ -128,12 +124,24 @@ public class InvoiceManagement
 
         try
         {
-            await using var stream = await imageExporter.Export(_template, invoice);
+            await using var stream = await exporter.Export(_template, invoice);
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            var base64 = Convert.ToBase64String(ms.ToArray());
-            var dataUri = $"data:{imageExporter.MimeType};base64,{base64}";
-            return new ExportResult(true, dataUri);
+            var bytes = ms.ToArray();
+
+            if (exporter.MimeType == "text/html")
+            {
+                var html = System.Text.Encoding.UTF8.GetString(bytes);
+                return new ExportResult(true, html);
+            }
+            if (exporter.MimeType == "image/png" || exporter.MimeType == "image/jpeg")
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                var dataUri = $"data:{exporter.MimeType};base64,{base64}";
+                return new ExportResult(true, dataUri);
+            }
+            _logger.LogError("Preview export failed: unsupported MimeType", new ArgumentException($"Unsupported exporter MimeType: {exporter.MimeType}"));
+            return new ExportResult(false, null);
         }
         catch (Exception ex)
         {
@@ -145,6 +153,24 @@ public class InvoiceManagement
     public Task<QueryResult<Invoice>> ListInvoicesAsync(int limit)
     {
         return _invoiceRepo.LatestAsync(limit);
+    }
+
+    public Task<Invoice> GetInvoiceAsync(string number)
+    {
+        return _invoiceRepo.GetAsync(number);
+    }
+
+    /// <summary>
+    /// Opens the PDF stream for an invoice. Throws FileNotFoundException if the PDF was not exported.
+    /// </summary>
+    public async Task<Stream> GetInvoicePdfStreamAsync(string number)
+    {
+        _ = await _invoiceRepo.GetAsync(number);
+        var formattedNumber = number.Length >= _invoiceNumberPadding
+            ? number
+            : number.PadLeft(_invoiceNumberPadding, '0');
+        var objectKey = $"invoice-{formattedNumber}";
+        return await _blobStorage.OpenReadAsync(_invoicesBucket, objectKey);
     }
 
     private Invoice.InvoiceContent BuildInvoiceContent(DateTime date, BillingAddress buyerAddress, int amountCents)

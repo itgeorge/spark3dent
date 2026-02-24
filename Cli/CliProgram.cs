@@ -335,16 +335,16 @@ class CliProgram
         {
             var result = await invoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, pdfExporter);
             Console.WriteLine($"Invoice {result.Invoice.Number} created.");
-            if (result.ExportResult.Success && result.ExportResult.Uri != null)
-                Console.WriteLine($"PDF saved to: {result.ExportResult.Uri}");
+            if (result.ExportResult.Success && result.ExportResult.DataOrUri != null)
+                Console.WriteLine($"PDF saved to: {result.ExportResult.DataOrUri}");
             else
                 Console.WriteLine("Warning: PDF export failed.");
 
             if (exportPng && imageExporter != null)
             {
                 var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
-                if (pngResult.ExportResult.Success && pngResult.ExportResult.Uri != null)
-                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Uri}");
+                if (pngResult.ExportResult.Success && pngResult.ExportResult.DataOrUri != null)
+                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.DataOrUri}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
             }
@@ -399,7 +399,7 @@ class CliProgram
         try
         {
             var result = await invoiceManagement.PreviewInvoiceAsync(nickname, amountCents, date, imageExporter);
-            if (!result.Success || result.Uri == null)
+            if (!result.Success || result.DataOrUri == null)
             {
                 Console.WriteLine("Preview export failed.");
                 return;
@@ -409,7 +409,7 @@ class CliProgram
             var html = $"""
                 <!DOCTYPE html>
                 <html><head><meta charset="utf-8"><title>Invoice Preview</title></head>
-                <body style="margin:0"><img src="{result.Uri}" alt="Invoice preview" style="max-width:100%"/></body>
+                <body style="margin:0"><img src="{result.DataOrUri}" alt="Invoice preview" style="max-width:100%"/></body>
                 </html>
                 """;
             await File.WriteAllTextAsync(htmlPath, html);
@@ -477,8 +477,8 @@ class CliProgram
             if (exportPng && imageExporter != null)
             {
                 var pngResult = await invoiceManagement.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
-                if (pngResult.ExportResult.Success && pngResult.ExportResult.Uri != null)
-                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.Uri}");
+                if (pngResult.ExportResult.Success && pngResult.ExportResult.DataOrUri != null)
+                    Console.WriteLine($"PNG saved to: {pngResult.ExportResult.DataOrUri}");
                 else
                     Console.WriteLine("Warning: PNG export failed.");
             }
