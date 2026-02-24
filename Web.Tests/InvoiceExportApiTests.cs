@@ -56,6 +56,19 @@ public class InvoiceExportApiTests
     }
 
     [Test]
+    public async Task PostPreview_WithInvoiceNumber_ReturnsHtmlWithThatNumber()
+    {
+        await CreateClientAsync();
+        var body = new { clientNickname = "acme", amountCents = 25000, date = "2026-02-20", format = "html", invoiceNumber = "0000000042" };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/api/invoices/preview", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.That(html, Does.Contain("0000000042"));
+    }
+
+    [Test]
     public async Task PostPreview_WithFormatOmitted_DefaultsToHtml()
     {
         await CreateClientAsync();

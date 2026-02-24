@@ -254,7 +254,7 @@ public static class Api
             {
                 try
                 {
-                    var result = await invMgmt.PreviewInvoiceAsync(body.ClientNickname!.Trim(), body.AmountCents, date, new InvoiceHtmlExporter());
+                    var result = await invMgmt.PreviewInvoiceAsync(body.ClientNickname!.Trim(), body.AmountCents, date, new InvoiceHtmlExporter(), body.InvoiceNumber?.Trim());
                     if (!result.Success || result.DataOrUri == null)
                         return Results.Json(new { error = "HTML preview failed." }, statusCode: 500);
                     return Results.Content(result.DataOrUri, "text/html; charset=utf-8");
@@ -268,7 +268,7 @@ public static class Api
             // format == "png"
             try
             {
-                var result = await invMgmt.PreviewInvoiceAsync(body.ClientNickname!.Trim(), body.AmountCents, date, imageExporter!);
+                var result = await invMgmt.PreviewInvoiceAsync(body.ClientNickname!.Trim(), body.AmountCents, date, imageExporter!, body.InvoiceNumber?.Trim());
                 if (!result.Success || result.DataOrUri == null)
                     return Results.Json(new { error = "Image export unavailable: Chromium not found." }, statusCode: 503);
 
@@ -374,5 +374,5 @@ public static class Api
     private record ClientUpdateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
     private record IssueInvoiceRequest(string? ClientNickname, int? AmountCents, string? Date);
     private record CorrectInvoiceRequest(string? InvoiceNumber, int? AmountCents, string? Date);
-    private record PreviewInvoiceRequest(string? ClientNickname, int AmountCents, string? Date, string? Format);
+    private record PreviewInvoiceRequest(string? ClientNickname, int AmountCents, string? Date, string? Format, string? InvoiceNumber);
 }

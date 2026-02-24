@@ -611,6 +611,43 @@ public class InvoiceManagementTest
         Assert.That(result.DataOrUri, Is.Null);
     }
 
+    [Test]
+    public async Task PreviewInvoiceAsync_WhenInvoiceNumberProvided_ThenUsesThatNumber()
+    {
+        var fixture = await CreateFixtureAsync();
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        await fixture.Management.IssueInvoiceAsync("acme", 200_00, new DateTime(2026, 1, 20), fixture.Exporter);
+        var imageExporter = new FakeImageExporter();
+
+        var result = await fixture.Management.PreviewInvoiceAsync("acme", 300_00, new DateTime(2026, 2, 1), imageExporter, invoiceNumber: "0000000005");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.DataOrUri, Is.Not.Null);
+        var text = result.DataOrUri!.Replace("data:image/png;base64,", "");
+        var decoded = Convert.FromBase64String(text);
+        var content = System.Text.Encoding.UTF8.GetString(decoded);
+        Assert.That(content, Does.Contain("invoice 0000000005"));
+    }
+
+    [Test]
+    public async Task PreviewInvoiceAsync_WhenInvoiceNumberNotProvided_ThenUsesNextNumber()
+    {
+        var fixture = await CreateFixtureAsync();
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        await fixture.Management.IssueInvoiceAsync("acme", 100_00, new DateTime(2026, 1, 15), fixture.Exporter);
+        var imageExporter = new FakeImageExporter();
+
+        var result = await fixture.Management.PreviewInvoiceAsync("acme", 200_00, new DateTime(2026, 2, 1), imageExporter);
+
+        Assert.That(result.Success, Is.True);
+        var text = result.DataOrUri!.Replace("data:image/png;base64,", "");
+        var content = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(text));
+        Assert.That(content, Does.Contain("invoice 2"), "When no number provided, should use next number");
+    }
+
     private static BillingAddress ValidBuyerAddress() => new(
         Name: "Test Buyer EOOD",
         RepresentativeName: "Мария Тестова",

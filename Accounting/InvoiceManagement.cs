@@ -96,31 +96,41 @@ public class InvoiceManagement
     }
 
     /// <summary>
-    /// Creates a preview export for a future invoice with the next invoice number.
+    /// Creates a preview export for a future invoice with the next invoice number, or a specific number when correcting.
     /// Supports HTML (no Chromium) or image (PNG/JPEG, requires Chromium) exporters.
     /// </summary>
     /// <param name="clientNickname">The client nickname.</param>
     /// <param name="amountCents">The amount in cents.</param>
     /// <param name="date">Optional invoice date; defaults to today.</param>
     /// <param name="exporter">The exporter (e.g. InvoiceHtmlExporter, InvoiceImageExporter).</param>
+    /// <param name="invoiceNumber">Optional invoice number for correction preview; when null or empty, uses the next number.</param>
     /// <returns>For HTML: ExportResult with Uri = raw HTML. For image: ExportResult with Uri = data:image/...;base64,...</returns>
     /// <exception cref="InvalidOperationException">When the client is not found.</exception>
     public async Task<ExportResult> PreviewInvoiceAsync(
         string clientNickname,
         int amountCents,
         DateTime? date,
-        IInvoiceExporter exporter)
+        IInvoiceExporter exporter,
+        string? invoiceNumber = null)
     {
         var client = await _clientRepo.GetAsync(clientNickname);
         var invoiceDate = date ?? DateTime.UtcNow.Date;
 
-        var latest = await _invoiceRepo.LatestAsync(1);
-        var nextNumber = latest.Items.Count == 0
-            ? "1"
-            : (long.Parse(latest.Items[0].Number) + 1).ToString();
+        string number;
+        if (!string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            number = invoiceNumber.Trim();
+        }
+        else
+        {
+            var latest = await _invoiceRepo.LatestAsync(1);
+            number = latest.Items.Count == 0
+                ? "1"
+                : (long.Parse(latest.Items[0].Number) + 1).ToString();
+        }
 
         var content = BuildInvoiceContent(invoiceDate, client.Address, amountCents);
-        var invoice = new Invoice(nextNumber, content);
+        var invoice = new Invoice(number, content);
 
         try
         {

@@ -1662,10 +1662,12 @@
       $("#previewCaption").textContent = caption;
 
       try {
+        const invNum = (editorMode === "correct" ? ($("#inputNumber").value || "").trim() : "") || undefined;
+        const previewBody = { clientNickname: clientNick, amountCents: amtCents, date, format: "html", ...(invNum && { invoiceNumber: invNum }) };
         const r = await fetch("/api/invoices/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientNickname: clientNick, amountCents: amtCents, date, format: "html" })
+          body: JSON.stringify(previewBody)
         });
         if(!r.ok){
           const data = await r.json().catch(()=>({}));
