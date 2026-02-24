@@ -28,7 +28,7 @@ todos:
     status: completed
   - id: phase-6
     content: "Phase 6: Build verification, run all tests, manual end-to-end testing, single-file publish test"
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -404,7 +404,7 @@ The API tests from Phase 3B define the expected validation and error behavior. I
 
 ---
 
-## [ ] Phase 6: Build & Test
+## [x] Phase 6: Build & Test
 
 - **6.1** Verify the solution builds: `dotnet build Spark3Dent.sln`
 - **6.2** Run all existing tests to confirm no regressions: `dotnet test Spark3Dent.sln`
