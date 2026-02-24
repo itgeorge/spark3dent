@@ -9,8 +9,15 @@ namespace Invoices.Tests.Fakes;
 public class FakeInvoiceRepo : IInvoiceRepo
 {
     private readonly Dictionary<string, Invoice> _storage = new();
-    private int _nextNumber = 1;
+    private int _nextNumber;
+    private readonly int _startInvoiceNumber;
     private readonly object _lock = new();
+
+    public FakeInvoiceRepo(int startInvoiceNumber = 1)
+    {
+        _startInvoiceNumber = startInvoiceNumber;
+        _nextNumber = startInvoiceNumber;
+    }
 
     public Task<Invoice> CreateAsync(Invoice.InvoiceContent content)
     {
@@ -101,6 +108,22 @@ public class FakeInvoiceRepo : IInvoiceRepo
                 var nextStartAfter = items.Count > 0 ? items[^1].Number : null;
 
                 return new QueryResult<Invoice>(items, nextStartAfter);
+            }
+        });
+    }
+
+    public Task<string> PeekNextInvoiceNumberAsync()
+    {
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                var lastInvoice = _storage.Values
+                    .OrderByDescending(i => long.Parse(i.Number))
+                    .FirstOrDefault();
+                return lastInvoice == null
+                    ? _startInvoiceNumber.ToString()
+                    : (long.Parse(lastInvoice.Number) + 1).ToString();
             }
         });
     }

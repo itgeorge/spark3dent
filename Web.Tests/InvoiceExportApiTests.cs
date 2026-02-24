@@ -23,6 +23,11 @@ public class InvoiceExportApiTests
 
     private async Task CreateClientAsync()
     {
+        await CreateClientInFixtureAsync(_client);
+    }
+
+    private static async Task CreateClientInFixtureAsync(HttpClient client)
+    {
         var body = new
         {
             nickname = "acme",
@@ -36,7 +41,7 @@ public class InvoiceExportApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await client.PostAsync("/api/clients", content);
     }
 
     [Test]
@@ -53,6 +58,21 @@ public class InvoiceExportApiTests
         Assert.That(html, Is.Not.Null.And.Not.Empty);
         Assert.That(html, Does.Contain("ACME EOOD"));
         Assert.That(html.Length, Is.GreaterThan(100));
+    }
+
+    [Test]
+    public async Task PostPreview_WhenNoInvoicesExist_ThenUsesStartInvoiceNumberFromConfig()
+    {
+        using var fixtureWithStart1000 = new ApiTestFixture(startInvoiceNumber: "1000");
+        var client = fixtureWithStart1000.CreateClient();
+        await CreateClientInFixtureAsync(client);
+        var body = new { clientNickname = "acme", amountCents = 15000, date = "2026-02-20", format = "html" };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync("/api/invoices/preview", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.That(html, Does.Contain("1000"), "When no invoices exist, preview should use StartInvoiceNumber from appsettings.json");
     }
 
     [Test]

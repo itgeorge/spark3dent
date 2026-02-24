@@ -504,6 +504,24 @@ public class InvoiceManagementTest
     }
 
     [Test]
+    public async Task PreviewInvoiceAsync_WhenNoInvoicesExist_ThenUsesStartInvoiceNumberFromConfig()
+    {
+        var fixture = await CreateFixtureAsync(startInvoiceNumber: 1000);
+        var client = new Client("acme", ValidBuyerAddress());
+        await fixture.ClientRepo.AddAsync(client);
+        var imageExporter = new FakeImageExporter();
+
+        var result = await fixture.Management.PreviewInvoiceAsync("acme", 150_00, new DateTime(2026, 2, 1), imageExporter);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.DataOrUri, Is.Not.Null.And.Not.Empty);
+        var base64Part = result.DataOrUri!.Replace("data:image/png;base64,", "");
+        var decoded = Convert.FromBase64String(base64Part);
+        var text = System.Text.Encoding.UTF8.GetString(decoded);
+        Assert.That(text, Does.Contain("invoice 1000"), "When no invoices exist, preview should use StartInvoiceNumber from config");
+    }
+
+    [Test]
     public async Task PreviewInvoiceAsync_WhenInvoicesExist_ThenUsesNextNumber()
     {
         var fixture = await CreateFixtureAsync();
@@ -658,17 +676,17 @@ public class InvoiceManagementTest
         PostalCode: "4000",
         Country: "BG");
 
-    private static async Task<TestFixture> CreateFixtureAsync(int invoiceNumberPadding = 10)
+    private static async Task<TestFixture> CreateFixtureAsync(int invoiceNumberPadding = 10, int startInvoiceNumber = 1)
     {
-        var f = CreateFixture(invoiceNumberPadding: invoiceNumberPadding);
+        var f = CreateFixture(invoiceNumberPadding: invoiceNumberPadding, startInvoiceNumber: startInvoiceNumber);
         await f.InitializeAsync();
         return f;
     }
 
-    private static TestFixture CreateFixture(IInvoiceExporter? exporter = null, int invoiceNumberPadding = 10)
+    private static TestFixture CreateFixture(IInvoiceExporter? exporter = null, int invoiceNumberPadding = 10, int startInvoiceNumber = 1)
     {
         var exp = exporter ?? new FakeInvoiceExporter();
-        var invoiceRepo = new FakeInvoiceRepo();
+        var invoiceRepo = new FakeInvoiceRepo(startInvoiceNumber);
         var clientRepo = new FakeClientRepo();
         var tempDir = Path.Combine(Path.GetTempPath(), "InvoiceManagementTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -690,10 +708,10 @@ public class InvoiceManagementTest
         return new TestFixture(invoiceRepo, clientRepo, management, exp, tempDir);
     }
 
-    private static TestFixture CreateFixtureWithExporter(IInvoiceExporter exporter, out CapturingLogger logger, int invoiceNumberPadding = 10)
+    private static TestFixture CreateFixtureWithExporter(IInvoiceExporter exporter, out CapturingLogger logger, int invoiceNumberPadding = 10, int startInvoiceNumber = 1)
     {
         logger = new CapturingLogger();
-        var invoiceRepo = new FakeInvoiceRepo();
+        var invoiceRepo = new FakeInvoiceRepo(startInvoiceNumber);
         var clientRepo = new FakeClientRepo();
         var tempDir = Path.Combine(Path.GetTempPath(), "InvoiceManagementTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);

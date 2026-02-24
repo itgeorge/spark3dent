@@ -14,13 +14,15 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string _tempDir;
     private readonly string _dbPath;
     private readonly string _blobPath;
+    private readonly string _startInvoiceNumber;
 
-    public ApiTestFixture()
+    public ApiTestFixture(string startInvoiceNumber = "1")
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
         _dbPath = Path.Combine(_tempDir, "test.db");
         _blobPath = Path.Combine(_tempDir, "blob");
+        _startInvoiceNumber = startInvoiceNumber;
     }
 
     public HttpClient Client => CreateClient();
@@ -35,7 +37,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
                 ["Port"] = "0",
                 ["Desktop:DatabasePath"] = _dbPath,
                 ["Desktop:BlobStoragePath"] = _blobPath,
-                ["Desktop:LogDirectory"] = _tempDir
+                ["Desktop:LogDirectory"] = _tempDir,
+                ["App:StartInvoiceNumber"] = _startInvoiceNumber
             });
         });
     }
@@ -50,7 +53,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
                 ["Port"] = "0",
                 ["Desktop:DatabasePath"] = _dbPath,
                 ["Desktop:BlobStoragePath"] = _blobPath,
-                ["Desktop:LogDirectory"] = _tempDir
+                ["Desktop:LogDirectory"] = _tempDir,
+                ["App:StartInvoiceNumber"] = _startInvoiceNumber
             });
         });
         return base.CreateHost(builder);

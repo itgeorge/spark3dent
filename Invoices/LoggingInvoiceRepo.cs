@@ -58,6 +58,22 @@ public class LoggingInvoiceRepo : IInvoiceRepo
         }
     }
 
+    public async Task<string> PeekNextInvoiceNumberAsync()
+    {
+        _logger.LogInfo("InvoiceRepo.PeekNextInvoiceNumberAsync");
+        try
+        {
+            var number = await _inner.PeekNextInvoiceNumberAsync();
+            _logger.LogInfo($"InvoiceRepo.PeekNextInvoiceNumberAsync completed, number={number}");
+            return number;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("InvoiceRepo.PeekNextInvoiceNumberAsync failed", ex);
+            throw;
+        }
+    }
+
     public async Task<QueryResult<Invoice>> LatestAsync(int limit, string? startAfterCursor = null)
     {
         _logger.LogInfo($"InvoiceRepo.LatestAsync limit={limit}, cursor={startAfterCursor ?? "(none)"}");

@@ -163,6 +163,28 @@ public class SqliteInvoiceRepoTest : Invoices.Tests.InvoiceRepoContractTest
     }
 
     [Test]
+    public async Task PeekNextInvoiceNumber_GivenEmptyDb_WhenPeeking_ThenReturnsStartInvoiceNumber()
+    {
+        var (repo, _) = await CreateFreshRepoAsync(startInvoiceNumber: 1000);
+
+        var next = await repo.PeekNextInvoiceNumberAsync();
+
+        Assert.That(next, Is.EqualTo("1000"));
+    }
+
+    [Test]
+    public async Task PeekNextInvoiceNumber_GivenExistingInvoices_WhenPeeking_ThenReturnsMaxPlusOne()
+    {
+        var (repo, _) = await CreateFreshRepoAsync(startInvoiceNumber: 1);
+        await repo.CreateAsync(BuildValidInvoiceContent());
+        await repo.CreateAsync(BuildValidInvoiceContent(date: DateTime.UtcNow.AddDays(1)));
+
+        var next = await repo.PeekNextInvoiceNumberAsync();
+
+        Assert.That(next, Is.EqualTo("3"));
+    }
+
+    [Test]
     public async Task Create_GivenConcurrentCreateCalls_WhenRacing_ThenAllNumbersUniqueAndContiguous()
     {
         var (repo, _) = await CreateFreshRepoAsync(startInvoiceNumber: 1);

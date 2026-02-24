@@ -123,10 +123,7 @@ public class InvoiceManagement
         }
         else
         {
-            var latest = await _invoiceRepo.LatestAsync(1);
-            number = latest.Items.Count == 0
-                ? "1"
-                : (long.Parse(latest.Items[0].Number) + 1).ToString();
+            number = await _invoiceRepo.PeekNextInvoiceNumberAsync();
         }
 
         var content = BuildInvoiceContent(invoiceDate, client.Address, amountCents);

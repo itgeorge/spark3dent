@@ -105,6 +105,19 @@ public class SqliteInvoiceRepo : IInvoiceRepo
         });
     }
 
+    public async Task<string> PeekNextInvoiceNumberAsync()
+    {
+        await using var ctx = _contextFactory();
+
+        var lastInvoice = await ctx.Invoices
+            .OrderByDescending(i => i.NumberNumeric)
+            .FirstOrDefaultAsync();
+
+        return lastInvoice == null
+            ? _config.App.StartInvoiceNumber.ToString()
+            : (lastInvoice.NumberNumeric + 1).ToString();
+    }
+
     public async Task<QueryResult<Invoice>> LatestAsync(int limit, string? startAfterCursor = null)
     {
         await using var ctx = _contextFactory();
