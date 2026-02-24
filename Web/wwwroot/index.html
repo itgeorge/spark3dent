@@ -1423,10 +1423,17 @@
       }
     });
 
+    function applyClientSelection(nickname){
+      selectedClientNickname = nickname;
+      updateClientPill();
+      rebuildPreview();
+    }
+
     function openEditorIssue(clientNickname){
       editorMode = "issue";
       correctingInvoiceNumber = null;
-      selectedClientNickname = clientNickname ?? selectedClientNickname;
+      const nick = clientNickname ?? selectedClientNickname ?? (clients[0]?.nickname ?? null);
+      applyClientSelection(nick);
       $("#editorTitle").textContent = "Issue invoice";
       $("#editorSubtitle").textContent = "Live preview updates as you type";
       $("#modeChip").textContent = "ISSUE";
@@ -1624,9 +1631,7 @@
           const companyId = c.companyId || c.companyIdentifier || "&#8212;";
           el.innerHTML = `<div class="nick">${c.nickname}</div><div class="detail">${c.name} &#8226; ${companyId} &#8226; ${c.city||""}, ${c.country||""}</div>`;
           el.addEventListener("click", ()=>{
-            selectedClientNickname = c.nickname;
-            updateClientPill();
-            rebuildPreview();
+            applyClientSelection(c.nickname);
             closeClientPickerModal();
             toast(`Client: ${c.nickname}`);
           });
@@ -1666,9 +1671,9 @@
       $("#clientCompanyId").value = "";
       $("#clientVatId").value = "";
       $("#clientAddress").value = "";
-      $("#clientCity").value = "";
-      $("#clientPostal").value = "";
-      $("#clientCountry").value = "";
+      $("#clientCity").value = "Габрово";
+      $("#clientPostal").value = "5300";
+      $("#clientCountry").value = "България";
       $("#clientNickname").readOnly = false;
       $("#clientNickname").classList.remove("input-readonly");
       $("#modalNewClient").classList.add("show");
