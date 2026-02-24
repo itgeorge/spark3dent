@@ -90,21 +90,32 @@ public static class Api
                 return Results.Json(new { error = $"Client '{nickname}' not found." }, statusCode: 404);
             }
 
+            var newName = body.Name?.Trim() ?? existing.Address.Name;
+            var newRep = body.RepresentativeName?.Trim() ?? existing.Address.RepresentativeName;
+            var newCompanyId = body.CompanyIdentifier?.Trim() ?? existing.Address.CompanyIdentifier;
+            var newAddress = body.Address?.Trim() ?? existing.Address.Address;
+            var newCity = body.City?.Trim() ?? existing.Address.City;
+            var newPostal = body.PostalCode?.Trim() ?? existing.Address.PostalCode;
+
+            var err = ValidateClientUpdate(newName, newRep, newCompanyId, newAddress, newCity, newPostal);
+            if (err != null)
+                return Results.Json(new { error = err }, statusCode: 400);
+
             var newNickname = body.Nickname?.Trim() ?? existing.Nickname;
-            var newAddress = new BillingAddress(
-                body.Name?.Trim() ?? existing.Address.Name,
-                body.RepresentativeName?.Trim() ?? existing.Address.RepresentativeName,
-                body.CompanyIdentifier?.Trim() ?? existing.Address.CompanyIdentifier,
+            var mergedAddress = new BillingAddress(
+                newName,
+                newRep,
+                newCompanyId,
                 body.VatIdentifier?.Trim() ?? existing.Address.VatIdentifier,
-                body.Address?.Trim() ?? existing.Address.Address,
-                body.City?.Trim() ?? existing.Address.City,
-                body.PostalCode?.Trim() ?? existing.Address.PostalCode,
+                newAddress,
+                newCity,
+                newPostal,
                 body.Country?.Trim() ?? existing.Address.Country);
 
-            var update = new IClientRepo.ClientUpdate(newNickname, newAddress);
+            var update = new IClientRepo.ClientUpdate(newNickname, mergedAddress);
             await clientRepo.UpdateAsync(nickname, update);
 
-            var updated = new Client(newNickname, newAddress);
+            var updated = new Client(newNickname, mergedAddress);
             return Results.Json(ToClientDto(updated), JsonOptions);
         });
 
@@ -194,6 +205,10 @@ public static class Api
 
             if (string.IsNullOrWhiteSpace(body.InvoiceNumber))
                 return Results.Json(new { error = "invoiceNumber is required." }, statusCode: 400);
+
+            if (!string.IsNullOrWhiteSpace(body.CorrectInvoiceNumber) &&
+                !string.Equals(body.InvoiceNumber!.Trim(), body.CorrectInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase))
+                return Results.Json(new { error = "Invoice number cannot be changed when correcting. You are correcting invoice #" + body.CorrectInvoiceNumber.Trim() + "." }, statusCode: 400);
 
             DateTime? date = null;
             if (!string.IsNullOrWhiteSpace(body.Date))
@@ -358,6 +373,17 @@ public static class Api
         return null;
     }
 
+    private static string? ValidateClientUpdate(string name, string representativeName, string companyIdentifier, string address, string city, string postalCode)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "name is required.";
+        if (string.IsNullOrWhiteSpace(representativeName)) return "representativeName is required.";
+        if (string.IsNullOrWhiteSpace(companyIdentifier)) return "companyIdentifier is required.";
+        if (string.IsNullOrWhiteSpace(address)) return "address is required.";
+        if (string.IsNullOrWhiteSpace(city)) return "city is required.";
+        if (string.IsNullOrWhiteSpace(postalCode)) return "postalCode is required.";
+        return null;
+    }
+
     private static async Task<T?> ReadJson<T>(HttpContext ctx)
     {
         try
@@ -373,6 +399,6 @@ public static class Api
     private record ClientCreateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
     private record ClientUpdateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
     private record IssueInvoiceRequest(string? ClientNickname, int? AmountCents, string? Date);
-    private record CorrectInvoiceRequest(string? InvoiceNumber, int? AmountCents, string? Date);
+    private record CorrectInvoiceRequest(string? InvoiceNumber, int? AmountCents, string? Date, string? CorrectInvoiceNumber);
     private record PreviewInvoiceRequest(string? ClientNickname, int AmountCents, string? Date, string? Format, string? InvoiceNumber);
 }

@@ -343,6 +343,16 @@
     .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
     .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
 
+    .btn:disabled, .btn.primary:disabled{
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .spinner{ display:inline-block; width:18px; height:18px; border:2px solid rgba(255,255,255,.4); border-top-color:white; border-radius:50%; animation: spin .7s linear infinite; }
+    @keyframes spin{ to{ transform: rotate(360deg); } }
+    .loading-skeleton{ min-height: 80px; background: linear-gradient(90deg, rgba(226,232,240,.5) 25%, rgba(248,250,252,.8) 50%, rgba(226,232,240,.5) 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; border-radius: 12px; }
+    @keyframes shimmer{ 0%{ background-position: 200% 0; } 100%{ background-position: -200% 0; } }
+
     .date-field-wrap{
       display: flex;
       align-items: stretch;
@@ -851,7 +861,7 @@
               <button class="btn small primary" id="btnNewFromInvoices">&#65291; New invoice</button>
             </div>
             <div class="card-body">
-              <div id="invoiceList" class="list"></div>
+              <div id="invoiceList" class="list"><div class="loading-skeleton" id="invoiceListLoading"></div></div>
               <div style="border-top:1px solid rgba(226,232,240,.7);">
                 <button class="view-all-link" type="button" id="btnViewAllInvoices">view all</button>
               </div>
@@ -867,7 +877,7 @@
               <button class="btn small primary-teal" id="btnNewClient">&#65291; New client</button>
             </div>
             <div class="card-body">
-              <div id="clientList" class="list"></div>
+              <div id="clientList" class="list"><div class="loading-skeleton" id="clientListLoading"></div></div>
               <div style="border-top:1px solid rgba(226,232,240,.7);">
                 <button class="view-all-link" type="button" id="btnViewAllClients">view all</button>
               </div>
@@ -1085,6 +1095,7 @@
     let selectedInvoiceNumber = null;
     let editorMode = "issue";
     let selectedClientNickname = null;
+    let correctingInvoiceNumber = null;
 
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -1140,7 +1151,7 @@
     // ---- API ----
     async function loadClients(){
       const r = await fetch("/api/clients?limit=100");
-      if(!r.ok){ toast("Failed to load clients"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); toast(data.error || "Failed to load clients"); return; }
       const data = await r.json();
       clients = (data.items || []).map(c => ({
         nickname: c.nickname,
@@ -1158,7 +1169,7 @@
 
     async function loadInvoices(){
       const r = await fetch("/api/invoices?limit=100");
-      if(!r.ok){ toast("Failed to load invoices"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); toast(data.error || "Failed to load invoices"); return; }
       const data = await r.json();
       invoices = (data.items || []).map(inv => ({
         number: inv.number,
@@ -1303,6 +1314,7 @@
 
     function openEditorIssue(clientNickname){
       editorMode = "issue";
+      correctingInvoiceNumber = null;
       selectedClientNickname = clientNickname ?? selectedClientNickname;
       $("#editorTitle").textContent = "Issue invoice";
       $("#editorSubtitle").textContent = "Live preview updates as you type";
@@ -1311,6 +1323,8 @@
       $("#btnIssue").textContent = "Issue";
       $("#fieldInvoiceNumber").classList.add("hidden");
       $("#inputNumber").value = "";
+      $("#inputNumber").readOnly = false;
+      $("#inputNumber").classList.remove("input-readonly");
       $("#tabPreviewBtn").textContent = "Preview";
       $("#btnDownloadPdf").style.display = "none";
       setDefaults();
@@ -1321,6 +1335,7 @@
 
     function openEditorCorrect(invoiceNumber){
       editorMode = "correct";
+      correctingInvoiceNumber = invoiceNumber;
       const inv = invoices.find(x=>x.number === invoiceNumber);
       selectedClientNickname = inv ? (inv.client||inv.clientNickname) : selectedClientNickname;
       $("#editorTitle").textContent = "Review / Correct";
@@ -1329,6 +1344,8 @@
       $("#modeChip").className = "chip fix";
       $("#btnIssue").textContent = "Save correction";
       $("#fieldInvoiceNumber").classList.remove("hidden");
+      $("#inputNumber").readOnly = true;
+      $("#inputNumber").classList.add("input-readonly");
       $("#tabPreviewBtn").textContent = "View";
       $("#btnDownloadPdf").style.display = "";
       setDefaults(inv);
@@ -1375,12 +1392,17 @@
       const amtCents = parseAmountToCents(amountStr);
 
       if(editorMode === "correct" && !number){ toast("Enter invoice number"); return; }
+      if(editorMode === "correct" && correctingInvoiceNumber && number !== correctingInvoiceNumber){
+        toast("Invoice number cannot be changed when correcting. You are correcting invoice #" + correctingInvoiceNumber);
+        return;
+      }
       if(amtCents == null){ toast("Enter valid amount"); return; }
       if(!date){ toast("Select date"); return; }
       if(!selectedClientNickname){ toast("Select a client"); return; }
 
-      const btn = $("#modalConfirmSaveYes");
-      btn.disabled = true;
+      closeConfirmSaveModal();
+      const btnIssue = $("#btnIssue");
+      btnIssue.disabled = true;
       try {
         if(editorMode === "issue"){
           const r = await fetch("/api/invoices/issue", {
@@ -1395,17 +1417,16 @@
           const r = await fetch("/api/invoices/correct", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date })
+            body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date, correctInvoiceNumber: correctingInvoiceNumber })
           });
           const data = await r.json();
           if(!r.ok){ toast(data.error || "Failed to correct invoice"); return; }
           toast(`Corrected invoice #${data.invoice?.number || number}`);
         }
-        closeConfirmSaveModal();
         await refreshData();
         setView("dashboard");
       }finally{
-        btn.disabled = false;
+        btnIssue.disabled = false;
       }
     }
 

@@ -29,6 +29,29 @@ builder.WebHost.UseUrls(url);
 
 var app = builder.Build();
 
+// Global exception handling: InvalidOperationException -> 400, others -> 500, log all
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (InvalidOperationException ex)
+    {
+        logger.LogError($"Request failed (validation): {ex.Message}", ex);
+        context.Response.StatusCode = 400;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError($"Unexpected error: {ex.Message}", ex);
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred." });
+    }
+});
+
 var webAssembly = Assembly.GetExecutingAssembly();
 app.MapGet("/", async () =>
 {
