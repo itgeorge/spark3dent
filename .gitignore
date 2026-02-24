@@ -56,3 +56,6 @@ TestResult.xml
 nunit-*.xml
 # JetBrains
 .idea/*
+
+# Publish
+publish/*
