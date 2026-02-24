@@ -172,8 +172,6 @@ public static class Api
             try
             {
                 var result = await invMgmt.IssueInvoiceAsync(body.ClientNickname!.Trim(), body.AmountCents.Value, date, pdfExporter);
-                if (imageExporter != null)
-                    _ = invMgmt.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
 
                 return Results.Json(new
                 {
