@@ -1660,20 +1660,36 @@
 
     let clientModalMode = "new";
     let clientModalEditNickname = null;
+    let newClientDraft = null;
+
+    function saveNewClientDraft(){
+      newClientDraft = {
+        nickname: $("#clientNickname").value,
+        name: $("#clientName").value,
+        rep: $("#clientRep").value,
+        companyId: $("#clientCompanyId").value,
+        vatId: $("#clientVatId").value,
+        address: $("#clientAddress").value,
+        city: $("#clientCity").value,
+        postal: $("#clientPostal").value,
+        country: $("#clientCountry").value
+      };
+    }
 
     function openNewClientModal(){
       clientModalMode = "new";
       clientModalEditNickname = null;
       $("#modalNewClientTitle").textContent = "New client";
-      $("#clientNickname").value = "";
-      $("#clientName").value = "";
-      $("#clientRep").value = "";
-      $("#clientCompanyId").value = "";
-      $("#clientVatId").value = "";
-      $("#clientAddress").value = "";
-      $("#clientCity").value = "Габрово";
-      $("#clientPostal").value = "5300";
-      $("#clientCountry").value = "България";
+      const d = newClientDraft;
+      $("#clientNickname").value = d ? d.nickname : "";
+      $("#clientName").value = d ? d.name : "";
+      $("#clientRep").value = d ? d.rep : "";
+      $("#clientCompanyId").value = d ? d.companyId : "";
+      $("#clientVatId").value = d ? d.vatId : "";
+      $("#clientAddress").value = d ? d.address : "";
+      $("#clientCity").value = d ? d.city : "Габрово";
+      $("#clientPostal").value = d ? d.postal : "5300";
+      $("#clientCountry").value = d ? d.country : "България";
       $("#clientNickname").readOnly = false;
       $("#clientNickname").classList.remove("input-readonly");
       $("#modalNewClient").classList.add("show");
@@ -1703,7 +1719,9 @@
       $("#clientName").focus();
     }
 
-    function closeNewClientModal(){
+    function closeNewClientModal(clearDraft = false){
+      if(clearDraft) newClientDraft = null;
+      else if(clientModalMode === "new") saveNewClientDraft();
       $("#modalNewClient").classList.remove("show");
       $("#modalNewClient").setAttribute("aria-hidden", "true");
     }
@@ -1750,7 +1768,7 @@
           if(!r.ok){ showErrorPopup(data.error || "Client already exists"); return; }
           toast(`Client "${nickname}" added`);
         }
-        closeNewClientModal();
+        closeNewClientModal(clientModalMode === "new");
         await refreshData();
       }finally{
         btn.disabled = false;
