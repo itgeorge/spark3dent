@@ -38,13 +38,17 @@ app.MapGet("/", async () =>
 
 Web.Api.MapRoutes(app, setup);
 
+Console.WriteLine($"Running on {url}");
 await app.StartAsync();
 
 // Development/Mvp: open browser. Test: exit immediately. Production: run until Cloud Run scales down.
 var env = builder.Environment.EnvironmentName;
-var shouldOpenBrowser = string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(env, "Mvp", StringComparison.OrdinalIgnoreCase);
-var shouldWaitForShutdown = !string.Equals(env, "Test", StringComparison.OrdinalIgnoreCase);
+const string DevelopmentEnvName = "Development";
+const string MvpEnvName = "Mvp";
+const string TestEnvName = "Test";
+var shouldOpenBrowser = string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase);
+var shouldWaitForShutdown = !string.Equals(env, TestEnvName, StringComparison.OrdinalIgnoreCase);
 
 if (shouldOpenBrowser)
 {
@@ -52,6 +56,11 @@ if (shouldOpenBrowser)
     Console.WriteLine("Press Ctrl+C to stop.");
     Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
 }
+else
+{
+    Console.WriteLine($"NOT auto-starting browser. If you want the browser to automatically open, set `ASPNETCORE_ENVIRONMENT={MvpEnvName}` or `ASPNETCORE_ENVIRONMENT={DevelopmentEnvName}`");
+}
+
 if (shouldWaitForShutdown)
     await app.WaitForShutdownAsync();
 
