@@ -105,8 +105,8 @@ public class InvoicePdfExporterTest
 
         // Invoice number (padded to 10 digits)
         Assert.That(allText, Does.Contain("0000000001"));
-        // Date
-        Assert.That(allText, Does.Contain("2026-01-15"));
+        // Date (Bulgarian format dd.MM.yyyy г.)
+        Assert.That(allText, Does.Contain("15.01.2026 г."));
         // Seller
         Assert.That(allText, Does.Contain("Test Seller EOOD"));
         Assert.That(allText, Does.Contain("Иван Тестов"));

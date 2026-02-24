@@ -100,7 +100,7 @@ public class InvoiceHtmlTemplate
             ? invoice.Number
             : invoice.Number.PadLeft(_invoiceNumberPadding, '0');
         SetField(doc, "invNo", formattedNumber);
-        SetField(doc, "invDate", c.Date.ToString("yyyy-MM-dd"));
+        SetField(doc, "invDate", c.Date.ToString("dd.MM.yyyy 'г.'"));
         SetField(doc, "sellerNameTop", seller.Name);
         SetField(doc, "sellerCompanyName", seller.Name);
         SetField(doc, "sellerCity", seller.City);
@@ -115,7 +115,7 @@ public class InvoiceHtmlTemplate
         SetField(doc, "buyerVat", buyer.VatIdentifier ?? "—");
         SetField(doc, "totalWords", _amountTranscriber.Transcribe(invoice.TotalAmount));
         SetField(doc, "placeOfSupply", seller.City);
-        SetField(doc, "taxEventDate", c.Date.ToString("yyyy-MM-dd"));
+        SetField(doc, "taxEventDate", c.Date.ToString("dd.MM.yyyy 'г.'"));
         SetField(doc, "paymentMethod", "По сметка");
         SetField(doc, "iban", c.BankTransferInfo.Iban);
         SetField(doc, "bank", c.BankTransferInfo.BankName);

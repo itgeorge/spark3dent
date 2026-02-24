@@ -309,7 +309,7 @@ public class InvoiceHtmlTemplateTest
             ? invoice.Number
             : invoice.Number.PadLeft(invoiceNumberPadding, '0');
         Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo(expectedInvNo));
-        Assert.That(GetFieldValue(html, "invDate"), Is.EqualTo(c.Date.ToString("yyyy-MM-dd")));
+        Assert.That(GetFieldValue(html, "invDate"), Is.EqualTo(c.Date.ToString("dd.MM.yyyy 'г.'")));
         Assert.That(GetFieldValue(html, "sellerNameTop"), Is.EqualTo(c.SellerAddress.Name));
         Assert.That(GetFieldValue(html, "sellerCompanyName"), Is.EqualTo(c.SellerAddress.Name));
         Assert.That(GetFieldValue(html, "sellerCity"), Is.EqualTo(c.SellerAddress.City));

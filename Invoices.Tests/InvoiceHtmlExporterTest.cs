@@ -90,8 +90,8 @@ public class InvoiceHtmlExporterTest
 
         // Invoice number (padded to 10 digits)
         Assert.That(html, Does.Contain("0000000001"));
-        // Date
-        Assert.That(html, Does.Contain("2026-01-15"));
+        // Date (Bulgarian format dd.MM.yyyy г.)
+        Assert.That(html, Does.Contain("15.01.2026 г."));
         // Seller
         Assert.That(html, Does.Contain("Test Seller EOOD"));
         Assert.That(html, Does.Contain("Иван Тестов"));
