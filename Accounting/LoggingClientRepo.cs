@@ -42,6 +42,20 @@ public class LoggingClientRepo : IClientRepo
         }
     }
 
+    public async Task<QueryResult<Client>> LatestAsync(int limit, string? startAfterCursor = null)
+    {
+        _logger.LogInfo($"ClientRepo.LatestAsync limit={limit}, cursor={startAfterCursor ?? "(none)"}");
+        try
+        {
+            return await _inner.LatestAsync(limit, startAfterCursor);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("ClientRepo.LatestAsync failed", ex);
+            throw;
+        }
+    }
+
     public async Task AddAsync(Client client)
     {
         _logger.LogInfo($"ClientRepo.AddAsync nickname={client.Nickname}");

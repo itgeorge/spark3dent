@@ -1154,6 +1154,7 @@
   <script>
     // ---- State (loaded from API) ----
     let clients = [];
+    let latestClients = [];
     let invoices = [];
     let selectedInvoiceNumber = null;
     let editorMode = "issue";
@@ -1232,11 +1233,8 @@
     }
 
     // ---- API ----
-    async function loadClients(){
-      const r = await fetch("/api/clients?limit=100");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load clients"); return; }
-      const data = await r.json();
-      clients = (data.items || []).map(c => ({
+    function mapClient(c){
+      return {
         nickname: c.nickname,
         name: c.name,
         rep: c.representativeName,
@@ -1246,7 +1244,20 @@
         city: c.city,
         postal: c.postalCode,
         country: c.country
-      }));
+      };
+    }
+    async function loadClients(){
+      const r = await fetch("/api/clients?limit=100");
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load clients"); return; }
+      const data = await r.json();
+      clients = (data.items || []).map(mapClient);
+      refreshLists();
+    }
+    async function loadLatestClients(){
+      const r = await fetch("/api/clients/latest?limit=10");
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load clients"); return; }
+      const data = await r.json();
+      latestClients = (data.items || []).map(mapClient);
       refreshLists();
     }
 
@@ -1266,13 +1277,13 @@
     }
 
     async function refreshData(){
-      await Promise.all([loadClients(), loadInvoices()]);
+      await Promise.all([loadClients(), loadLatestClients(), loadInvoices()]);
     }
 
     function refreshLists(){
       renderInvoices(applySearch(invoices));
       renderInvoices(applySearch(invoices), $("#invoiceListAll"));
-      renderClients(applyClientSearch(clients));
+      renderClients(applyClientSearch(latestClients), $("#clientList"));
       renderClients(applyClientSearch(clients), $("#clientListAll"));
     }
 

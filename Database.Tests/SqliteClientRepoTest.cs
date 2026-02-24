@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Accounting;
+using Configuration;
+using Invoices;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 
@@ -28,9 +30,11 @@ public class SqliteClientRepoTest : Accounting.Tests.ClientRepoContractTest
         }
 
         var contextFactory = () => new Database.AppDbContext(options);
-        var repo = new SqliteClientRepo(contextFactory);
+        var clientRepo = new SqliteClientRepo(contextFactory);
+        var config = new Config { App = new AppConfig { StartInvoiceNumber = 1 } };
+        var invoiceRepo = new SqliteInvoiceRepo(contextFactory, config);
 
-        return new SqliteFixture(repo);
+        return new SqliteFixture(clientRepo, invoiceRepo);
     }
 
     [TearDown]
@@ -50,8 +54,13 @@ public class SqliteClientRepoTest : Accounting.Tests.ClientRepoContractTest
     private sealed class SqliteFixture : FixtureBase
     {
         private readonly SqliteClientRepo _repo;
+        private readonly SqliteInvoiceRepo _invoiceRepo;
 
-        public SqliteFixture(SqliteClientRepo repo) => _repo = repo;
+        public SqliteFixture(SqliteClientRepo repo, SqliteInvoiceRepo invoiceRepo)
+        {
+            _repo = repo;
+            _invoiceRepo = invoiceRepo;
+        }
 
         public override IClientRepo Repo => _repo;
 
@@ -60,5 +69,8 @@ public class SqliteClientRepoTest : Accounting.Tests.ClientRepoContractTest
 
         public override Task<Client> GetClientAsync(string nickname) =>
             _repo.GetAsync(nickname);
+
+        public override Task<Invoice> SetUpInvoiceAsync(Invoice.InvoiceContent content) =>
+            _invoiceRepo.CreateAsync(content);
     }
 }

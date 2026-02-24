@@ -20,6 +20,7 @@ public abstract class ClientRepoContractTest
         public abstract IClientRepo Repo { get; }
         public abstract Task SetUpClientAsync(Client client);
         public abstract Task<Client> GetClientAsync(string nickname);
+        public abstract Task<Invoice> SetUpInvoiceAsync(Invoice.InvoiceContent content);
     }
 
     private static BillingAddress ValidAddress(string name = "Test Client") =>
@@ -236,4 +237,85 @@ public abstract class ClientRepoContractTest
         Assert.That(result.Items, Is.Empty);
         Assert.That(result.NextStartAfter, Is.Null);
     }
+
+    [Test]
+    public async Task Latest_GivenClientsWithInvoices_WhenGettingLatest_ThenClientsRetrievedLatestFirst()
+    {
+        var fixture = await SetUpAsync();
+        var olderDate = new DateTime(2026, 2, 20, 0, 0, 0, DateTimeKind.Utc);
+        var newerDate = new DateTime(2026, 2, 23, 0, 0, 0, DateTimeKind.Utc);
+        var clientA = new Client("a", ValidAddress("a Corp"));
+        var clientTest = new Client("test", ValidAddress("Test Corp"));
+        await fixture.SetUpClientAsync(clientA);
+        await fixture.SetUpClientAsync(clientTest);
+        await fixture.SetUpInvoiceAsync(BuildInvoiceContent(olderDate, clientA.Address));
+        await fixture.SetUpInvoiceAsync(BuildInvoiceContent(newerDate, clientTest.Address));
+
+        var result = await fixture.Repo.LatestAsync(5);
+
+        Assert.That(result.Items, Has.Count.EqualTo(2));
+        Assert.That(result.Items[0].Nickname, Is.EqualTo("test"));
+        Assert.That(result.Items[1].Nickname, Is.EqualTo("a"));
+        Assert.That(result.NextStartAfter, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Latest_GivenClientsWithInvoices_WhenGettingLatestWithLimit_ThenLimited()
+    {
+        var fixture = await SetUpAsync();
+        var baseDate = new DateTime(2026, 2, 20, 0, 0, 0, DateTimeKind.Utc);
+        var clientA = new Client("a", ValidAddress("a Corp"));
+        var clientB = new Client("b", ValidAddress("b Corp"));
+        var clientC = new Client("c", ValidAddress("c Corp"));
+        await fixture.SetUpClientAsync(clientA);
+        await fixture.SetUpClientAsync(clientB);
+        await fixture.SetUpClientAsync(clientC);
+        // Create invoices in chronological order (repo requires date >= last invoice)
+        await fixture.SetUpInvoiceAsync(BuildInvoiceContent(baseDate, clientC.Address));
+        await fixture.SetUpInvoiceAsync(BuildInvoiceContent(baseDate.AddDays(1), clientB.Address));
+        await fixture.SetUpInvoiceAsync(BuildInvoiceContent(baseDate.AddDays(2), clientA.Address));
+
+        var result = await fixture.Repo.LatestAsync(2);
+
+        Assert.That(result.Items, Has.Count.EqualTo(2));
+        Assert.That(result.Items[0].Nickname, Is.EqualTo("a"));
+        Assert.That(result.Items[1].Nickname, Is.EqualTo("b"));
+    }
+
+    [Test]
+    public async Task Latest_GivenClientsWithNoInvoices_WhenGettingLatest_ThenClientsAppearLast()
+    {
+        var fixture = await SetUpAsync();
+        var clientWithInv = new Client("with", ValidAddress("With Corp"));
+        var clientNoInv = new Client("noinv", ValidAddress("NoInv Corp"));
+        await fixture.SetUpClientAsync(clientWithInv);
+        await fixture.SetUpClientAsync(clientNoInv);
+        await fixture.SetUpInvoiceAsync(BuildInvoiceContent(new DateTime(2026, 2, 23), clientWithInv.Address));
+
+        var result = await fixture.Repo.LatestAsync(5);
+
+        Assert.That(result.Items, Has.Count.EqualTo(2));
+        Assert.That(result.Items[0].Nickname, Is.EqualTo("with"));
+        Assert.That(result.Items[1].Nickname, Is.EqualTo("noinv"));
+    }
+
+    [Test]
+    public async Task Latest_GivenNoClients_WhenGettingLatest_ThenReturnsEmpty()
+    {
+        var fixture = await SetUpAsync();
+
+        var result = await fixture.Repo.LatestAsync(5);
+
+        Assert.That(result.Items, Is.Empty);
+        Assert.That(result.NextStartAfter, Is.Null);
+    }
+
+    private static readonly BankTransferInfo TestBankInfo = new("BG00TEST00000000000000", "Test Bank", "TESTBGSF");
+
+    private static Invoice.InvoiceContent BuildInvoiceContent(DateTime date, BillingAddress buyerAddress) =>
+        new(date,
+            new BillingAddress("Seller", "Rep", "123", null, "Addr", "City", "1000", "BG"),
+            buyerAddress,
+            [new Invoice.LineItem("Item", new Amount(100, Currency.Eur))],
+            TestBankInfo);
 }

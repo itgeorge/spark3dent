@@ -24,6 +24,53 @@ public class SqliteClientRepo : IClientRepo
         return ClientMapping.ToDomain(entity);
     }
 
+    public async Task<QueryResult<Client>> LatestAsync(int limit, string? startAfterCursor = null)
+    {
+        await using var ctx = _contextFactory();
+
+        var lastDateByBuyerName = await ctx.Invoices
+            .GroupBy(i => i.BuyerName)
+            .Select(g => new { BuyerName = g.Key, LastDate = g.Max(i => i.Date) })
+            .ToListAsync();
+
+        var lastDateMap = lastDateByBuyerName
+            .ToDictionary(x => x.BuyerName, x => x.LastDate, StringComparer.OrdinalIgnoreCase);
+
+        var allClients = await ctx.Clients.ToListAsync();
+        var clientsWithDate = allClients
+            .Select(c => new { Entity = c, LastDate = lastDateMap.TryGetValue(c.Name, out var ld) ? ld : (DateTime?)null })
+            .ToList();
+
+        var ordered = clientsWithDate
+            .OrderByDescending(x => x.LastDate ?? DateTime.MinValue)
+            .ThenBy(x => x.Entity.Nickname, StringComparer.Ordinal)
+            .AsEnumerable();
+
+        if (!string.IsNullOrEmpty(startAfterCursor))
+        {
+            var parts = startAfterCursor.Split('|', 2);
+            var cursorDate = parts.Length >= 1 && DateTime.TryParseExact(parts[0], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var d)
+                ? d
+                : DateTime.MinValue;
+            var cursorNick = parts.Length >= 2 ? parts[1] : "";
+            ordered = ordered.Where(x =>
+            {
+                var dt = x.LastDate ?? DateTime.MinValue;
+                return dt < cursorDate || (dt == cursorDate && string.Compare(x.Entity.Nickname, cursorNick, StringComparison.Ordinal) > 0);
+            });
+        }
+
+        var pageEntities = ordered.Select(x => x.Entity).Take(limit).ToList();
+        var items = pageEntities.Select(ClientMapping.ToDomain).ToList();
+        var last = items.Count > 0 ? items[^1] : null;
+        var lastEntity = last != null ? pageEntities[^1] : null;
+        var nextStartAfter = lastEntity != null
+            ? $"{(lastDateMap.TryGetValue(lastEntity.Name, out var ld) ? ld : DateTime.MinValue):yyyyMMdd}|{lastEntity.Nickname}"
+            : null;
+
+        return new QueryResult<Client>(items, nextStartAfter);
+    }
+
     public async Task<QueryResult<Client>> ListAsync(int limit, string? startAfterCursor = null)
     {
         await using var ctx = _contextFactory();

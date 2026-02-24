@@ -28,6 +28,14 @@ public static class Api
             return Results.Json(new { items }, JsonOptions);
         });
 
+        app.MapGet("/api/clients/latest", async (int? limit) =>
+        {
+            var l = limit ?? 10;
+            var result = await clientRepo.LatestAsync(l);
+            var items = result.Items.Select(ToClientDto).ToList();
+            return Results.Json(new { items }, JsonOptions);
+        });
+
         app.MapGet("/api/clients/{nickname}", async (string nickname) =>
         {
             try
