@@ -45,18 +45,20 @@
       flex-direction:column;
     }
 
-    .topbar{
-      position:sticky;
-      top:0;
-      z-index:10;
+    .app-header{
+      position: sticky;
+      top: 0;
+      z-index: 10;
       backdrop-filter: blur(10px);
-      background: rgba(248,250,252,.75);
+      background: rgba(248,250,252,.85);
+    }
+    .topbar{
       border-bottom: 1px solid rgba(226,232,240,.8);
     }
 
     .topbar-inner{
       max-width: 1280px;
-      margin:0 auto;
+      margin: 0 auto;
       padding: 14px 18px;
       display:flex;
       align-items:center;
@@ -821,7 +823,6 @@
 
     /* Nav tabs */
     .nav-tabs{
-      background: rgba(248,250,252,.9);
       border-bottom: 1px solid rgba(226,232,240,.8);
       padding: 0 18px;
     }
@@ -869,6 +870,7 @@
 </head>
 <body>
   <div class="app">
+    <header class="app-header">
     <div class="topbar">
       <div class="topbar-inner">
         <div class="brand" id="btnBrand" role="button" tabindex="0" title="Back to dashboard">
@@ -891,6 +893,7 @@
         <button class="nav-tab" data-nav="editor">Issue</button>
       </div>
     </div>
+    </header>
 
     <div class="container">
       <div id="viewDashboard">
@@ -1459,7 +1462,6 @@
       setDefaults(inv);
       setView("editor");
       rebuildPreview();
-      toast(`Correct invoice #${invoiceNumber}`);
     }
 
     function setDefaults(inv){
