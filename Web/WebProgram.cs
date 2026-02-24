@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Reflection;
 using AppSetup;
 using Configuration;
-using Microsoft.Extensions.Configuration;
 using Utilities;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,14 +40,20 @@ Web.Api.MapRoutes(app, setup);
 
 await app.StartAsync();
 
-var isInteractive = IsInteractiveMode(builder.Environment);
-if (isInteractive)
+// Development/Mvp: open browser. Test: exit immediately. Production: run until Cloud Run scales down.
+var env = builder.Environment.EnvironmentName;
+var shouldOpenBrowser = string.Equals(env, "Development", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(env, "Mvp", StringComparison.OrdinalIgnoreCase);
+var shouldWaitForShutdown = !string.Equals(env, "Test", StringComparison.OrdinalIgnoreCase);
+
+if (shouldOpenBrowser)
 {
     Console.WriteLine($"Spark3Dent Web running at {url}");
     Console.WriteLine("Press Ctrl+C to stop.");
     Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-    await app.WaitForShutdownAsync();
 }
+if (shouldWaitForShutdown)
+    await app.WaitForShutdownAsync();
 
 static int GetPort(IConfiguration configuration)
 {
@@ -59,14 +64,6 @@ static int GetPort(IConfiguration configuration)
     listener.Start();
     return ((IPEndPoint)listener.LocalEndpoint).Port;
 }
-
-/// <summary>
-/// Interactive mode = browser launch + WaitForShutdown.
-/// Use "Development" for local dev; "Mvp" for initial business deployment; "Test"/"Production" for headless.
-/// </summary>
-static bool IsInteractiveMode(IWebHostEnvironment env) =>
-    !string.Equals(env.EnvironmentName, "Test", StringComparison.OrdinalIgnoreCase) &&
-    !string.Equals(env.EnvironmentName, "Production", StringComparison.OrdinalIgnoreCase);
 
 static async Task<Config> LoadConfigAsync(IConfiguration configuration)
 {
