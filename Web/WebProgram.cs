@@ -69,8 +69,9 @@ var env = builder.Environment.EnvironmentName;
 const string DevelopmentEnvName = "Development";
 const string MvpEnvName = "Mvp";
 const string TestEnvName = "Test";
-var shouldOpenBrowser = string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase);
+var shouldOpenBrowser = config.App.ShouldOpenBrowserOnStart
+    ?? (string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase));
 var shouldWaitForShutdown = !string.Equals(env, TestEnvName, StringComparison.OrdinalIgnoreCase);
 
 if (shouldOpenBrowser)
@@ -81,7 +82,7 @@ if (shouldOpenBrowser)
 }
 else
 {
-    Console.WriteLine($"NOT auto-starting browser. If you want the browser to automatically open, set `ASPNETCORE_ENVIRONMENT={MvpEnvName}` or `ASPNETCORE_ENVIRONMENT={DevelopmentEnvName}`");
+    Console.WriteLine("NOT auto-starting browser. To open the browser automatically, set `App.ShouldOpenBrowserOnStart: true` in appsettings.json, or set `ASPNETCORE_ENVIRONMENT=Mvp` (or Development).");
 }
 
 if (shouldWaitForShutdown)
