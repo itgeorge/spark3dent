@@ -1164,6 +1164,15 @@
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+    function escapeHtmlAttr(s){
+      if(!s) return "";
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
     function centsToEur(cents){
       const sign = cents < 0 ? "-" : "";
       const abs = Math.abs(cents);
@@ -1310,9 +1319,10 @@
     function renderInvoices(list, rootEl){
       const root = rootEl || $("#invoiceList");
       root.innerHTML = "";
-      list.forEach(inv => {
+      list.forEach((inv, index) => {
+        const isLatest = index === 0;
         const row = document.createElement("div");
-        row.className = "row" + (inv.number === selectedInvoiceNumber ? " selected" : "");
+        row.className = "row" + (isLatest ? " selected" : "");
         row.tabIndex = 0;
         row.dataset.number = inv.number;
         const chipClass = (inv.status === "Corrected" || inv.status === "Edited") ? "chip fix" : "chip ok";
@@ -1320,10 +1330,14 @@
         const client = inv.client || inv.clientNickname || "";
         const buyer = inv.buyer || inv.buyerName || "";
         const cents = inv.cents ?? inv.totalCents ?? 0;
+        const clientFull = clients.find(c => (c.nickname || c.clientNickname) === client);
+        const tooltipText = clientFull
+          ? `${client} — ${clientFull.name || buyer}\n${[clientFull.address, clientFull.city, clientFull.postal, clientFull.country].filter(Boolean).join(", ")}`
+          : (client ? `${client} — ${buyer}` : buyer || "—");
         row.innerHTML = `
           <div class="row-status"><span class="${chipClass}">${chipText}</span></div>
           <div class="meta"><div class="invno">#${inv.number}</div><div class="date">${formatDateISO(inv.date)}</div></div>
-          <div class="main"><div class="primaryline">${client}</div><div class="secondaryline">${buyer}</div></div>
+          <div class="main" title="${escapeHtmlAttr(tooltipText)}"><div class="primaryline">${client}</div><div class="secondaryline">${buyer}</div></div>
           <div class="row-download"><button class="btn small" title="Download PDF" data-action="download" data-number="${inv.number}">&#8595; PDF</button></div>
           <div class="right"><span class="amount">&#8364; ${centsToEur(cents)}</span></div>
         `;
