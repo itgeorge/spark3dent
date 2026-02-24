@@ -124,25 +124,14 @@
             position: relative;
         }
 
-        .sheet:before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 0;
-            right: 0;
-            height: 2px;
-            background: var(--a1);
-            opacity: 0.9;
-        }
-
         .sheet:after {
             content: "";
             position: absolute;
             left: 16mm;
             right: 16mm;
             top: 34mm;
-            height: 1px;
-            background: var(--line);
+            height: 0;
+            border-top: 1px solid #3161b7;
         }
 
         .mono {
@@ -206,12 +195,6 @@
                     border-radius: 0 !important;
                     box-shadow: none !important;
                     overflow: hidden !important; /* prevents tiny overflow from spilling to page 2 */
-                }
-
-                /* 3) Kill any elements that might contribute unexpected height */
-                .sheet::before,
-                .sheet::after {
-                    display: none !important;
                 }
 
                 /* 4) Prevent accidental page breaks inside the sheet content */
@@ -432,12 +415,13 @@
             font-weight: 950;
             letter-spacing: 0.02em;
             font-family: var(--mono);
+            color: #3161b7;
         }
 
         .due-accent {
             height: 3px;
             border-radius: 999px;
-            background: var(--a2);
+            background: #3161b7;
             margin-top: 8px;
             width: 100%;
             opacity: 0.9;
@@ -531,12 +515,6 @@
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 overflow: hidden !important; /* prevents tiny overflow from spilling to page 2 */
-            }
-
-            /* 3) Kill any elements that might contribute unexpected height */
-            .sheet::before,
-            .sheet::after {
-                display: none !important;
             }
 
             /* 4) Prevent accidental page breaks inside the sheet content */
