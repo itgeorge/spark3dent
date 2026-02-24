@@ -33,9 +33,9 @@ public class ApiTestFixture : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Port"] = "0",
-                ["Test:DatabasePath"] = _dbPath,
-                ["Test:BlobStoragePath"] = _blobPath,
-                ["Test:LogDirectory"] = _tempDir
+                ["Desktop:DatabasePath"] = _dbPath,
+                ["Desktop:BlobStoragePath"] = _blobPath,
+                ["Desktop:LogDirectory"] = _tempDir
             });
         });
     }
@@ -48,9 +48,9 @@ public class ApiTestFixture : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Port"] = "0",
-                ["Test:DatabasePath"] = _dbPath,
-                ["Test:BlobStoragePath"] = _blobPath,
-                ["Test:LogDirectory"] = _tempDir
+                ["Desktop:DatabasePath"] = _dbPath,
+                ["Desktop:BlobStoragePath"] = _blobPath,
+                ["Desktop:LogDirectory"] = _tempDir
             });
         });
         return base.CreateHost(builder);

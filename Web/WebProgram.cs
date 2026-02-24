@@ -98,18 +98,12 @@ static int GetPort(IConfiguration configuration)
     return ((IPEndPoint)listener.LocalEndpoint).Port;
 }
 
-static async Task<Config> LoadConfigAsync(IConfiguration configuration)
+static Task<Config> LoadConfigAsync(IConfiguration configuration)
 {
-    var testDbPath = configuration["Test:DatabasePath"];
-    if (!string.IsNullOrEmpty(testDbPath))
-    {
-        var config = configuration.Get<Config>() ?? await AppBootstrap.LoadAndResolveConfigAsync();
-        config.Desktop.DatabasePath = testDbPath;
-        config.Desktop.BlobStoragePath = configuration["Test:BlobStoragePath"] ?? Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
-        config.Desktop.LogDirectory = configuration["Test:LogDirectory"] ?? Path.GetTempPath();
-        return config;
-    }
-    return await AppBootstrap.LoadAndResolveConfigAsync();
+    var config = configuration.Get<Config>() ?? new Config();
+    config.Desktop ??= new DesktopConfig();
+    AppBootstrap.ResolveDesktopDefaults(config);
+    return Task.FromResult(config);
 }
 
 public partial class Program { }

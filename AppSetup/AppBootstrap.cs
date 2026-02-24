@@ -15,14 +15,11 @@ public static class AppBootstrap
     private const string InvoicesBucket = "invoices";
     private const int InvoiceNumberPadding = 10;
 
-    /// <summary>Loads config via JsonAppSettingsLoader, resolves default Desktop paths, writes back defaults if needed. Returns Config.</summary>
-    public static async Task<Config> LoadAndResolveConfigAsync(string? basePath = null)
+    /// <summary>Fills empty Desktop paths with defaults. Returns true if any were applied.</summary>
+    public static bool ResolveDesktopDefaults(Config config)
     {
-        var loader = new JsonAppSettingsLoader(basePath);
-        var config = await loader.LoadAsync();
-
-        var defaultsUsed = false;
         var desktop = config.Desktop;
+        var defaultsUsed = false;
 
         if (string.IsNullOrEmpty(desktop.DatabasePath))
         {
@@ -48,10 +45,19 @@ public static class AppBootstrap
             defaultsUsed = true;
         }
 
-        if (defaultsUsed)
+        return defaultsUsed;
+    }
+
+    /// <summary>Loads config via JsonAppSettingsLoader, resolves default Desktop paths, writes back defaults if needed. Returns Config.</summary>
+    public static async Task<Config> LoadAndResolveConfigAsync(string? basePath = null)
+    {
+        var loader = new JsonAppSettingsLoader(basePath);
+        var config = await loader.LoadAsync();
+
+        if (ResolveDesktopDefaults(config))
         {
             var appSettingsPath = loader.GetAppSettingsPath();
-            var json = JsonSerializer.Serialize(new { App = config.App, Desktop = desktop },
+            var json = JsonSerializer.Serialize(new { App = config.App, Desktop = config.Desktop },
                 new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(appSettingsPath, json);
         }
