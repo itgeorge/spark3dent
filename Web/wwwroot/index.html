@@ -343,12 +343,18 @@
     .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
     .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
 
-    .btn:disabled, .btn.primary:disabled{
-      opacity: 0.6;
+    .btn:disabled, .btn.primary:disabled,
+    .btn.btn-loading{
+      opacity: 0.5;
       cursor: not-allowed;
       transform: none;
+      filter: grayscale(0.4);
+    }
+    .btn.primary:disabled, .btn.primary.btn-loading{
+      background: linear-gradient(180deg, rgba(124,58,237,.6), rgba(108,43,230,.6)) !important;
     }
     .spinner{ display:inline-block; width:18px; height:18px; border:2px solid rgba(255,255,255,.4); border-top-color:white; border-radius:50%; animation: spin .7s linear infinite; }
+    .spinner-dark{ border-color: rgba(15,23,42,.2); border-top-color: var(--a2); }
     @keyframes spin{ to{ transform: rotate(360deg); } }
     .loading-skeleton{ min-height: 80px; background: linear-gradient(90deg, rgba(226,232,240,.5) 25%, rgba(248,250,252,.8) 50%, rgba(226,232,240,.5) 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; border-radius: 12px; }
     @keyframes shimmer{ 0%{ background-position: 200% 0; } 100%{ background-position: -200% 0; } }
@@ -746,6 +752,43 @@
       background: rgba(248,250,252,.5);
     }
 
+    .modal-error .modal-head{ border-bottom-color: rgba(239,68,68,.3); background: rgba(239,68,68,.06); }
+    .modal-error .modal-head h3{ color: #dc2626; }
+
+    .loading-overlay{
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(15,23,42,.4);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+    .loading-overlay.show{
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .loading-overlay .spinner-large{
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(255,255,255,.25);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .loading-overlay .loading-text{
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      text-shadow: 0 1px 2px rgba(0,0,0,.3);
+    }
+
     .picker-item{
       display: flex;
       flex-direction: column;
@@ -1086,6 +1129,26 @@
         </div>
       </div>
     </div>
+
+    <div class="modal-overlay" id="modalError" aria-hidden="true">
+      <div class="modal modal-error" role="dialog" aria-labelledby="modalErrorTitle" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="modalErrorTitle">Error</h3>
+          <button class="btn small" type="button" id="modalErrorClose" aria-label="Close">&#215;</button>
+        </div>
+        <div class="modal-body">
+          <p id="modalErrorText" style="margin:0; font-size:14px; line-height:1.5;"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn primary" id="modalErrorOk">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
+      <div class="spinner-large"></div>
+      <span class="loading-text" id="loadingOverlayText">Saving...</span>
+    </div>
   </div>
 
   <script>
@@ -1140,6 +1203,26 @@
       setTimeout(()=> t.classList.remove("show"), 2500);
     }
 
+    function showErrorPopup(msg){
+      $("#modalErrorText").textContent = msg || "An error occurred.";
+      $("#modalError").classList.add("show");
+      $("#modalError").setAttribute("aria-hidden", "false");
+    }
+    function closeErrorPopup(){
+      $("#modalError").classList.remove("show");
+      $("#modalError").setAttribute("aria-hidden", "true");
+    }
+
+    function showLoadingOverlay(text){
+      $("#loadingOverlayText").textContent = text || "Saving...";
+      $("#loadingOverlay").classList.add("show");
+      $("#loadingOverlay").setAttribute("aria-hidden", "false");
+    }
+    function hideLoadingOverlay(){
+      $("#loadingOverlay").classList.remove("show");
+      $("#loadingOverlay").setAttribute("aria-hidden", "true");
+    }
+
     function debounce(fn, ms){
       let h = null;
       return (...args) => {
@@ -1151,7 +1234,7 @@
     // ---- API ----
     async function loadClients(){
       const r = await fetch("/api/clients?limit=100");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); toast(data.error || "Failed to load clients"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load clients"); return; }
       const data = await r.json();
       clients = (data.items || []).map(c => ({
         nickname: c.nickname,
@@ -1169,7 +1252,7 @@
 
     async function loadInvoices(){
       const r = await fetch("/api/invoices?limit=100");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); toast(data.error || "Failed to load invoices"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load invoices"); return; }
       const data = await r.json();
       invoices = (data.items || []).map(inv => ({
         number: inv.number,
@@ -1391,18 +1474,20 @@
       const date = ($("#inputDate").value || "").trim();
       const amtCents = parseAmountToCents(amountStr);
 
-      if(editorMode === "correct" && !number){ toast("Enter invoice number"); return; }
+      if(editorMode === "correct" && !number){ showErrorPopup("Enter invoice number"); return; }
       if(editorMode === "correct" && correctingInvoiceNumber && number !== correctingInvoiceNumber){
-        toast("Invoice number cannot be changed when correcting. You are correcting invoice #" + correctingInvoiceNumber);
+        showErrorPopup("Invoice number cannot be changed when correcting. You are correcting invoice #" + correctingInvoiceNumber);
         return;
       }
-      if(amtCents == null){ toast("Enter valid amount"); return; }
-      if(!date){ toast("Select date"); return; }
-      if(!selectedClientNickname){ toast("Select a client"); return; }
+      if(amtCents == null){ showErrorPopup("Enter valid amount"); return; }
+      if(!date){ showErrorPopup("Select date"); return; }
+      if(!selectedClientNickname){ showErrorPopup("Select a client"); return; }
 
       closeConfirmSaveModal();
       const btnIssue = $("#btnIssue");
       btnIssue.disabled = true;
+      btnIssue.classList.add("btn-loading");
+      showLoadingOverlay(editorMode === "issue" ? "Issuing invoice..." : "Saving correction...");
       try {
         if(editorMode === "issue"){
           const r = await fetch("/api/invoices/issue", {
@@ -1411,7 +1496,7 @@
             body: JSON.stringify({ clientNickname: selectedClientNickname, amountCents: amtCents, date })
           });
           const data = await r.json();
-          if(!r.ok){ toast(data.error || "Failed to issue invoice"); return; }
+          if(!r.ok){ showErrorPopup(data.error || "Failed to issue invoice"); return; }
           toast(`Issued invoice #${data.invoice?.number || "?"}`);
         }else{
           const r = await fetch("/api/invoices/correct", {
@@ -1420,13 +1505,15 @@
             body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date, correctInvoiceNumber: correctingInvoiceNumber })
           });
           const data = await r.json();
-          if(!r.ok){ toast(data.error || "Failed to correct invoice"); return; }
+          if(!r.ok){ showErrorPopup(data.error || "Failed to correct invoice"); return; }
           toast(`Corrected invoice #${data.invoice?.number || number}`);
         }
         await refreshData();
         setView("dashboard");
       }finally{
         btnIssue.disabled = false;
+        btnIssue.classList.remove("btn-loading");
+        hideLoadingOverlay();
       }
     }
 
@@ -1434,9 +1521,9 @@
       const number = ($("#inputNumber").value || "").trim();
       const amount = ($("#inputAmount").value || "").trim();
       const date = ($("#inputDate").value || "").trim();
-      if(editorMode === "correct" && !number){ toast("Enter invoice number"); $("#inputNumber").focus(); return; }
-      if(!amount){ toast("Enter amount"); $("#inputAmount").focus(); return; }
-      if(!date){ toast("Select date"); $("#inputDate").focus(); return; }
+      if(editorMode === "correct" && !number){ showErrorPopup("Enter invoice number"); $("#inputNumber").focus(); return; }
+      if(!amount){ showErrorPopup("Enter amount"); $("#inputAmount").focus(); return; }
+      if(!date){ showErrorPopup("Select date"); $("#inputDate").focus(); return; }
       const c = clients.find(x=>x.nickname === selectedClientNickname) || clients[0];
       const summary = editorMode === "issue"
         ? `Issue invoice for ${c?.nickname || "?"} (${c?.name || "?"}) for € ${amount}.`
@@ -1462,6 +1549,15 @@
       if(e.key === "Escape" && $("#modalConfirmSave").classList.contains("show")){ e.stopPropagation(); closeConfirmSaveModal(); }
     });
 
+    $("#modalErrorOk").addEventListener("click", closeErrorPopup);
+    $("#modalErrorClose").addEventListener("click", closeErrorPopup);
+    $("#modalError").addEventListener("click", (e)=>{
+      if(e.target === $("#modalError")) closeErrorPopup();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && $("#modalError").classList.contains("show")){ e.stopPropagation(); closeErrorPopup(); }
+    });
+
     $("#btnNewFromInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
 
     $$(".nav-tab").forEach(tab => {
@@ -1484,7 +1580,7 @@
     $("#btnDownloadPdf").addEventListener("click", ()=>{
       const num = ($("#inputNumber").value || "").trim();
       if(num) downloadPdf(num);
-      else toast("Enter invoice number");
+      else showErrorPopup("Enter invoice number");
     });
 
     function openClientPickerModal(){
@@ -1555,7 +1651,7 @@
 
     function openEditClientModal(nickname){
       const c = clients.find(x => x.nickname === nickname);
-      if(!c){ toast("Client not found"); return; }
+      if(!c){ showErrorPopup("Client not found"); return; }
       clientModalMode = "edit";
       clientModalEditNickname = nickname;
       $("#modalNewClientTitle").textContent = "Edit client";
@@ -1585,8 +1681,8 @@
     $("#modalNewClientSave").addEventListener("click", async ()=>{
       const nickname = $("#clientNickname").value.trim();
       const name = $("#clientName").value.trim();
-      if(!nickname){ toast("Enter nickname"); $("#clientNickname").focus(); return; }
-      if(!name){ toast("Enter company name"); $("#clientName").focus(); return; }
+      if(!nickname){ showErrorPopup("Enter nickname"); $("#clientNickname").focus(); return; }
+      if(!name){ showErrorPopup("Enter company name"); $("#clientName").focus(); return; }
       const body = {
         nickname,
         name,
@@ -1600,6 +1696,8 @@
       };
       const btn = $("#modalNewClientSave");
       btn.disabled = true;
+      btn.classList.add("btn-loading");
+      showLoadingOverlay("Saving client...");
       try {
         if(clientModalMode === "edit"){
           const r = await fetch(`/api/clients/${encodeURIComponent(clientModalEditNickname)}`, {
@@ -1608,7 +1706,7 @@
             body: JSON.stringify(body)
           });
           const data = await r.json();
-          if(!r.ok){ toast(data.error || "Failed to update client"); return; }
+          if(!r.ok){ showErrorPopup(data.error || "Failed to update client"); return; }
           toast(`Client "${nickname}" updated`);
         }else{
           const r = await fetch("/api/clients", {
@@ -1617,13 +1715,15 @@
             body: JSON.stringify(body)
           });
           const data = await r.json();
-          if(!r.ok){ toast(data.error || "Client already exists"); return; }
+          if(!r.ok){ showErrorPopup(data.error || "Client already exists"); return; }
           toast(`Client "${nickname}" added`);
         }
         closeNewClientModal();
         await refreshData();
       }finally{
         btn.disabled = false;
+        btn.classList.remove("btn-loading");
+        hideLoadingOverlay();
       }
     });
     $("#modalNewClient").addEventListener("click", (e)=>{

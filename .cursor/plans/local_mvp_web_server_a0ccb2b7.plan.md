@@ -25,7 +25,7 @@ todos:
     status: completed
   - id: phase-5
     content: "Phase 5: Error handling, request validation, loading states, Chromium-unavailable graceful fallback"
-    status: pending
+    status: completed
   - id: phase-6
     content: "Phase 6: Build verification, run all tests, manual end-to-end testing, single-file publish test"
     status: pending
@@ -136,14 +136,14 @@ Add an `IsCorrected` flag to the domain model so the API can report whether an i
 
 ### Domain Model
 
-- [x] **1B.1** Add `IsCorrected` property to `Invoice` in [Invoices/Invoice.cs](Invoices/Invoice.cs):
+- **1B.1** Add `IsCorrected` property to `Invoice` in [Invoices/Invoice.cs](Invoices/Invoice.cs):
   - Add a `bool IsCorrected` property (default `false`)
   - The `Invoice` constructor currently takes `(string number, InvoiceContent content)`. Extend it to accept an optional `bool isCorrected = false` parameter, keeping backward compatibility with all existing call sites
   - `IsCorrected` is set to `true` when an invoice is updated via `IInvoiceRepo.UpdateAsync` -- the repos are responsible for this, not the caller
 
 ### Contract Tests
 
-- [x] **1B.2** Update [Invoices.Tests/InvoiceRepoContractTest.cs](Invoices.Tests/InvoiceRepoContractTest.cs):
+- **1B.2** Update [Invoices.Tests/InvoiceRepoContractTest.cs](Invoices.Tests/InvoiceRepoContractTest.cs):
   - Update `AssertInvoicesEqual` to also compare `IsCorrected`
   - Add test: `Create_GivenValidContent_WhenCreatingInvoice_ThenIsCorrectedIsFalse` -- verify a newly created invoice has `IsCorrected == false`
   - Add test: `Update_GivenExistingInvoice_WhenUpdatingInvoice_ThenIsCorrectedIsTrue` -- create an invoice, call `UpdateAsync`, retrieve it, verify `IsCorrected == true`
@@ -152,55 +152,55 @@ Add an `IsCorrected` flag to the domain model so the API can report whether an i
 
 ### Fake Repo
 
-- [x] **1B.3** Update [Invoices.Tests/Fakes/FakeInvoiceRepo.cs](Invoices.Tests/Fakes/FakeInvoiceRepo.cs):
+- **1B.3** Update [Invoices.Tests/Fakes/FakeInvoiceRepo.cs](Invoices.Tests/Fakes/FakeInvoiceRepo.cs):
   - `CreateAsync`: store invoices with `IsCorrected = false` (already the default)
   - `UpdateAsync`: set `IsCorrected = true` when replacing the stored invoice: `_storage[number] = new Invoice(number, content, isCorrected: true);`
-- [x] **1B.4** Run fake repo contract tests to verify the new tests pass: `dotnet test Invoices.Tests --filter FakeInvoiceRepoTest`
+- **1B.4** Run fake repo contract tests to verify the new tests pass: `dotnet test Invoices.Tests --filter FakeInvoiceRepoTest`
 
 ### DB Entity & Mapping
 
-- [x] **1B.5** Add `IsCorrected` column to [Database/Entities/InvoiceEntity.cs](Database/Entities/InvoiceEntity.cs):
+- **1B.5** Add `IsCorrected` column to [Database/Entities/InvoiceEntity.cs](Database/Entities/InvoiceEntity.cs):
   - `public bool IsCorrected { get; set; }` (defaults to `false`)
-- [ ] **1B.6** Update [Database/InvoiceMapping.cs](Database/InvoiceMapping.cs):
+- **1B.6** Update [Database/InvoiceMapping.cs](Database/InvoiceMapping.cs):
   - `ToDomain`: pass `entity.IsCorrected` to the `Invoice` constructor
   - `ApplyContent`: do **not** set `IsCorrected` here (controlled by the repo's `UpdateAsync`, not by content mapping)
   - `ToEntity`: leave `IsCorrected = false` for new entities (the default)
 
 ### Migration
 
-- [x] **1B.7** Confirm [Database.Tests/PendingModelChangesTest.cs](Database.Tests/PendingModelChangesTest.cs) fails (model has a new column with no migration): `dotnet test Database.Tests --filter PendingModelChangesTest` -- expect failure
-- [x] **1B.8** Add the migration: `dotnet ef migrations add AddInvoiceIsCorrected --project Database --startup-project Cli`
-- [x] **1B.9** Confirm `PendingModelChangesTest` now passes: `dotnet test Database.Tests --filter PendingModelChangesTest`
+- **1B.7** Confirm [Database.Tests/PendingModelChangesTest.cs](Database.Tests/PendingModelChangesTest.cs) fails (model has a new column with no migration): `dotnet test Database.Tests --filter PendingModelChangesTest` -- expect failure
+- **1B.8** Add the migration: `dotnet ef migrations add AddInvoiceIsCorrected --project Database --startup-project Cli`
+- **1B.9** Confirm `PendingModelChangesTest` now passes: `dotnet test Database.Tests --filter PendingModelChangesTest`
 
 ### SQLite Repo
 
-- [x] **1B.10** Update `UpdateAsync` in [Database/SqliteInvoiceRepo.cs](Database/SqliteInvoiceRepo.cs):
+- **1B.10** Update `UpdateAsync` in [Database/SqliteInvoiceRepo.cs](Database/SqliteInvoiceRepo.cs):
   - After `InvoiceMapping.ApplyContent(entity, content)` (line 102), add `entity.IsCorrected = true;`
   - This ensures any call to `UpdateAsync` marks the invoice as corrected
 
 ### SQLite-Specific Tests
 
-- [x] **1B.11** Add tests in [Database.Tests/SqliteInvoiceRepoTest.cs](Database.Tests/SqliteInvoiceRepoTest.cs):
+- **1B.11** Add tests in [Database.Tests/SqliteInvoiceRepoTest.cs](Database.Tests/SqliteInvoiceRepoTest.cs):
   - `IsCorrected_GivenFreshDb_WhenCreatingInvoice_ThenIsCorrectedIsFalseInDb` -- create an invoice, query the raw `InvoiceEntity`, verify `IsCorrected == false`
   - `IsCorrected_GivenExistingInvoice_WhenUpdating_ThenIsCorrectedIsTrueInDb` -- create, update, query raw entity, verify `IsCorrected == true`
   - `IsCorrected_GivenMigratedDbWithExistingInvoices_ThenDefaultsToFalse` -- verify the migration defaults existing rows to `false` (important for production data predating this migration)
 
 ### Verify
 
-- [x] **1B.12** Run all tests: `dotnet test Spark3Dent.sln` -- all contract tests (fake + SQLite), migration tests, and all existing tests should pass
+- **1B.12** Run all tests: `dotnet test Spark3Dent.sln` -- all contract tests (fake + SQLite), migration tests, and all existing tests should pass
 
 ---
 
 ## [x] Phase 2: Server Startup & Browser Launch
 
-- [x] **2.1** Implement the server startup in `Web/Program.cs`:
+- **2.1** Implement the server startup in `Web/Program.cs`:
   - Use `WebApplication.CreateBuilder()` with ASP.NET Core minimal API
   - **Bind to localhost only**: use `builder.WebHost.UseUrls($"http://127.0.0.1:{port}")` where `port` is dynamically found
   - Find a free port: bind a `TcpListener` to port 0, read the assigned port, then close the listener before starting Kestrel on that port
   - After `app.Start()` (non-blocking), open the default browser: `Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true })`
   - Then `await app.WaitForShutdownAsync()` to keep running until Ctrl+C
   - Console output: print the URL and "Press Ctrl+C to stop"
-- [x] **2.2** Serve the UI HTML:
+- **2.2** Serve the UI HTML:
   - The UI file will be embedded as a resource in `Web/wwwroot/index.html`
   - Map `GET /` to return the embedded HTML with `Content-Type: text/html; charset=utf-8`
   - Use `EmbeddedResourceLoader` (from Utilities) or `Assembly.GetManifestResourceStream`
@@ -213,50 +213,50 @@ All endpoints return JSON. Error responses use a consistent format: `{ "error": 
 
 ### [x] Clients API
 
-- [x] **3.1** `GET /api/clients?limit={limit}` -- List clients
+- **3.1** `GET /api/clients?limit={limit}` -- List clients
   - Calls `IClientRepo.ListAsync(limit)`
   - Returns: `{ "items": [{ "nickname", "name", "representativeName", "companyIdentifier", "vatIdentifier", "address", "city", "postalCode", "country" }] }`
   - Maps from `Client` domain record to JSON DTO
-- [x] **3.2** `GET /api/clients/{nickname}` -- Get a single client
+- **3.2** `GET /api/clients/{nickname}` -- Get a single client
   - Calls `IClientRepo.GetAsync(nickname)`
   - Returns the client DTO or 404
-- [x] **3.3** `POST /api/clients` -- Add a new client
+- **3.3** `POST /api/clients` -- Add a new client
   - Request body: `{ "nickname", "name", "representativeName", "companyIdentifier", "vatIdentifier", "address", "city", "postalCode", "country" }`
   - Validate required fields: nickname, name, representativeName, companyIdentifier, address, city, postalCode
   - Calls `IClientRepo.AddAsync(client)`
   - Returns 201 with the created client DTO, or 409 if duplicate nickname
-- [x] **3.4** `PUT /api/clients/{nickname}` -- Update an existing client
+- **3.4** `PUT /api/clients/{nickname}` -- Update an existing client
   - Request body: same fields as POST (all optional except what's being changed)
   - Calls `IClientRepo.UpdateAsync(nickname, update)`
   - Returns 200 with updated client DTO, or 404
 
 ### [x] Invoices API
 
-- [x] **3.5** `GET /api/invoices?limit={limit}` -- List invoices
+- **3.5** `GET /api/invoices?limit={limit}` -- List invoices
   - Calls `InvoiceManagement.ListInvoicesAsync(limit)`
   - Returns: `{ "items": [{ "number", "date", "clientNickname", "buyerName", "totalCents", "status" }] }`
   - The `clientNickname` is derived from `BuyerAddress.Name` matching against the client list (or stored as a field if we add it)
   - The `status` field: "Issued" for all (correction tracking can be added later; for now the UI shows "EDITED" for corrected invoices based on presence of `_corrected` in the filename or a separate flag)
-- [x] **3.6** `GET /api/invoices/{number}` -- Get a single invoice
+- **3.6** `GET /api/invoices/{number}` -- Get a single invoice
   - Calls `IInvoiceRepo.GetAsync(number)` (through InvoiceManagement or directly)
   - Returns full invoice details or 404
-- [x] **3.7** `POST /api/invoices/issue` -- Issue a new invoice
+- **3.7** `POST /api/invoices/issue` -- Issue a new invoice
   - Request body: `{ "clientNickname": "acme", "amountCents": 12345, "date": "2026-02-20" }`
   - `date` is optional (defaults to today)
   - Calls `InvoiceManagement.IssueInvoiceAsync(nickname, amountCents, date, pdfExporter)`
   - Also exports PNG via `ReExportInvoiceAsync` if image exporter is available
   - Returns: `{ "invoice": { "number", "date", "totalCents" }, "pdfUri": "...", "pngUri": "..." }`
-- [x] **3.8** `POST /api/invoices/correct` -- Correct an existing invoice
+- **3.8** `POST /api/invoices/correct` -- Correct an existing invoice
   - Request body: `{ "invoiceNumber": "000123", "amountCents": 12345, "date": "2026-02-20" }`
   - Calls `InvoiceManagement.CorrectInvoiceAsync(number, amountCents, date, pdfExporter)`
   - Returns same shape as issue
-- [x] **3.9** `POST /api/invoices/preview` -- Preview an invoice (no persistence)
+- **3.9** `POST /api/invoices/preview` -- Preview an invoice (no persistence)
   - Request body: `{ "clientNickname": "acme", "amountCents": 12345, "date": "2026-02-20", "format": "html" }`
   - `format` is optional, defaults to `"html"`. Allowed values: `"html"`, `"png"`
   - `**format=html`** (default): Calls a new `InvoiceManagement.PreviewInvoiceHtmlAsync(nickname, amountCents, date)` method that builds the invoice and calls `InvoiceHtmlTemplate.Render(invoice)`. Returns the rendered HTML directly with `Content-Type: text/html; charset=utf-8`. This does **not** require Chromium.
   - `**format=png`**: Calls `InvoiceManagement.PreviewInvoiceAsync(nickname, amountCents, date, imageExporter)` as before. Returns `Content-Type: image/png` with the image bytes (or JSON `{ "imageDataUri": "data:image/png;base64,..." }` if preferred). Requires Chromium; returns 503 if unavailable.
   - Add `PreviewInvoiceHtmlAsync` to [Accounting/InvoiceManagement.cs](Accounting/InvoiceManagement.cs): reuses the same logic as `PreviewInvoiceAsync` (get client, determine next number, build content, create Invoice) but calls `_template.Render(invoice)` instead of going through the image exporter. Returns the HTML string.
-- [x] **3.10** `GET /api/invoices/{number}/pdf` -- Download the PDF for an invoice
+- **3.10** `GET /api/invoices/{number}/pdf` -- Download the PDF for an invoice
   - Reads the PDF from blob storage via `IBlobStorage.OpenReadAsync("invoices", objectKey)`
   - Returns the PDF stream with `Content-Type: application/pdf` and `Content-Disposition: attachment; filename="Invoice_{number}.pdf"`
 
@@ -268,13 +268,13 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ### [x] Project Setup
 
-- [x] **3B.1** Create `Web.Tests/Web.Tests.csproj`:
+- **3B.1** Create `Web.Tests/Web.Tests.csproj`:
   - Target: `net9.0`, `IsPackable: false`
   - NuGet: `Microsoft.AspNetCore.Mvc.Testing` (latest 9.x), `Microsoft.NET.Test.Sdk` (18.0.1), `NUnit` (4.4.0), `NUnit3TestAdapter` (6.1.0)
   - Project references: `Web`, `Utilities.Tests` (for test helpers like `CapturingLogger`)
   - Add to [Spark3Dent.sln](Spark3Dent.sln)
-- [x] **3B.2** Add `public partial class Program { }` at the bottom of `Web/Program.cs` so `WebApplicationFactory<Program>` can discover the entry point
-- [x] **3B.3** Create a `Web.Tests/ApiTestFixture.cs` base class:
+- **3B.2** Add `public partial class Program { }` at the bottom of `Web/Program.cs` so `WebApplicationFactory<Program>` can discover the entry point
+- **3B.3** Create a `Web.Tests/ApiTestFixture.cs` base class:
   - Inherits `WebApplicationFactory<Program>`
   - Overrides `ConfigureWebHost` to:
     - Use a per-test temporary SQLite database file (unique path per test run, cleaned up on dispose)
@@ -284,7 +284,7 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ### [x] Client API Tests
 
-- [x] **3B.4** `ClientApiTests.cs` -- test the full client lifecycle:
+- **3B.4** `ClientApiTests.cs` -- test the full client lifecycle:
   - `GET /api/clients` on empty DB returns 200 with `{ "items": [] }`
   - `POST /api/clients` with valid body returns 201 and the created client DTO
   - `POST /api/clients` with duplicate nickname returns 409 with `{ "error": "..." }`
@@ -298,7 +298,7 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ### [x] Invoice API Tests
 
-- [x] **3B.5** `InvoiceApiTests.cs` -- test invoice operations (seed a client first in each test):
+- **3B.5** `InvoiceApiTests.cs` -- test invoice operations (seed a client first in each test):
   - `GET /api/invoices` on empty DB returns 200 with `{ "items": [] }`
   - `POST /api/invoices/issue` with valid body returns 200/201 with invoice number, date, totalCents
   - `POST /api/invoices/issue` with non-existing clientNickname returns 400 or 404 with error message
@@ -315,7 +315,7 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ### [x] Preview & PDF Download Tests
 
-- [x] **3B.6** `InvoiceExportApiTests.cs` -- test export-related endpoints:
+- **3B.6** `InvoiceExportApiTests.cs` -- test export-related endpoints:
   - **HTML preview (no Chromium needed -- these always run):**
     - `POST /api/invoices/preview` with `format=html` (or omitted, since html is default) returns 200 with `Content-Type: text/html` and a non-empty HTML body
     - The returned HTML contains expected invoice data (invoice number, buyer name, amount) -- verify with string matching or HTML parsing
@@ -332,7 +332,7 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ### [x] Error Format Consistency
 
-- [x] **3B.7** `ErrorFormatTests.cs` -- verify all error responses follow the same shape:
+- **3B.7** `ErrorFormatTests.cs` -- verify all error responses follow the same shape:
   - All 400 responses contain `{ "error": "..." }` with a non-empty message
   - All 404 responses contain `{ "error": "..." }`
   - Verify the `Content-Type` is `application/json` for all error responses
@@ -340,7 +340,7 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ### [x] Run
 
-- [x] **3B.8** Run all API tests: `dotnet test Web.Tests`
+- **3B.8** Run all API tests: `dotnet test Web.Tests`
 
 ---
 
@@ -348,8 +348,8 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 Transform the prototype HTML to replace mock data with real API calls. The UI will be placed in `Web/wwwroot/index.html`.
 
-- [x] **4.1** Copy [design/invoicer.uiprototype.v1.html](design/invoicer.uiprototype.v1.html) to `Web/wwwroot/index.html`
-- [x] **4.2** Replace mock data with API calls -- **Data loading**:
+- **4.1** Copy [design/invoicer.uiprototype.v1.html](design/invoicer.uiprototype.v1.html) to `Web/wwwroot/index.html`
+- **4.2** Replace mock data with API calls -- **Data loading**:
   - Remove the hardcoded `clients` and `invoices` arrays
   - Add an `async function loadClients()` that calls `GET /api/clients?limit=100` and stores the result
   - Add an `async function loadInvoices()` that calls `GET /api/invoices?limit=100` and stores the result
@@ -357,15 +357,15 @@ Transform the prototype HTML to replace mock data with real API calls. The UI wi
   - Adapt the rendering functions (`renderInvoices`, `renderClients`) to work with the API response shape:
     - Client DTO fields: `nickname`, `name`, `representativeName`, `companyIdentifier`, `vatIdentifier`, `address`, `city`, `postalCode`, `country`
     - Invoice DTO fields: `number`, `date`, `buyerName`, `totalCents`, `status`, `clientNickname`
-- [x] **4.3** Replace mock operations -- **Client add/edit**:
+- **4.3** Replace mock operations -- **Client add/edit**:
   - `modalNewClientSave` click handler: call `POST /api/clients` or `PUT /api/clients/{nickname}` instead of pushing to local array
   - Show success/error toast based on response
   - Reload clients list after successful save
-- [x] **4.4** Replace mock operations -- **Invoice issue/correct**:
+- **4.4** Replace mock operations -- **Invoice issue/correct**:
   - `performSave()`: call `POST /api/invoices/issue` or `POST /api/invoices/correct` depending on `editorMode`
   - Show the created invoice number in the toast
   - Reload invoices list after success
-- [x] **4.5** Replace mock operations -- **Invoice preview**:
+- **4.5** Replace mock operations -- **Invoice preview**:
   - Replace the mock `renderPreview()` that builds a local HTML invoice with a real API call to `POST /api/invoices/preview` with `format=html`
   - Use debouncing (already in place at 120ms) to avoid flooding the API. The HTML preview is lightweight (no Chromium, just template rendering), so 120ms is fine; adjust only if needed based on observed latency
   - Display the returned HTML inside an `<iframe>` in `#tab_preview`:
@@ -376,16 +376,16 @@ Transform the prototype HTML to replace mock data with real API calls. The UI wi
   - Fall back to a placeholder message ("Enter client and amount to see preview") if required fields are incomplete (skip the API call entirely)
   - On API error, show the error message in `#tab_preview` instead of a broken state
   - The Details tab can remain as-is (structured JSON data built client-side from the current form values)
-- [x] **4.6** Replace mock operations -- **PDF download**:
+- **4.6** Replace mock operations -- **PDF download**:
   - The "Download PDF" button on invoice rows and in the editor should trigger a download from `GET /api/invoices/{number}/pdf`
   - Use `window.open()` or create a temporary `<a>` element with `download` attribute
-- [x] **4.7** Wire the seller address into the preview details tab:
+- **4.7** Wire the seller address into the preview details tab:
   - Add a `GET /api/config/seller` endpoint (or include seller info in the initial page load) so the preview "SELLER" section shows real seller data instead of placeholder "Your Company Ltd"
   - Alternatively, the preview endpoint already returns a rendered image -- the details tab can show the structured data from the invoice response
 
 ---
 
-## [ ] Phase 5: Error Handling & Polish
+## [x] Phase 5: Error Handling & Polish
 
 The API tests from Phase 3B define the expected validation and error behavior. Implement validation to make those tests pass, and re-run `dotnet test Web.Tests` after each change to confirm.
 
@@ -400,12 +400,7 @@ The API tests from Phase 3B define the expected validation and error behavior. I
   - Show a spinner or skeleton while initial data loads
   - Show error messages if API calls fail (toast with error text)
   - Disable the "Issue" / "Save correction" button while a request is in flight
-- **5.4** Handle the case where Chromium is not available:
-  - If PDF/image export is unavailable, the issue/correct endpoints should still succeed but return `pdfUri: null`
-  - `POST /api/invoices/preview` with `format=html` works without Chromium (it only uses `InvoiceHtmlTemplate.Render`), so the primary preview path is always available
-  - `POST /api/invoices/preview` with `format=png` returns 503 with `{ "error": "Image export unavailable: Chromium not found" }`
-  - The UI uses HTML preview by default, so Chromium being unavailable only affects PDF/PNG export -- the invoice preview itself always works
-  - The "Download PDF" button should be hidden or show "PDF unavailable" if the invoice has no exported PDF
+  - Close the confirmation popup immediately after submitting a "Issue" / "Save correction" request (same event loop, i.e. while request in flight)
 
 ---
 
