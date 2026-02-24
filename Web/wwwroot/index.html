@@ -1,12 +1,1795 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="bg">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spark3Dent Invoicer</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spark3Dent Invoicer</title>
+  <style>
+    :root{
+      --a1:#22c1c3; /* teal */
+      --a2:#7c3aed; /* violet */
+      --a3:#f97316; /* orange */
+      --a4:#10b981; /* green */
+
+      --bg:#f8fafc;
+      --panel:#ffffff;
+      --text:#0f172a;
+      --muted:#475569;
+      --muted2:#64748b;
+      --border:#e2e8f0;
+      --shadow: 0 8px 30px rgba(15,23,42,.08);
+      --shadow2: 0 2px 12px rgba(15,23,42,.06);
+      --radius: 14px;
+      --radius2: 12px;
+
+      --focus: 0 0 0 4px rgba(124,58,237,.18);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color:var(--text);
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(34,193,195,.10), transparent 50%),
+                  radial-gradient(900px 600px at 90% -10%, rgba(124,58,237,.10), transparent 45%),
+                  var(--bg);
+    }
+
+    /* Layout */
+    .app{
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:10;
+      backdrop-filter: blur(10px);
+      background: rgba(248,250,252,.75);
+      border-bottom: 1px solid rgba(226,232,240,.8);
+    }
+
+    .topbar-inner{
+      max-width: 1280px;
+      margin:0 auto;
+      padding: 14px 18px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+
+    .brand{
+      display:flex;
+	  flex:auto;
+      align-items:center;
+      gap:10px;
+      min-width: 220px;
+      cursor: pointer;
+    }
+    .logo{
+      width:34px;height:34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(124,58,237,1), rgba(34,193,195,1));
+      box-shadow: var(--shadow2);
+    }
+    .brand h1{
+      margin:0;
+      font-size: 14px;
+      line-height: 1.2;
+      letter-spacing: .2px;
+    }
+    .sub{
+      display:block;
+      font-size:12px;
+      color: var(--muted2);
+      font-weight: 500;
+    }
+
+    .search{
+      flex:2;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border:1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,.75);
+      box-shadow: 0 1px 0 rgba(15,23,42,.02);
+    }
+    .search input{
+      border:none;
+      outline:none;
+      flex:1;
+      font-size:14px;
+      background: transparent;
+      color: var(--text);
+    }
+    .kbd{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      padding: 3px 6px;
+      border:1px solid var(--border);
+      border-bottom-color: rgba(226,232,240,.7);
+      border-radius: 8px;
+      background: white;
+    }
+
+    .actions{
+      display:flex;
+      gap:10px;
+    }
+
+    .container{
+      max-width: 1280px;
+      margin:0 auto;
+      padding: 18px;
+      width:100%;
+    }
+
+    /* Cards & sections */
+    .grid-2{
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 16px;
+      align-items:start;
+    }
+
+    .card{
+      background: var(--panel);
+      border: 1px solid rgba(226,232,240,.85);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+    }
+
+    .card-head{
+      padding: 14px 14px 12px 14px;
+      border-bottom: 1px solid rgba(226,232,240,.8);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .card-head .title{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .card-head h2{
+      margin:0;
+      font-size: 14px;
+      letter-spacing:.2px;
+    }
+    .card-head .hint{
+      font-size: 12px;
+      color: var(--muted2);
+    }
+
+    .card-body{ padding: 0; }
+
+    /* Buttons */
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      border:1px solid var(--border);
+      background:white;
+      color:var(--text);
+      padding: 10px 12px;
+      font-size: 13px;
+      border-radius: 12px;
+      cursor:pointer;
+      user-select:none;
+      transition: transform .06s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .btn:hover{ background: rgba(248,250,252,.9); }
+    .btn:active{ transform: translateY(1px); }
+    .btn:focus{ outline:none; box-shadow: var(--focus); border-color: rgba(124,58,237,.35); }
+
+    .btn.primary{
+      border-color: rgba(124,58,237,.35);
+      background: linear-gradient(180deg, rgba(124,58,237,1), rgba(108,43,230,1));
+      color:white;
+      box-shadow: 0 10px 22px rgba(124,58,237,.18);
+    }
+    .btn.primary:hover{
+      background: linear-gradient(180deg, rgba(124,58,237,.95), rgba(108,43,230,.95));
+    }
+    .btn.primary-teal{
+      border-color: rgba(34,193,195,.35);
+      background: linear-gradient(180deg, #22c1c3, #1aacae);
+      color:white;
+      box-shadow: 0 10px 22px rgba(34,193,195,.25);
+    }
+    .btn.primary-teal:hover{
+      background: linear-gradient(180deg, rgba(34,193,195,.95), rgba(26,172,174,.95));
+    }
+    .btn.small{
+      padding: 8px 10px;
+      font-size: 12px;
+      border-radius: 10px;
+    }
+    .btn.icon{
+      width: 34px; height: 34px; padding:0;
+      border-radius: 12px;
+    }
+    .btn.small.icon{
+      width: 28px; height: 28px;
+      border-radius: 10px;
+    }
+
+    .view-all-link{
+      display:block;
+      width:100%;
+      padding:10px 14px;
+      border:none;
+      background:transparent;
+      color:var(--muted2);
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+      text-align:center;
+      transition:color .15s ease;
+    }
+    .view-all-link:hover{
+      color:var(--text);
+    }
+
+    /* Lists */
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap: 0;
+    }
+
+    .row{
+      position:relative;
+      display:grid;
+      grid-template-columns: 70px 140px 1fr 72px minmax(90px, auto);
+      gap: 12px;
+      padding: 12px 14px;
+      border:none;
+      border-bottom: 1px solid rgba(226,232,240,.7);
+      border-radius: 0;
+      background: transparent;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .row:last-child{
+      border-bottom: none;
+    }
+    .row:hover{
+      background: rgba(248,250,252,.6);
+    }
+    .row.selected{
+      background: rgba(124,58,237,.06);
+    }
+
+    .row-status{
+      display:flex;
+      align-items:center;
+    }
+    .meta{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .meta .invno{
+      font-family: var(--mono);
+      font-weight:700;
+      font-size: 12px;
+      letter-spacing: .3px;
+    }
+    .meta .date{
+      font-size: 12px;
+      color: var(--muted2);
+    }
+
+    .main{
+      min-width:0;
+    }
+    .row-download{
+      display:flex;
+      align-items:center;
+    }
+    .main .primaryline{
+      font-weight: 700;
+      font-size: 13px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .main .secondaryline{
+      font-size: 12px;
+      color: var(--muted2);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      margin-top:3px;
+    }
+
+    .right{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap: 10px;
+      white-space:nowrap;
+    }
+    .amount{
+      font-weight: 800;
+      letter-spacing:.2px;
+      flex-shrink:0;
+    }
+
+    .chip{
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 8px;
+      border-radius: 999px;
+      border:1px solid rgba(226,232,240,.95);
+      color: var(--muted);
+      background: rgba(248,250,252,.8);
+      white-space: nowrap;
+    }
+    .chip.ok{ border-color: rgba(16,185,129,.30); background: rgba(16,185,129,.10); color: rgba(6,95,70,1); }
+    .chip.fix{ border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.12); color: rgba(124,45,18,1); }
+
+    .date-field-wrap{
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .date-display-cell{
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
+    .date-display{
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.95);
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    .date-display-placeholder{
+      color: var(--muted2);
+    }
+    .date-input-overlay{
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      font-size: 16px;
+    }
+    .date-edit-btn{
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.95);
+      font-size: 15px;
+      cursor: pointer;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .date-edit-btn:hover{
+      border-color: rgba(124,58,237,.25);
+    }
+    .date-field-wrap.date-picker-disabled .date-display,
+    .date-field-wrap.date-picker-disabled .date-edit-btn{
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    /* Clients list */
+    .client-item{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border:none;
+      border-bottom: 1px solid rgba(226,232,240,.7);
+      border-radius: 0;
+      background: transparent;
+      transition: background .15s ease;
+    }
+    .client-item:last-child{
+      border-bottom: none;
+    }
+    .client-item:hover{
+      background: rgba(248,250,252,.6);
+    }
+    .client-left{
+      min-width:0;
+    }
+    .client-left .nick{
+      font-weight: 800;
+      font-size: 13px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .client-left .detail{
+      font-size:12px;
+      color: var(--muted2);
+      margin-top:3px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .client-right{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:8px;
+      white-space:nowrap;
+    }
+    .client-right .last{
+      font-size:12px;
+      color: var(--muted2);
+    }
+    .client-actions{
+      display:flex;
+      align-items:stretch;
+      gap:8px;
+    }
+    .client-actions .btn.small.icon{
+      width:32px;
+      height:32px;
+      padding:0;
+      flex-shrink:0;
+    }
+
+    /* Editor */
+    .hidden{ display:none !important; }
+
+    .editor{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap: 16px;
+      align-items:start;
+    }
+
+    .panel{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .panel-head{
+      padding: 14px;
+      border-bottom: 1px solid rgba(226,232,240,.8);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+    }
+    .panel-head .mode{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .panel-head .mode .big{
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: .2px;
+    }
+    .panel-head .mode .small{
+      font-size: 12px;
+      color: var(--muted2);
+    }
+
+    .form{
+      padding: 14px;
+      display:flex;
+      flex-direction:column;
+      gap: 12px;
+    }
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    label{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    .input{
+      width:100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.95);
+      font-size: 14px;
+      outline:none;
+      transition: box-shadow .15s ease, border-color .15s ease;
+    }
+    .input:focus{
+      box-shadow: var(--focus);
+      border-color: rgba(124,58,237,.35);
+    }
+    .input.input-readonly{
+      background: rgba(248,250,252,.9);
+      color: var(--muted2);
+      cursor: not-allowed;
+    }
+    .readonly{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .readonly .pill{
+      flex:1;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border:1px dashed rgba(226,232,240,1);
+      background: rgba(248,250,252,.8);
+      color: var(--text);
+      font-size: 13px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .readonly .pill:hover{
+      border-color: rgba(124,58,237,.3);
+      background: rgba(124,58,237,.06);
+    }
+
+    .sticky-footer{
+      position: sticky;
+      bottom: 0;
+      padding: 12px 14px;
+      border-top: 1px solid rgba(226,232,240,.8);
+      background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,1));
+      display:flex;
+      gap: 10px;
+      justify-content:space-between;
+    }
+
+    /* Preview */
+    .preview-wrap{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      min-width:0;
+    }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+    }
+    .tab{
+      border:none;
+      background: transparent;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 12px;
+      color: var(--muted);
+      cursor:pointer;
+    }
+    .tab.active{
+      background: white;
+      color: var(--text);
+      box-shadow: 0 6px 16px rgba(15,23,42,.08);
+      border: 1px solid rgba(226,232,240,.9);
+    }
+
+    .preview-panel{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height: 1123px; /* A4 height at 96dpi (297mm) */
+      display:flex;
+      flex-direction:column;
+      min-width:0;
+    }
+    .preview-head{
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(226,232,240,.8);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: 10px;
+    }
+    .preview-head .left{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .preview-head .left .t{
+      font-weight: 900;
+      font-size: 13px;
+    }
+    .preview-head .left .s{
+      font-size: 12px;
+      color: var(--muted2);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .preview-body{
+      padding: 14px;
+      overflow: auto;
+      flex: 1;
+      background: linear-gradient(180deg, rgba(248,250,252,.4), rgba(248,250,252,0));
+    }
+    .preview-panel.preview-scaled .preview-body{
+      overflow: hidden;
+    }
+
+    #previewFrameWrapper{
+      overflow: hidden;
+      margin: 0 auto;
+      position: relative;
+    }
+    #previewFrame{
+      border: none;
+      transform-origin: top left;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .muted{ color: var(--muted2); }
+
+    .toast{
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: rgba(15,23,42,.92);
+      color:white;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: 13px;
+      box-shadow: 0 18px 40px rgba(15,23,42,.25);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .toast.show{
+      opacity:1;
+      transform: translateX(-50%) translateY(-4px);
+    }
+
+    /* Modal overlay */
+    .modal-overlay{
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(15,23,42,.35);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+    .modal-overlay.show{
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 24px 60px rgba(15,23,42,.2);
+      max-width: 480px;
+      width: 100%;
+      max-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: scale(.96);
+      transition: transform .2s ease;
+    }
+    .modal-overlay.show .modal{
+      transform: scale(1);
+    }
+    .modal-head{
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(226,232,240,.8);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .modal-head h3{
+      margin: 0;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: .2px;
+    }
+    .modal-body{
+      padding: 18px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-footer{
+      padding: 12px 18px;
+      border-top: 1px solid rgba(226,232,240,.8);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      background: rgba(248,250,252,.5);
+    }
+
+    .picker-item{
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px 14px;
+      border: 1px solid rgba(226,232,240,.9);
+      border-radius: 12px;
+      background: rgba(255,255,255,.9);
+      cursor: pointer;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .picker-item:hover{
+      border-color: rgba(124,58,237,.25);
+      box-shadow: 0 6px 16px rgba(15,23,42,.06);
+      background: white;
+    }
+    .picker-item.selected{
+      border-color: rgba(124,58,237,.4);
+      background: rgba(124,58,237,.06);
+      box-shadow: 0 6px 16px rgba(124,58,237,.1);
+    }
+    .picker-item .nick{
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .picker-item .detail{
+      font-size: 12px;
+      color: var(--muted2);
+    }
+
+    /* Nav tabs */
+    .nav-tabs{
+      background: rgba(248,250,252,.9);
+      border-bottom: 1px solid rgba(226,232,240,.8);
+      padding: 0 18px;
+    }
+    .nav-tabs-inner{
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0;
+    }
+    .nav-tab{
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted2);
+      cursor: pointer;
+      position: relative;
+      transition: color .15s ease;
+    }
+    .nav-tab:hover{
+      color: var(--text);
+    }
+    .nav-tab.active{
+      color: var(--text);
+    }
+    .nav-tab.active::after{
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background: var(--a2);
+    }
+
+    /* Responsive */
+    @media (max-width: 1100px){
+      .grid-2{ grid-template-columns: 1fr; }
+      .editor{ grid-template-columns: 1fr; }
+      .brand{ min-width: 160px; }
+      .row{ grid-template-columns: 70px 120px 1fr 64px minmax(90px, auto); }
+    }
+  </style>
 </head>
 <body>
-    <h1>Spark3Dent Invoicer</h1>
-    <p>UI will be wired in Phase 4.</p>
+  <div class="app">
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div class="brand" id="btnBrand" role="button" tabindex="0" title="Back to dashboard">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>Spark3Dent Invoicer <span class="sub">Issue & review invoices, add/edit clients</span></h1>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="btnTopSettings" title="Placeholder">&#9881;</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-tabs">
+      <div class="nav-tabs-inner">
+        <button class="nav-tab active" data-nav="dashboard">Home</button>
+        <button class="nav-tab" data-nav="allClients">Clients</button>
+        <button class="nav-tab" data-nav="allInvoices">Invoices</button>
+        <button class="nav-tab" data-nav="editor">Issue</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <div id="viewDashboard">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <div class="title">
+                <h2>Latest invoices</h2>
+                <div class="hint">Your latest issued invoices. Click a row to review</div>
+              </div>
+              <button class="btn small primary" id="btnNewFromInvoices">&#65291; New invoice</button>
+            </div>
+            <div class="card-body">
+              <div id="invoiceList" class="list"></div>
+              <div style="border-top:1px solid rgba(226,232,240,.7);">
+                <button class="view-all-link" type="button" id="btnViewAllInvoices">view all</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="title">
+                <h2>Clients with recent invoices</h2>
+                <div class="hint">Your clients, latest first</div>
+              </div>
+              <button class="btn small primary-teal" id="btnNewClient">&#65291; New client</button>
+            </div>
+            <div class="card-body">
+              <div id="clientList" class="list"></div>
+              <div style="border-top:1px solid rgba(226,232,240,.7);">
+                <button class="view-all-link" type="button" id="btnViewAllClients">view all</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewAllInvoices" class="hidden">
+        <div class="card" style="max-width:100%;">
+          <div class="card-head">
+            <div class="title">
+              <h2>All invoices</h2>
+              <div class="hint">Your latest issued invoices. Click a row to review</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn" id="btnBackFromAllInvoices">Back</button>
+              <button class="btn small primary" id="btnNewFromAllInvoices">&#65291; New invoice</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="invoiceListAll" class="list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewAllClients" class="hidden">
+        <div class="card" style="max-width:100%;">
+          <div class="card-head">
+            <div class="title">
+              <h2>All clients</h2>
+              <div class="hint">Your clients, latest first</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn" id="btnBackFromAllClients">Back</button>
+              <button class="btn small primary-teal" id="btnNewClientFromAll">&#65291; New client</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="clientListAll" class="list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewEditor" class="hidden">
+        <div class="editor">
+          <div class="panel">
+            <div class="panel-head">
+              <div class="mode">
+                <div class="big" id="editorTitle">Issue invoice</div>
+                <div class="small" id="editorSubtitle">Live preview updates as you type</div>
+              </div>
+              <span class="chip" id="modeChip">ISSUE</span>
+            </div>
+
+            <div class="form">
+              <div class="field">
+                <label>Client</label>
+                <div class="readonly">
+                  <div class="pill" id="clientPill">&#8212;</div>
+                  <button class="btn small" id="btnChangeClient" title="Select client">Change</button>
+                </div>
+              </div>
+
+              <div class="field" id="fieldInvoiceNumber">
+                <label>Invoice number (review/correct mode)</label>
+                <input class="input" id="inputNumber" placeholder="e.g. 000123" />
+              </div>
+
+              <div class="field">
+                <label>Amount (&#8364;)</label>
+                <input class="input" id="inputAmount" placeholder="123.45" inputmode="decimal" />
+              </div>
+
+              <div class="field">
+                <label for="inputDate">Date</label>
+                <div class="date-field-wrap" id="dateFieldWrap">
+                  <div class="date-display-cell">
+                    <div id="dateDisplay" class="date-display" aria-live="polite"></div>
+                    <input class="date-input-overlay" id="inputDate" type="date" title="Click to open date picker" />
+                  </div>
+                  <button class="date-edit-btn" id="btnEditDate" type="button" title="Change date">&#9998;</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <span class="chip ok" id="previewStatus">Preview: ready</span>
+              </div>
+            </div>
+
+            <div class="sticky-footer">
+              <button class="btn" id="btnCancel">Back</button>
+              <button class="btn primary" id="btnIssue">Issue</button>
+            </div>
+          </div>
+
+          <div class="preview-wrap">
+            <div class="preview-panel">
+              <div class="preview-head">
+                <div class="left">
+                  <div class="t">Invoice preview</div>
+                  <div class="s" id="previewCaption">&#8212;</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <button class="btn small" id="btnDownloadPdf" style="display:none;" title="Download PDF">Download PDF</button>
+                  <div class="tabs" role="tablist" aria-label="Preview tabs">
+                    <button class="tab active" data-tab="preview" id="tabPreviewBtn">Preview</button>
+                    <button class="tab" data-tab="details">Details</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="preview-body">
+                <div id="tab_preview"></div>
+                <div id="tab_details" class="hidden"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="modal-overlay" id="modalNewClient" aria-hidden="true">
+      <div class="modal" role="dialog" aria-labelledby="modalNewClientTitle" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="modalNewClientTitle">New client</h3>
+          <button class="btn small" type="button" id="modalNewClientClose" aria-label="Close">&#215;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form">
+            <div class="field">
+              <label>Nickname</label>
+              <input class="input" id="clientNickname" placeholder="e.g. acme" />
+            </div>
+            <div class="field">
+              <label>Company name</label>
+              <input class="input" id="clientName" placeholder="e.g. ACME Consulting OOD" />
+            </div>
+            <div class="field">
+              <label>Representative</label>
+              <input class="input" id="clientRep" placeholder="e.g. John Doe" />
+            </div>
+            <div class="field">
+              <label>Company ID</label>
+              <input class="input" id="clientCompanyId" placeholder="e.g. BG123456789" />
+            </div>
+            <div class="field">
+              <label>VAT ID (optional)</label>
+              <input class="input" id="clientVatId" placeholder="e.g. BG123456789" />
+            </div>
+            <div class="field">
+              <label>Address</label>
+              <input class="input" id="clientAddress" placeholder="e.g. 1 Example St" />
+            </div>
+            <div class="field" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+              <div>
+                <label>City</label>
+                <input class="input" id="clientCity" placeholder="e.g. Sofia" />
+              </div>
+              <div>
+                <label>Postal code</label>
+                <input class="input" id="clientPostal" placeholder="e.g. 1000" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Country</label>
+              <input class="input" id="clientCountry" placeholder="e.g. Bulgaria" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="modalNewClientCancel">Cancel</button>
+          <button class="btn primary" id="modalNewClientSave">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modalClientPicker" aria-hidden="true">
+      <div class="modal" role="dialog" aria-labelledby="modalClientPickerTitle" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="modalClientPickerTitle">Select client</h3>
+          <button class="btn small" type="button" id="modalClientPickerClose" aria-label="Close">&#215;</button>
+        </div>
+        <div class="modal-body">
+          <div class="list" id="clientPickerList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modalConfirmSave" aria-hidden="true">
+      <div class="modal" role="dialog" aria-labelledby="modalConfirmSaveTitle" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="modalConfirmSaveTitle">Confirm</h3>
+          <button class="btn small" type="button" id="modalConfirmSaveClose" aria-label="Close">&#215;</button>
+        </div>
+        <div class="modal-body">
+          <p id="modalConfirmSaveText" style="margin:0; font-size:14px; line-height:1.5;"></p>
+          <p style="margin:12px 0 0 0; font-weight:700;">Are you sure?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="modalConfirmSaveNo">No</button>
+          <button class="btn primary" id="modalConfirmSaveYes">Yes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---- State (loaded from API) ----
+    let clients = [];
+    let invoices = [];
+    let selectedInvoiceNumber = null;
+    let editorMode = "issue";
+    let selectedClientNickname = null;
+
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    function centsToEur(cents){
+      const sign = cents < 0 ? "-" : "";
+      const abs = Math.abs(cents);
+      const euros = Math.floor(abs / 100);
+      const rem = abs % 100;
+      return `${sign}${euros}.${String(rem).padStart(2,'0')}`;
+    }
+
+    function formatDateISO(iso){
+      if(!iso) return "";
+      const [y,m,d] = iso.split("-");
+      return `${d}.${m}.${y}`;
+    }
+    function formatDateBulgarianWithWeekday(iso){
+      if(!iso) return "";
+      const [y,m,d] = iso.split("-");
+      const date = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+      const weekday = new Intl.DateTimeFormat("bg-BG", { weekday: "long" }).format(date);
+      const dateStr = new Intl.DateTimeFormat("bg-BG", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+      const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+      return `${cap(weekday)}, ${dateStr}`;
+    }
+    function updateDateDisplay(){
+      const iso = $("#inputDate").value;
+      const el = $("#dateDisplay");
+      if(iso){
+        el.textContent = formatDateBulgarianWithWeekday(iso);
+        el.classList.remove("date-display-placeholder");
+      } else {
+        el.textContent = "Select date";
+        el.classList.add("date-display-placeholder");
+      }
+    }
+    function toast(msg){
+      const t = $("#toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(()=> t.classList.remove("show"), 2500);
+    }
+
+    function debounce(fn, ms){
+      let h = null;
+      return (...args) => {
+        clearTimeout(h);
+        h = setTimeout(()=> fn(...args), ms);
+      };
+    }
+
+    // ---- API ----
+    async function loadClients(){
+      const r = await fetch("/api/clients?limit=100");
+      if(!r.ok){ toast("Failed to load clients"); return; }
+      const data = await r.json();
+      clients = (data.items || []).map(c => ({
+        nickname: c.nickname,
+        name: c.name,
+        rep: c.representativeName,
+        companyId: c.companyIdentifier,
+        vatId: c.vatIdentifier || null,
+        address: c.address,
+        city: c.city,
+        postal: c.postalCode,
+        country: c.country
+      }));
+      refreshLists();
+    }
+
+    async function loadInvoices(){
+      const r = await fetch("/api/invoices?limit=100");
+      if(!r.ok){ toast("Failed to load invoices"); return; }
+      const data = await r.json();
+      invoices = (data.items || []).map(inv => ({
+        number: inv.number,
+        date: inv.date,
+        client: inv.clientNickname || "",
+        buyer: inv.buyerName || "",
+        cents: inv.totalCents,
+        status: inv.status
+      }));
+      refreshLists();
+    }
+
+    async function refreshData(){
+      await Promise.all([loadClients(), loadInvoices()]);
+    }
+
+    function refreshLists(){
+      renderInvoices(applySearch(invoices));
+      renderInvoices(applySearch(invoices), $("#invoiceListAll"));
+      renderClients(applyClientSearch(clients));
+      renderClients(applyClientSearch(clients), $("#clientListAll"));
+    }
+
+    function setView(view){
+      const dash = $("#viewDashboard");
+      const allInv = $("#viewAllInvoices");
+      const allCli = $("#viewAllClients");
+      const ed = $("#viewEditor");
+      dash.classList.toggle("hidden", view !== "dashboard");
+      allInv.classList.toggle("hidden", view !== "allInvoices");
+      allCli.classList.toggle("hidden", view !== "allClients");
+      ed.classList.toggle("hidden", view !== "editor");
+      if(view === "allInvoices") renderInvoices(applySearch(invoices), $("#invoiceListAll"));
+      if(view === "allClients") renderClients(applyClientSearch(clients), $("#clientListAll"));
+      updateNavTabs(view);
+    }
+
+    function updateNavTabs(activeView){
+      $$(".nav-tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.nav === activeView);
+      });
+    }
+
+    function renderInvoices(list, rootEl){
+      const root = rootEl || $("#invoiceList");
+      root.innerHTML = "";
+      list.forEach(inv => {
+        const row = document.createElement("div");
+        row.className = "row" + (inv.number === selectedInvoiceNumber ? " selected" : "");
+        row.tabIndex = 0;
+        row.dataset.number = inv.number;
+        const chipClass = (inv.status === "Corrected" || inv.status === "Edited") ? "chip fix" : "chip ok";
+        const chipText = (inv.status === "Corrected" || inv.status === "Edited") ? "EDITED" : "ISSUED";
+        const client = inv.client || inv.clientNickname || "";
+        const buyer = inv.buyer || inv.buyerName || "";
+        const cents = inv.cents ?? inv.totalCents ?? 0;
+        row.innerHTML = `
+          <div class="row-status"><span class="${chipClass}">${chipText}</span></div>
+          <div class="meta"><div class="invno">#${inv.number}</div><div class="date">${formatDateISO(inv.date)}</div></div>
+          <div class="main"><div class="primaryline">${client}</div><div class="secondaryline">${buyer}</div></div>
+          <div class="row-download"><button class="btn small" title="Download PDF" data-action="download" data-number="${inv.number}">&#8595; PDF</button></div>
+          <div class="right"><span class="amount">&#8364; ${centsToEur(cents)}</span></div>
+        `;
+        row.querySelector('button[data-action="download"]').addEventListener("click", (e)=>{
+          e.stopPropagation();
+          downloadPdf(inv.number);
+        });
+        row.addEventListener("click", ()=> openEditorCorrect(inv.number));
+        row.addEventListener("keydown", (e)=>{
+          if(e.key === "Enter" && !e.target.closest("button")){ e.preventDefault(); openEditorCorrect(inv.number); }
+        });
+        root.appendChild(row);
+      });
+      if(list.length === 0) root.innerHTML = `<div class="muted" style="padding:14px;">No invoices yet.</div>`;
+    }
+
+    function downloadPdf(number){
+      window.open(`/api/invoices/${encodeURIComponent(number)}/pdf`, "_blank", "noopener");
+    }
+
+    function renderClients(list, rootEl){
+      const root = rootEl || $("#clientList");
+      root.innerHTML = "";
+      list.forEach(c => {
+        const el = document.createElement("div");
+        el.className = "client-item";
+        const companyId = c.companyId ?? c.companyIdentifier ?? "";
+        el.innerHTML = `
+          <div class="client-left">
+            <div class="nick">${c.nickname}</div>
+            <div class="detail">${c.name} &#8226; <span class="muted">${companyId}</span></div>
+            <div class="detail muted">${c.city || ""}, ${c.country || ""}</div>
+          </div>
+          <div class="client-right">
+            <div class="last">Last invoice: <b>${lastInvoiceDateFor(c.nickname) ?? "&#8212;"}</b></div>
+            <div class="client-actions">
+              <button class="btn small" title="Edit client" data-action="edit" data-client="${c.nickname}">&#9998; Edit Client</button>
+              <button class="btn small primary" data-action="new" data-client="${c.nickname}">&#65291; New invoice</button>
+            </div>
+          </div>
+        `;
+        el.querySelector('button[data-action="edit"]').addEventListener("click", ()=> openEditClientModal(c.nickname));
+        el.querySelector('button[data-action="new"]').addEventListener("click", ()=> openEditorIssue(c.nickname));
+        root.appendChild(el);
+      });
+      if(list.length === 0) root.innerHTML = `<div class="muted" style="padding:14px;">No clients yet. Add one to get started.</div>`;
+    }
+
+    function lastInvoiceDateFor(nickname){
+      const inv = invoices.filter(x=>(x.client||x.clientNickname)===nickname).sort((a,b)=> (b.date||"").localeCompare(a.date||""))[0];
+      return inv ? formatDateISO(inv.date) : null;
+    }
+
+    function applySearch(items){
+      const q = (($("#searchBox") && $("#searchBox").value) || "").trim().toLowerCase();
+      if(!q) return items;
+      return items.filter(inv =>
+        (inv.number||"").toLowerCase().includes(q) ||
+        (inv.client||inv.clientNickname||"").toLowerCase().includes(q) ||
+        (inv.buyer||inv.buyerName||"").toLowerCase().includes(q)
+      );
+    }
+
+    function applyClientSearch(items){
+      const q = (($("#searchBox") && $("#searchBox").value) || "").trim().toLowerCase();
+      if(!q) return items;
+      return items.filter(c =>
+        (c.nickname||"").toLowerCase().includes(q) ||
+        (c.name||"").toLowerCase().includes(q) ||
+        (c.companyId||c.companyIdentifier||"").toLowerCase().includes(q) ||
+        (c.vatId||"").toLowerCase().includes(q)
+      );
+    }
+
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape"){
+        if(!$("#viewEditor").classList.contains("hidden")) goToDashboard();
+        else if(!$("#viewAllInvoices").classList.contains("hidden")) goToDashboard();
+        else if(!$("#viewAllClients").classList.contains("hidden")) goToDashboard();
+      }
+    });
+
+    function openEditorIssue(clientNickname){
+      editorMode = "issue";
+      selectedClientNickname = clientNickname ?? selectedClientNickname;
+      $("#editorTitle").textContent = "Issue invoice";
+      $("#editorSubtitle").textContent = "Live preview updates as you type";
+      $("#modeChip").textContent = "ISSUE";
+      $("#modeChip").className = "chip ok";
+      $("#btnIssue").textContent = "Issue";
+      $("#fieldInvoiceNumber").classList.add("hidden");
+      $("#inputNumber").value = "";
+      $("#tabPreviewBtn").textContent = "Preview";
+      $("#btnDownloadPdf").style.display = "none";
+      setDefaults();
+      setView("editor");
+      rebuildPreview();
+      if(selectedClientNickname) toast(`Issue for client: ${selectedClientNickname}`);
+    }
+
+    function openEditorCorrect(invoiceNumber){
+      editorMode = "correct";
+      const inv = invoices.find(x=>x.number === invoiceNumber);
+      selectedClientNickname = inv ? (inv.client||inv.clientNickname) : selectedClientNickname;
+      $("#editorTitle").textContent = "Review / Correct";
+      $("#editorSubtitle").textContent = "Adjust details and re-issue correction";
+      $("#modeChip").textContent = "REVIEW / CORRECT";
+      $("#modeChip").className = "chip fix";
+      $("#btnIssue").textContent = "Save correction";
+      $("#fieldInvoiceNumber").classList.remove("hidden");
+      $("#tabPreviewBtn").textContent = "View";
+      $("#btnDownloadPdf").style.display = "";
+      setDefaults(inv);
+      setView("editor");
+      rebuildPreview();
+      toast(`Correct invoice #${invoiceNumber}`);
+    }
+
+    function setDefaults(inv){
+      updateClientPill();
+      if(inv){
+        $("#inputAmount").value = centsToEur(inv.cents ?? inv.totalCents ?? 0);
+        $("#inputDate").value = inv.date || "";
+        $("#inputNumber").value = inv.number || "";
+      }else{
+        $("#inputAmount").value = "";
+        $("#inputDate").value = new Date().toISOString().slice(0,10);
+      }
+      updateDateDisplay();
+    }
+
+    function updateClientPill(){
+      const c = clients.find(x=>x.nickname === selectedClientNickname) || clients[0];
+      const pill = $("#clientPill");
+      pill.textContent = c ? `${c.nickname} — ${c.name}` : "— Select client";
+      pill.title = "Click to change client";
+    }
+
+    $("#btnCancel").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+
+    function goToDashboard(){
+      setView("dashboard");
+      toast("Back to dashboard");
+    }
+    $("#btnBrand").addEventListener("click", goToDashboard);
+    $("#btnBrand").addEventListener("keydown", (e)=>{
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); goToDashboard(); }
+    });
+
+    async function performSave(){
+      const number = ($("#inputNumber").value || "").trim();
+      const amountStr = ($("#inputAmount").value || "").trim();
+      const date = ($("#inputDate").value || "").trim();
+      const amtCents = parseAmountToCents(amountStr);
+
+      if(editorMode === "correct" && !number){ toast("Enter invoice number"); return; }
+      if(amtCents == null){ toast("Enter valid amount"); return; }
+      if(!date){ toast("Select date"); return; }
+      if(!selectedClientNickname){ toast("Select a client"); return; }
+
+      const btn = $("#modalConfirmSaveYes");
+      btn.disabled = true;
+      try {
+        if(editorMode === "issue"){
+          const r = await fetch("/api/invoices/issue", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clientNickname: selectedClientNickname, amountCents: amtCents, date })
+          });
+          const data = await r.json();
+          if(!r.ok){ toast(data.error || "Failed to issue invoice"); return; }
+          toast(`Issued invoice #${data.invoice?.number || "?"}`);
+        }else{
+          const r = await fetch("/api/invoices/correct", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date })
+          });
+          const data = await r.json();
+          if(!r.ok){ toast(data.error || "Failed to correct invoice"); return; }
+          toast(`Corrected invoice #${data.invoice?.number || number}`);
+        }
+        closeConfirmSaveModal();
+        await refreshData();
+        setView("dashboard");
+      }finally{
+        btn.disabled = false;
+      }
+    }
+
+    function openConfirmSaveModal(){
+      const number = ($("#inputNumber").value || "").trim();
+      const amount = ($("#inputAmount").value || "").trim();
+      const date = ($("#inputDate").value || "").trim();
+      if(editorMode === "correct" && !number){ toast("Enter invoice number"); $("#inputNumber").focus(); return; }
+      if(!amount){ toast("Enter amount"); $("#inputAmount").focus(); return; }
+      if(!date){ toast("Select date"); $("#inputDate").focus(); return; }
+      const c = clients.find(x=>x.nickname === selectedClientNickname) || clients[0];
+      const summary = editorMode === "issue"
+        ? `Issue invoice for ${c?.nickname || "?"} (${c?.name || "?"}) for € ${amount}.`
+        : `Save correction for invoice #${number} for ${c?.nickname || "?"} (${c?.name || "?"}) for € ${amount}.`;
+      $("#modalConfirmSaveText").textContent = summary;
+      $("#modalConfirmSave").classList.add("show");
+      $("#modalConfirmSave").setAttribute("aria-hidden", "false");
+    }
+
+    function closeConfirmSaveModal(){
+      $("#modalConfirmSave").classList.remove("show");
+      $("#modalConfirmSave").setAttribute("aria-hidden", "true");
+    }
+
+    $("#btnIssue").addEventListener("click", openConfirmSaveModal);
+    $("#modalConfirmSaveYes").addEventListener("click", performSave);
+    $("#modalConfirmSaveNo").addEventListener("click", closeConfirmSaveModal);
+    $("#modalConfirmSaveClose").addEventListener("click", closeConfirmSaveModal);
+    $("#modalConfirmSave").addEventListener("click", (e)=>{
+      if(e.target === $("#modalConfirmSave")) closeConfirmSaveModal();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && $("#modalConfirmSave").classList.contains("show")){ e.stopPropagation(); closeConfirmSaveModal(); }
+    });
+
+    $("#btnNewFromInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
+
+    $$(".nav-tab").forEach(tab => {
+      tab.addEventListener("click", ()=>{
+        const nav = tab.dataset.nav;
+        if(nav === "dashboard") setView("dashboard");
+        else if(nav === "allClients") setView("allClients");
+        else if(nav === "allInvoices") setView("allInvoices");
+        else if(nav === "editor") openEditorIssue(selectedClientNickname);
+      });
+    });
+
+    $("#btnViewAllInvoices").addEventListener("click", ()=> setView("allInvoices"));
+    $("#btnViewAllClients").addEventListener("click", ()=> setView("allClients"));
+    $("#btnBackFromAllInvoices").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+    $("#btnBackFromAllClients").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+    $("#btnNewFromAllInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
+    $("#btnNewClientFromAll").addEventListener("click", openNewClientModal);
+
+    $("#btnDownloadPdf").addEventListener("click", ()=>{
+      const num = ($("#inputNumber").value || "").trim();
+      if(num) downloadPdf(num);
+      else toast("Enter invoice number");
+    });
+
+    function openClientPickerModal(){
+      const root = $("#clientPickerList");
+      root.innerHTML = "";
+      if(clients.length === 0){
+        root.innerHTML = `<div class="muted" style="padding:14px;">No clients yet. Add one from the dashboard.</div>`;
+      }else{
+        clients.forEach(c => {
+          const el = document.createElement("div");
+          el.className = "picker-item" + (c.nickname === selectedClientNickname ? " selected" : "");
+          el.tabIndex = 0;
+          el.dataset.nickname = c.nickname;
+          const companyId = c.companyId || c.companyIdentifier || "&#8212;";
+          el.innerHTML = `<div class="nick">${c.nickname}</div><div class="detail">${c.name} &#8226; ${companyId} &#8226; ${c.city||""}, ${c.country||""}</div>`;
+          el.addEventListener("click", ()=>{
+            selectedClientNickname = c.nickname;
+            updateClientPill();
+            rebuildPreview();
+            closeClientPickerModal();
+            toast(`Client: ${c.nickname}`);
+          });
+          el.addEventListener("keydown", (e)=>{
+            if(e.key === "Enter" || e.key === " "){ e.preventDefault(); el.click(); }
+          });
+          root.appendChild(el);
+        });
+      }
+      $("#modalClientPicker").classList.add("show");
+      $("#modalClientPicker").setAttribute("aria-hidden", "false");
+    }
+    function closeClientPickerModal(){
+      $("#modalClientPicker").classList.remove("show");
+      $("#modalClientPicker").setAttribute("aria-hidden", "true");
+    }
+    $("#btnChangeClient").addEventListener("click", openClientPickerModal);
+    $("#clientPill").addEventListener("click", openClientPickerModal);
+    $("#modalClientPickerClose").addEventListener("click", closeClientPickerModal);
+    $("#modalClientPicker").addEventListener("click", (e)=>{
+      if(e.target === $("#modalClientPicker")) closeClientPickerModal();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && $("#modalClientPicker").classList.contains("show")){ e.stopPropagation(); closeClientPickerModal(); }
+    });
+
+    let clientModalMode = "new";
+    let clientModalEditNickname = null;
+
+    function openNewClientModal(){
+      clientModalMode = "new";
+      clientModalEditNickname = null;
+      $("#modalNewClientTitle").textContent = "New client";
+      $("#clientNickname").value = "";
+      $("#clientName").value = "";
+      $("#clientRep").value = "";
+      $("#clientCompanyId").value = "";
+      $("#clientVatId").value = "";
+      $("#clientAddress").value = "";
+      $("#clientCity").value = "";
+      $("#clientPostal").value = "";
+      $("#clientCountry").value = "";
+      $("#clientNickname").readOnly = false;
+      $("#clientNickname").classList.remove("input-readonly");
+      $("#modalNewClient").classList.add("show");
+      $("#modalNewClient").setAttribute("aria-hidden", "false");
+      $("#clientNickname").focus();
+    }
+
+    function openEditClientModal(nickname){
+      const c = clients.find(x => x.nickname === nickname);
+      if(!c){ toast("Client not found"); return; }
+      clientModalMode = "edit";
+      clientModalEditNickname = nickname;
+      $("#modalNewClientTitle").textContent = "Edit client";
+      $("#clientNickname").value = c.nickname;
+      $("#clientName").value = c.name || "";
+      $("#clientRep").value = c.rep || c.representativeName || "";
+      $("#clientCompanyId").value = c.companyId || c.companyIdentifier || "";
+      $("#clientVatId").value = c.vatId || "";
+      $("#clientAddress").value = c.address || "";
+      $("#clientCity").value = c.city || "";
+      $("#clientPostal").value = c.postal || c.postalCode || "";
+      $("#clientCountry").value = c.country || "";
+      $("#clientNickname").readOnly = true;
+      $("#clientNickname").classList.add("input-readonly");
+      $("#modalNewClient").classList.add("show");
+      $("#modalNewClient").setAttribute("aria-hidden", "false");
+      $("#clientName").focus();
+    }
+
+    function closeNewClientModal(){
+      $("#modalNewClient").classList.remove("show");
+      $("#modalNewClient").setAttribute("aria-hidden", "true");
+    }
+    $("#btnNewClient").addEventListener("click", openNewClientModal);
+    $("#modalNewClientClose").addEventListener("click", closeNewClientModal);
+    $("#modalNewClientCancel").addEventListener("click", closeNewClientModal);
+    $("#modalNewClientSave").addEventListener("click", async ()=>{
+      const nickname = $("#clientNickname").value.trim();
+      const name = $("#clientName").value.trim();
+      if(!nickname){ toast("Enter nickname"); $("#clientNickname").focus(); return; }
+      if(!name){ toast("Enter company name"); $("#clientName").focus(); return; }
+      const body = {
+        nickname,
+        name,
+        representativeName: $("#clientRep").value.trim() || "",
+        companyIdentifier: $("#clientCompanyId").value.trim() || "",
+        vatIdentifier: $("#clientVatId").value.trim() || null,
+        address: $("#clientAddress").value.trim() || "",
+        city: $("#clientCity").value.trim() || "",
+        postalCode: $("#clientPostal").value.trim() || "",
+        country: $("#clientCountry").value.trim() || ""
+      };
+      const btn = $("#modalNewClientSave");
+      btn.disabled = true;
+      try {
+        if(clientModalMode === "edit"){
+          const r = await fetch(`/api/clients/${encodeURIComponent(clientModalEditNickname)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          const data = await r.json();
+          if(!r.ok){ toast(data.error || "Failed to update client"); return; }
+          toast(`Client "${nickname}" updated`);
+        }else{
+          const r = await fetch("/api/clients", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+          const data = await r.json();
+          if(!r.ok){ toast(data.error || "Client already exists"); return; }
+          toast(`Client "${nickname}" added`);
+        }
+        closeNewClientModal();
+        await refreshData();
+      }finally{
+        btn.disabled = false;
+      }
+    });
+    $("#modalNewClient").addEventListener("click", (e)=>{
+      if(e.target === $("#modalNewClient")) closeNewClientModal();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && $("#modalNewClient").classList.contains("show")){ e.stopPropagation(); closeNewClientModal(); }
+    });
+
+    document.addEventListener("click", (e)=>{
+      if(!e.target.closest("#btnCopyDetails")) return;
+      e.preventDefault();
+      const c = clients.find(x=>x.nickname === selectedClientNickname) || clients[0];
+      const amtCents = parseAmountToCents($("#inputAmount").value);
+      const date = $("#inputDate").value || new Date().toISOString().slice(0,10);
+      const mode = editorMode;
+      const number = (mode === "correct" ? ($("#inputNumber").value || "&#8212;") : "(auto)");
+      const payload = {
+        Invoice: { Number: number, Date: date, TotalCents: amtCents != null ? amtCents : "&#8212;" },
+        Flags: { Mode: mode },
+        BuyerAddress: { Name: c?.name, RepresentativeName: c?.rep, CompanyIdentifier: c?.companyId, VatIdentifier: c?.vatId, Address: c?.address, City: c?.city, PostalCode: c?.postal, Country: c?.country },
+        LineItems: [{ Description: "Services", Amount: { Cents: amtCents ?? 0, Currency: "Eur" } }]
+      };
+      const text = JSON.stringify(payload, null, 2);
+      navigator.clipboard.writeText(text).then(()=> toast("Copied to clipboard")).catch(()=> toast("Copy failed"));
+    });
+
+    $$(".tab").forEach(btn => {
+      btn.addEventListener("click", ()=>{
+        $$(".tab").forEach(x=>x.classList.remove("active"));
+        btn.classList.add("active");
+        const tab = btn.dataset.tab;
+        $("#tab_preview").classList.toggle("hidden", tab !== "preview");
+        $("#tab_details").classList.toggle("hidden", tab !== "details");
+      });
+    });
+
+    const rebuildPreview = debounce(async ()=> {
+      const clientNick = selectedClientNickname;
+      const amtCents = parseAmountToCents($("#inputAmount").value);
+      const date = $("#inputDate").value || new Date().toISOString().slice(0,10);
+
+      if(!clientNick || amtCents == null){
+        $("#previewStatus").textContent = "Preview: enter client and amount";
+        $("#previewStatus").className = "chip";
+        $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Enter client and amount to see preview.</div>`;
+        $("#tab_details").innerHTML = "";
+        document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
+        return;
+      }
+
+      $("#previewStatus").textContent = "Preview: updating...";
+      $("#previewStatus").className = "chip";
+
+      const c = clients.find(x=>x.nickname === clientNick);
+      const caption = `${clientNick} • ${formatDateISO(date)} • € ${centsToEur(amtCents)}`;
+      $("#previewCaption").textContent = caption;
+
+      try {
+        const r = await fetch("/api/invoices/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientNickname: clientNick, amountCents: amtCents, date, format: "html" })
+        });
+        if(!r.ok){
+          const data = await r.json().catch(()=>({}));
+          $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Preview error: ${data.error || r.statusText}</div>`;
+          document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
+        }else{
+          const html = await r.text();
+          let container = $("#tab_preview");
+          let wrapper = container.querySelector("#previewFrameWrapper");
+          let frame = container.querySelector("#previewFrame");
+          if(!wrapper || !frame){
+            container.innerHTML = "";
+            wrapper = document.createElement("div");
+            wrapper.id = "previewFrameWrapper";
+            frame = document.createElement("iframe");
+            frame.id = "previewFrame";
+            const scaleToFit = ()=>{
+              if(!container.contains(frame)) return;
+              try {
+                const doc = frame.contentDocument;
+                if(!doc || !doc.body) return;
+                const contentW = Math.max(doc.documentElement.scrollWidth, doc.body.scrollWidth, 1);
+                const contentH = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, 1);
+                const previewBody = frame.closest(".preview-body");
+                const availW = Math.max((previewBody ? previewBody.clientWidth : container.clientWidth) - 28, 1);
+                const availH = Math.max((previewBody ? previewBody.clientHeight : 1123) - 28, 1);
+                const scale = Math.min(availW / contentW, availH / contentH, 1);
+                frame.style.width = contentW + "px";
+                frame.style.height = contentH + "px";
+                frame.style.transform = `scale(${scale})`;
+                wrapper.style.width = Math.ceil(scale * contentW) + "px";
+                wrapper.style.height = Math.ceil(scale * contentH) + "px";
+                frame.closest(".preview-panel")?.classList.add("preview-scaled");
+              }catch(_){}
+            };
+            frame.onload = ()=>{
+              requestAnimationFrame(()=> requestAnimationFrame(scaleToFit));
+            };
+            const ro = new ResizeObserver(()=> scaleToFit());
+            ro.observe(frame.closest(".preview-panel") || document.body);
+            wrapper.appendChild(frame);
+            container.appendChild(wrapper);
+          }
+          const styleOverride = "<style>html,body{overflow:hidden !important;}</style>";
+          frame.srcdoc = html.includes("</head>") ? html.replace("</head>", styleOverride + "</head>") : (html.includes("<head>") ? html.replace("<head>", "<head>" + styleOverride) : styleOverride + html);
+        }
+        $("#previewStatus").textContent = "Preview: ready";
+        $("#previewStatus").className = "chip ok";
+      }catch(err){
+        $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Preview failed: ${err.message}</div>`;
+        $("#previewStatus").textContent = "Preview: error";
+        $("#previewStatus").className = "chip fix";
+        document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
+      }
+
+      const mode = editorMode;
+      const number = (mode === "correct" ? ($("#inputNumber").value || "&#8212;") : "(auto)");
+      $("#tab_details").innerHTML = `
+        <div class="card" style="box-shadow:none;">
+          <div class="card-head">
+            <div class="title"><h2>Structured details</h2><div class="hint">Debug data mapping</div></div>
+            <button class="btn small" type="button" id="btnCopyDetails" title="Copy to clipboard">Copy</button>
+          </div>
+          <div class="card-body" style="padding:14px;">
+            <pre style="margin:0; font-family:var(--mono); font-size:12px; white-space:pre-wrap;">${JSON.stringify({
+              Invoice: { Number: number, Date: date, TotalCents: amtCents },
+              Mode: mode,
+              Buyer: c ? { name: c.name, rep: c.rep, companyId: c.companyId } : null
+            }, null, 2)}</pre>
+          </div>
+        </div>
+      `;
+    }, 120);
+
+    ["#inputNumber", "#inputAmount", "#inputDate"].forEach(sel=>{
+      const el = $(sel);
+      if(el){ el.addEventListener("input", rebuildPreview); el.addEventListener("change", rebuildPreview); }
+    });
+    $("#inputDate").addEventListener("input", updateDateDisplay);
+    $("#inputDate").addEventListener("change", updateDateDisplay);
+
+    let datePickerReenableTimer = null;
+    let datePickerCloseHandler = null;
+    function scheduleDatePickerReenable(){
+      clearTimeout(datePickerReenableTimer);
+      datePickerReenableTimer = setTimeout(() => {
+        $("#dateFieldWrap").classList.remove("date-picker-disabled");
+        if(datePickerCloseHandler){
+          document.removeEventListener("mousedown", datePickerCloseHandler);
+          datePickerCloseHandler = null;
+        }
+      }, 100);
+    }
+    function openDatePicker(){
+      $("#dateFieldWrap").classList.add("date-picker-disabled");
+      $("#inputDate").showPicker();
+      datePickerCloseHandler = () => scheduleDatePickerReenable();
+      setTimeout(() => document.addEventListener("mousedown", datePickerCloseHandler), 0);
+    }
+    $("#inputDate").addEventListener("change", scheduleDatePickerReenable);
+    $("#dateDisplay").addEventListener("click", openDatePicker);
+    $("#btnEditDate").addEventListener("click", openDatePicker);
+
+    function parseAmountToCents(str){
+      const s = (str || "").trim().replace(/\s+/g,'').replace(",", ".");
+      if(!s) return null;
+      const m = s.match(/^(-?\d+)(\.(\d{1,2}))?$/);
+      if(!m) return null;
+      const euros = parseInt(m[1], 10);
+      const dec = (m[3] || "0").padEnd(2, "0");
+      const cents = Math.abs(euros) * 100 + parseInt(dec, 10);
+      return euros < 0 ? -cents : cents;
+    }
+
+    async function init(){
+      $("#fieldInvoiceNumber").classList.add("hidden");
+      $("#inputDate").value = new Date().toISOString().slice(0,10);
+      updateDateDisplay();
+      await refreshData();
+      selectedClientNickname = clients[0]?.nickname ?? null;
+      selectedInvoiceNumber = invoices[0]?.number ?? null;
+    }
+
+    init();
+  </script>
 </body>
 </html>

@@ -22,7 +22,7 @@ todos:
     status: completed
   - id: phase-4
     content: "Phase 4: Transform UI prototype -- replace mock data/operations with real API fetch calls"
-    status: pending
+    status: completed
   - id: phase-5
     content: "Phase 5: Error handling, request validation, loading states, Chromium-unavailable graceful fallback"
     status: pending
@@ -344,12 +344,12 @@ Automated tests that exercise the running API over HTTP, verifying parameter val
 
 ---
 
-## [ ] Phase 4: Wire the UI to the API
+## [x] Phase 4: Wire the UI to the API
 
 Transform the prototype HTML to replace mock data with real API calls. The UI will be placed in `Web/wwwroot/index.html`.
 
-- **4.1** Copy [design/invoicer.uiprototype.v1.html](design/invoicer.uiprototype.v1.html) to `Web/wwwroot/index.html`
-- **4.2** Replace mock data with API calls -- **Data loading**:
+- [x] **4.1** Copy [design/invoicer.uiprototype.v1.html](design/invoicer.uiprototype.v1.html) to `Web/wwwroot/index.html`
+- [x] **4.2** Replace mock data with API calls -- **Data loading**:
   - Remove the hardcoded `clients` and `invoices` arrays
   - Add an `async function loadClients()` that calls `GET /api/clients?limit=100` and stores the result
   - Add an `async function loadInvoices()` that calls `GET /api/invoices?limit=100` and stores the result
@@ -357,15 +357,15 @@ Transform the prototype HTML to replace mock data with real API calls. The UI wi
   - Adapt the rendering functions (`renderInvoices`, `renderClients`) to work with the API response shape:
     - Client DTO fields: `nickname`, `name`, `representativeName`, `companyIdentifier`, `vatIdentifier`, `address`, `city`, `postalCode`, `country`
     - Invoice DTO fields: `number`, `date`, `buyerName`, `totalCents`, `status`, `clientNickname`
-- **4.3** Replace mock operations -- **Client add/edit**:
+- [x] **4.3** Replace mock operations -- **Client add/edit**:
   - `modalNewClientSave` click handler: call `POST /api/clients` or `PUT /api/clients/{nickname}` instead of pushing to local array
   - Show success/error toast based on response
   - Reload clients list after successful save
-- **4.4** Replace mock operations -- **Invoice issue/correct**:
+- [x] **4.4** Replace mock operations -- **Invoice issue/correct**:
   - `performSave()`: call `POST /api/invoices/issue` or `POST /api/invoices/correct` depending on `editorMode`
   - Show the created invoice number in the toast
   - Reload invoices list after success
-- **4.5** Replace mock operations -- **Invoice preview**:
+- [x] **4.5** Replace mock operations -- **Invoice preview**:
   - Replace the mock `renderPreview()` that builds a local HTML invoice with a real API call to `POST /api/invoices/preview` with `format=html`
   - Use debouncing (already in place at 120ms) to avoid flooding the API. The HTML preview is lightweight (no Chromium, just template rendering), so 120ms is fine; adjust only if needed based on observed latency
   - Display the returned HTML inside an `<iframe>` in `#tab_preview`:
@@ -376,10 +376,10 @@ Transform the prototype HTML to replace mock data with real API calls. The UI wi
   - Fall back to a placeholder message ("Enter client and amount to see preview") if required fields are incomplete (skip the API call entirely)
   - On API error, show the error message in `#tab_preview` instead of a broken state
   - The Details tab can remain as-is (structured JSON data built client-side from the current form values)
-- **4.6** Replace mock operations -- **PDF download**:
+- [x] **4.6** Replace mock operations -- **PDF download**:
   - The "Download PDF" button on invoice rows and in the editor should trigger a download from `GET /api/invoices/{number}/pdf`
   - Use `window.open()` or create a temporary `<a>` element with `download` attribute
-- **4.7** Wire the seller address into the preview details tab:
+- [x] **4.7** Wire the seller address into the preview details tab:
   - Add a `GET /api/config/seller` endpoint (or include seller info in the initial page load) so the preview "SELLER" section shows real seller data instead of placeholder "Your Company Ltd"
   - Alternatively, the preview endpoint already returns a rendered image -- the details tab can show the structured data from the invoice response
 
