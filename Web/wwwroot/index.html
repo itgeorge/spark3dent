@@ -873,10 +873,10 @@
     <header class="app-header">
     <div class="topbar">
       <div class="topbar-inner">
-        <div class="brand" id="btnBrand" role="button" tabindex="0" title="Back to dashboard">
+        <div class="brand" id="btnBrand" role="button" tabindex="0" title="Обратно към начало">
           <div class="logo" aria-hidden="true"></div>
           <div>
-            <h1>Spark3Dent Invoicer <span class="sub">Issue & review invoices, add/edit clients</span></h1>
+            <h1>Spark3Dent Invoicer <span class="sub">Издаване и преглед на фактури, добавяне и редакция на клиенти</span></h1>
           </div>
         </div>
         <div class="actions">
@@ -887,10 +887,10 @@
 
     <div class="nav-tabs">
       <div class="nav-tabs-inner">
-        <button class="nav-tab active" data-nav="dashboard">Home</button>
-        <button class="nav-tab" data-nav="allClients">Clients</button>
-        <button class="nav-tab" data-nav="allInvoices">Invoices</button>
-        <button class="nav-tab" data-nav="editor">Issue</button>
+        <button class="nav-tab active" data-nav="dashboard">Начало</button>
+        <button class="nav-tab" data-nav="allClients">Клиенти</button>
+        <button class="nav-tab" data-nav="allInvoices">Фактури</button>
+        <button class="nav-tab" data-nav="editor">Издаване</button>
       </div>
     </div>
     </header>
@@ -901,15 +901,15 @@
           <div class="card">
             <div class="card-head">
               <div class="title">
-                <h2>Latest invoices</h2>
-                <div class="hint">Your latest issued invoices. Click a row to review</div>
+                <h2>Последни фактури</h2>
+                <div class="hint">Последно издадени фактури.</div>
               </div>
-              <button class="btn small primary" id="btnNewFromInvoices">&#65291; New invoice</button>
+              <button class="btn small primary" id="btnNewFromInvoices">&#65291; Нова фактура</button>
             </div>
             <div class="card-body">
               <div id="invoiceList" class="list"><div class="loading-skeleton" id="invoiceListLoading"></div></div>
               <div style="border-top:1px solid rgba(226,232,240,.7);">
-                <button class="view-all-link" type="button" id="btnViewAllInvoices">view all</button>
+                <button class="view-all-link" type="button" id="btnViewAllInvoices">виж всички</button>
               </div>
             </div>
           </div>
@@ -917,15 +917,15 @@
           <div class="card">
             <div class="card-head">
               <div class="title">
-                <h2>Clients with recent invoices</h2>
-                <div class="hint">Your clients, latest first</div>
+                <h2>Клиенти със скорошни фактури</h2>
+                <div class="hint">Вашите клиенти, подредени по последни фактури</div>
               </div>
-              <button class="btn small primary-teal" id="btnNewClient">&#65291; New client</button>
+              <button class="btn small primary-teal" id="btnNewClient">&#65291; Нов клиент</button>
             </div>
             <div class="card-body">
               <div id="clientList" class="list"><div class="loading-skeleton" id="clientListLoading"></div></div>
               <div style="border-top:1px solid rgba(226,232,240,.7);">
-                <button class="view-all-link" type="button" id="btnViewAllClients">view all</button>
+                <button class="view-all-link" type="button" id="btnViewAllClients">виж всички</button>
               </div>
             </div>
           </div>
@@ -936,12 +936,12 @@
         <div class="card" style="max-width:100%;">
           <div class="card-head">
             <div class="title">
-              <h2>All invoices</h2>
-              <div class="hint">Your latest issued invoices. Click a row to review</div>
+              <h2>Всички фактури</h2>
+              <div class="hint">Последно издадени фактури.</div>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-              <button class="btn" id="btnBackFromAllInvoices">Back</button>
-              <button class="btn small primary" id="btnNewFromAllInvoices">&#65291; New invoice</button>
+              <button class="btn" id="btnBackFromAllInvoices">Назад</button>
+              <button class="btn small primary" id="btnNewFromAllInvoices">&#65291; Нова фактура</button>
             </div>
           </div>
           <div class="card-body">
@@ -954,12 +954,12 @@
         <div class="card" style="max-width:100%;">
           <div class="card-head">
             <div class="title">
-              <h2>All clients</h2>
-              <div class="hint">Your clients, latest first</div>
+              <h2>Всички клиенти</h2>
+              <div class="hint">Вашите клиенти, подредени по последни фактури</div>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-              <button class="btn" id="btnBackFromAllClients">Back</button>
-              <button class="btn small primary-teal" id="btnNewClientFromAll">&#65291; New client</button>
+              <button class="btn" id="btnBackFromAllClients">Назад</button>
+              <button class="btn small primary-teal" id="btnNewClientFromAll">&#65291; Нов клиент</button>
             </div>
           </div>
           <div class="card-body">
@@ -973,50 +973,50 @@
           <div class="panel">
             <div class="panel-head">
               <div class="mode">
-                <div class="big" id="editorTitle">Issue invoice</div>
-                <div class="small" id="editorSubtitle">Live preview updates as you type</div>
+                <div class="big" id="editorTitle">Издаване на фактура</div>
+                <div class="small" id="editorSubtitle">Прегледът се обновява докато пишете</div>
               </div>
-              <span class="chip" id="modeChip">ISSUE</span>
+              <span class="chip" id="modeChip">ИЗДАВАНЕ</span>
             </div>
 
             <div class="form">
               <div class="field">
-                <label>Client</label>
+                <label>Клиент</label>
                 <div class="readonly">
                   <div class="pill" id="clientPill">&#8212;</div>
-                  <button class="btn small" id="btnChangeClient" title="Select client">Change</button>
+                  <button class="btn small" id="btnChangeClient" title="Избери клиент">Промяна</button>
                 </div>
               </div>
 
               <div class="field" id="fieldInvoiceNumber">
-                <label>Invoice number (review/correct mode)</label>
-                <input class="input" id="inputNumber" placeholder="e.g. 000123" />
+                <label>Номер на фактура (преглед/коригиране)</label>
+                <input class="input" id="inputNumber" placeholder="напр. 000123" />
               </div>
 
               <div class="field">
-                <label>Amount (&#8364;)</label>
+                <label>Сума (&#8364;)</label>
                 <input class="input" id="inputAmount" placeholder="123.45" inputmode="decimal" />
               </div>
 
               <div class="field">
-                <label for="inputDate">Date</label>
+                <label for="inputDate">Дата</label>
                 <div class="date-field-wrap" id="dateFieldWrap">
                   <div class="date-display-cell">
                     <div id="dateDisplay" class="date-display" aria-live="polite"></div>
-                    <input class="date-input-overlay" id="inputDate" type="date" title="Click to open date picker" />
+                    <input class="date-input-overlay" id="inputDate" type="date" title="Кликнете за избор на дата" />
                   </div>
-                  <button class="date-edit-btn" id="btnEditDate" type="button" title="Change date">&#9998;</button>
+                  <button class="date-edit-btn" id="btnEditDate" type="button" title="Промяна на дата">&#9998;</button>
                 </div>
               </div>
 
               <div class="field">
-                <span class="chip ok" id="previewStatus">Preview: ready</span>
+                <span class="chip ok" id="previewStatus">Преглед: готов</span>
               </div>
             </div>
 
             <div class="sticky-footer">
-              <button class="btn" id="btnCancel">Back</button>
-              <button class="btn primary" id="btnIssue">Issue</button>
+              <button class="btn" id="btnCancel">Назад</button>
+              <button class="btn primary" id="btnIssue">Издай</button>
             </div>
           </div>
 
@@ -1024,14 +1024,14 @@
             <div class="preview-panel">
               <div class="preview-head">
                 <div class="left">
-                  <div class="t">Invoice preview</div>
+                  <div class="t">Преглед на фактура</div>
                   <div class="s" id="previewCaption">&#8212;</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <button class="btn small" id="btnDownloadPdf" style="display:none;" title="Download PDF">Download PDF</button>
-                  <div class="tabs" role="tablist" aria-label="Preview tabs">
-                    <button class="tab active" data-tab="preview" id="tabPreviewBtn">Preview</button>
-                    <button class="tab" data-tab="details">Details</button>
+                  <button class="btn small" id="btnDownloadPdf" style="display:none;" title="Изтегли PDF">Изтегли PDF</button>
+                  <div class="tabs" role="tablist" aria-label="Табове за преглед">
+                    <button class="tab active" data-tab="preview" id="tabPreviewBtn">Преглед</button>
+                    <button class="tab" data-tab="details">Детайли</button>
                   </div>
                 </div>
               </div>
@@ -1052,54 +1052,54 @@
     <div class="modal-overlay" id="modalNewClient" aria-hidden="true">
       <div class="modal" role="dialog" aria-labelledby="modalNewClientTitle" aria-modal="true">
         <div class="modal-head">
-          <h3 id="modalNewClientTitle">New client</h3>
-          <button class="btn small" type="button" id="modalNewClientClose" aria-label="Close">&#215;</button>
+          <h3 id="modalNewClientTitle">Нов клиент</h3>
+          <button class="btn small" type="button" id="modalNewClientClose" aria-label="Затвори">&#215;</button>
         </div>
         <div class="modal-body">
           <div class="form">
             <div class="field">
-              <label>Nickname</label>
-              <input class="input" id="clientNickname" placeholder="e.g. acme" />
+              <label>Псевдоним</label>
+              <input class="input" id="clientNickname" placeholder="напр. acme" />
             </div>
             <div class="field">
-              <label>Company name</label>
-              <input class="input" id="clientName" placeholder="e.g. ACME Consulting OOD" />
+              <label>Име на фирма</label>
+              <input class="input" id="clientName" placeholder="напр. ACME Consulting ООД" />
             </div>
             <div class="field">
-              <label>Representative</label>
-              <input class="input" id="clientRep" placeholder="e.g. John Doe" />
+              <label>МОЛ</label>
+              <input class="input" id="clientRep" placeholder="напр. Иван Иванов" />
             </div>
             <div class="field">
-              <label>Company ID</label>
-              <input class="input" id="clientCompanyId" placeholder="e.g. BG123456789" />
+              <label>ЕИК по Булстат</label>
+              <input class="input" id="clientCompanyId" placeholder="напр. BG123456789" />
             </div>
             <div class="field">
-              <label>VAT ID (optional)</label>
-              <input class="input" id="clientVatId" placeholder="e.g. BG123456789" />
+              <label>ДДС номер (по избор)</label>
+              <input class="input" id="clientVatId" placeholder="напр. BG123456789" />
             </div>
             <div class="field">
-              <label>Address</label>
-              <input class="input" id="clientAddress" placeholder="e.g. 1 Example St" />
+              <label>Адрес</label>
+              <input class="input" id="clientAddress" placeholder="напр. ул. Примерна 1" />
             </div>
             <div class="field" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
               <div>
-                <label>City</label>
-                <input class="input" id="clientCity" placeholder="e.g. Sofia" />
+                <label>Град</label>
+                <input class="input" id="clientCity" placeholder="напр. София" />
               </div>
               <div>
-                <label>Postal code</label>
-                <input class="input" id="clientPostal" placeholder="e.g. 1000" />
+                <label>Пощенски код</label>
+                <input class="input" id="clientPostal" placeholder="напр. 1000" />
               </div>
             </div>
             <div class="field">
-              <label>Country</label>
-              <input class="input" id="clientCountry" placeholder="e.g. Bulgaria" />
+              <label>Държава</label>
+              <input class="input" id="clientCountry" placeholder="напр. България" />
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn" id="modalNewClientCancel">Cancel</button>
-          <button class="btn primary" id="modalNewClientSave">Save</button>
+          <button class="btn" id="modalNewClientCancel">Отказ</button>
+          <button class="btn primary" id="modalNewClientSave">Запази</button>
         </div>
       </div>
     </div>
@@ -1107,8 +1107,8 @@
     <div class="modal-overlay" id="modalClientPicker" aria-hidden="true">
       <div class="modal" role="dialog" aria-labelledby="modalClientPickerTitle" aria-modal="true">
         <div class="modal-head">
-          <h3 id="modalClientPickerTitle">Select client</h3>
-          <button class="btn small" type="button" id="modalClientPickerClose" aria-label="Close">&#215;</button>
+          <h3 id="modalClientPickerTitle">Избери клиент</h3>
+          <button class="btn small" type="button" id="modalClientPickerClose" aria-label="Затвори">&#215;</button>
         </div>
         <div class="modal-body">
           <div class="list" id="clientPickerList"></div>
@@ -1119,16 +1119,16 @@
     <div class="modal-overlay" id="modalConfirmSave" aria-hidden="true">
       <div class="modal" role="dialog" aria-labelledby="modalConfirmSaveTitle" aria-modal="true">
         <div class="modal-head">
-          <h3 id="modalConfirmSaveTitle">Confirm</h3>
-          <button class="btn small" type="button" id="modalConfirmSaveClose" aria-label="Close">&#215;</button>
+          <h3 id="modalConfirmSaveTitle">Потвърди</h3>
+          <button class="btn small" type="button" id="modalConfirmSaveClose" aria-label="Затвори">&#215;</button>
         </div>
         <div class="modal-body">
           <p id="modalConfirmSaveText" style="margin:0; font-size:14px; line-height:1.5;"></p>
-          <p style="margin:12px 0 0 0; font-weight:700;">Are you sure?</p>
+          <p style="margin:12px 0 0 0; font-weight:700;">Сигурни ли сте?</p>
         </div>
         <div class="modal-footer">
-          <button class="btn" id="modalConfirmSaveNo">No</button>
-          <button class="btn primary" id="modalConfirmSaveYes">Yes</button>
+          <button class="btn" id="modalConfirmSaveNo">Не</button>
+          <button class="btn primary" id="modalConfirmSaveYes">Да</button>
         </div>
       </div>
     </div>
@@ -1136,21 +1136,21 @@
     <div class="modal-overlay" id="modalError" aria-hidden="true">
       <div class="modal modal-error" role="dialog" aria-labelledby="modalErrorTitle" aria-modal="true">
         <div class="modal-head">
-          <h3 id="modalErrorTitle">Error</h3>
-          <button class="btn small" type="button" id="modalErrorClose" aria-label="Close">&#215;</button>
+          <h3 id="modalErrorTitle">Грешка</h3>
+          <button class="btn small" type="button" id="modalErrorClose" aria-label="Затвори">&#215;</button>
         </div>
         <div class="modal-body">
           <p id="modalErrorText" style="margin:0; font-size:14px; line-height:1.5;"></p>
         </div>
         <div class="modal-footer">
-          <button class="btn primary" id="modalErrorOk">OK</button>
+          <button class="btn primary" id="modalErrorOk">ОК</button>
         </div>
       </div>
     </div>
 
     <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
       <div class="spinner-large"></div>
-      <span class="loading-text" id="loadingOverlayText">Saving...</span>
+      <span class="loading-text" id="loadingOverlayText">Запазване...</span>
     </div>
   </div>
 
@@ -1205,7 +1205,7 @@
         el.textContent = formatDateBulgarianWithWeekday(iso);
         el.classList.remove("date-display-placeholder");
       } else {
-        el.textContent = "Select date";
+        el.textContent = "Изберете дата";
         el.classList.add("date-display-placeholder");
       }
     }
@@ -1217,7 +1217,7 @@
     }
 
     function showErrorPopup(msg){
-      $("#modalErrorText").textContent = msg || "An error occurred.";
+      $("#modalErrorText").textContent = msg || "Възникна грешка.";
       $("#modalError").classList.add("show");
       $("#modalError").setAttribute("aria-hidden", "false");
     }
@@ -1227,7 +1227,7 @@
     }
 
     function showLoadingOverlay(text){
-      $("#loadingOverlayText").textContent = text || "Saving...";
+      $("#loadingOverlayText").textContent = text || "Запазване...";
       $("#loadingOverlay").classList.add("show");
       $("#loadingOverlay").setAttribute("aria-hidden", "false");
     }
@@ -1260,14 +1260,14 @@
     }
     async function loadClients(){
       const r = await fetch("/api/clients?limit=100");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load clients"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
       const data = await r.json();
       clients = (data.items || []).map(mapClient);
       refreshLists();
     }
     async function loadLatestClients(){
       const r = await fetch("/api/clients/latest?limit=10");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load clients"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
       const data = await r.json();
       latestClients = (data.items || []).map(mapClient);
       refreshLists();
@@ -1275,7 +1275,7 @@
 
     async function loadInvoices(){
       const r = await fetch("/api/invoices?limit=100");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Failed to load invoices"); return; }
+      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на фактури"); return; }
       const data = await r.json();
       invoices = (data.items || []).map(inv => ({
         number: inv.number,
@@ -1329,7 +1329,8 @@
         row.tabIndex = 0;
         row.dataset.number = inv.number;
         const chipClass = (inv.status === "Corrected" || inv.status === "Edited") ? "chip fix" : "chip ok";
-        const chipText = (inv.status === "Corrected" || inv.status === "Edited") ? "EDITED" : "ISSUED";
+        const chipText = (inv.status === "Corrected" || inv.status === "Edited") ? "РЕД." : "ИЗД.";
+        const chipTitle = (inv.status === "Corrected" || inv.status === "Edited") ? "Редактирана фактура" : "Издадена фактура";
         const client = inv.client || inv.clientNickname || "";
         const buyer = inv.buyer || inv.buyerName || "";
         const cents = inv.cents ?? inv.totalCents ?? 0;
@@ -1338,10 +1339,10 @@
           ? `${client} — ${clientFull.name || buyer}\n${[clientFull.address, clientFull.city, clientFull.postal, clientFull.country].filter(Boolean).join(", ")}`
           : (client ? `${client} — ${buyer}` : buyer || "—");
         row.innerHTML = `
-          <div class="row-status"><span class="${chipClass}">${chipText}</span></div>
+          <div class="row-status"><span class="${chipClass}" title="${chipTitle}">${chipText}</span></div>
           <div class="meta"><div class="invno">#${inv.number}</div><div class="date">${formatDateISO(inv.date)}</div></div>
           <div class="main" title="${escapeHtmlAttr(tooltipText)}"><div class="primaryline">${client}</div><div class="secondaryline">${buyer}</div></div>
-          <div class="row-download"><button class="btn small" title="Download PDF" data-action="download" data-number="${inv.number}">&#8595; PDF</button></div>
+          <div class="row-download"><button class="btn small" title="Изтегли PDF" data-action="download" data-number="${inv.number}">&#8595; PDF</button></div>
           <div class="right"><span class="amount">&#8364; ${centsToEur(cents)}</span></div>
         `;
         row.querySelector('button[data-action="download"]').addEventListener("click", (e)=>{
@@ -1354,7 +1355,7 @@
         });
         root.appendChild(row);
       });
-      if(list.length === 0) root.innerHTML = `<div class="muted" style="padding:14px;">No invoices yet.</div>`;
+      if(list.length === 0) root.innerHTML = `<div class="muted" style="padding:14px;">Все още няма фактури.</div>`;
     }
 
     function downloadPdf(number){
@@ -1375,10 +1376,10 @@
             <div class="detail muted">${c.city || ""}, ${c.country || ""}</div>
           </div>
           <div class="client-right">
-            <div class="last">Last invoice: <b>${lastInvoiceDateFor(c.nickname) ?? "&#8212;"}</b></div>
+            <div class="last">Последна фактура: <b>${lastInvoiceDateFor(c.nickname) ?? "&#8212;"}</b></div>
             <div class="client-actions">
-              <button class="btn small" title="Edit client" data-action="edit" data-client="${c.nickname}">&#9998; Edit Client</button>
-              <button class="btn small primary" data-action="new" data-client="${c.nickname}">&#65291; New invoice</button>
+              <button class="btn small" title="Редактирай клиент" data-action="edit" data-client="${c.nickname}">&#9998; Редактирай клиент</button>
+              <button class="btn small primary" data-action="new" data-client="${c.nickname}">&#65291; Нова фактура</button>
             </div>
           </div>
         `;
@@ -1386,7 +1387,7 @@
         el.querySelector('button[data-action="new"]').addEventListener("click", ()=> openEditorIssue(c.nickname));
         root.appendChild(el);
       });
-      if(list.length === 0) root.innerHTML = `<div class="muted" style="padding:14px;">No clients yet. Add one to get started.</div>`;
+      if(list.length === 0) root.innerHTML = `<div class="muted" style="padding:14px;">Все още няма клиенти. Добавете един, за да започнете.</div>`;
     }
 
     function lastInvoiceDateFor(nickname){
@@ -1434,21 +1435,21 @@
       correctingInvoiceNumber = null;
       const nick = clientNickname ?? selectedClientNickname ?? (clients[0]?.nickname ?? null);
       applyClientSelection(nick);
-      $("#editorTitle").textContent = "Issue invoice";
-      $("#editorSubtitle").textContent = "Live preview updates as you type";
-      $("#modeChip").textContent = "ISSUE";
+      $("#editorTitle").textContent = "Издаване на фактура";
+      $("#editorSubtitle").textContent = "Прегледът се обновява докато пишете";
+      $("#modeChip").textContent = "ИЗДАВАНЕ";
       $("#modeChip").className = "chip ok";
-      $("#btnIssue").textContent = "Issue";
+      $("#btnIssue").textContent = "Издай";
       $("#fieldInvoiceNumber").classList.add("hidden");
       $("#inputNumber").value = "";
       $("#inputNumber").readOnly = false;
       $("#inputNumber").classList.remove("input-readonly");
-      $("#tabPreviewBtn").textContent = "Preview";
+      $("#tabPreviewBtn").textContent = "Преглед";
       $("#btnDownloadPdf").style.display = "none";
       setDefaults();
       setView("editor");
       rebuildPreview();
-      if(selectedClientNickname) toast(`Issue for client: ${selectedClientNickname}`);
+      if(selectedClientNickname) toast(`Издаване за клиент: ${selectedClientNickname}`);
     }
 
     function openEditorCorrect(invoiceNumber){
@@ -1456,15 +1457,15 @@
       correctingInvoiceNumber = invoiceNumber;
       const inv = invoices.find(x=>x.number === invoiceNumber);
       selectedClientNickname = inv ? (inv.client||inv.clientNickname) : selectedClientNickname;
-      $("#editorTitle").textContent = "Review / Correct";
-      $("#editorSubtitle").textContent = "Adjust details and re-issue correction";
-      $("#modeChip").textContent = "REVIEW / CORRECT";
+      $("#editorTitle").textContent = "Преглед / Коригиране";
+      $("#editorSubtitle").textContent = "Променете данните и издайте корекция";
+      $("#modeChip").textContent = "ПРЕГЛЕД / КОРИГИРАНЕ";
       $("#modeChip").className = "chip fix";
-      $("#btnIssue").textContent = "Save correction";
+      $("#btnIssue").textContent = "Запази корекция";
       $("#fieldInvoiceNumber").classList.remove("hidden");
       $("#inputNumber").readOnly = true;
       $("#inputNumber").classList.add("input-readonly");
-      $("#tabPreviewBtn").textContent = "View";
+      $("#tabPreviewBtn").textContent = "Преглед";
       $("#btnDownloadPdf").style.display = "";
       setDefaults(inv);
       setView("editor");
@@ -1487,15 +1488,15 @@
     function updateClientPill(){
       const c = clients.find(x=>x.nickname === selectedClientNickname) || clients[0];
       const pill = $("#clientPill");
-      pill.textContent = c ? `${c.nickname} — ${c.name}` : "— Select client";
-      pill.title = "Click to change client";
+      pill.textContent = c ? `${c.nickname} — ${c.name}` : "— Избери клиент";
+      pill.title = "Кликнете за промяна на клиент";
     }
 
-    $("#btnCancel").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+    $("#btnCancel").addEventListener("click", ()=>{ setView("dashboard"); toast("Обратно към начало"); });
 
     function goToDashboard(){
       setView("dashboard");
-      toast("Back to dashboard");
+      toast("Обратно към начало");
     }
     $("#btnBrand").addEventListener("click", goToDashboard);
     $("#btnBrand").addEventListener("keydown", (e)=>{
@@ -1508,20 +1509,20 @@
       const date = ($("#inputDate").value || "").trim();
       const amtCents = parseAmountToCents(amountStr);
 
-      if(editorMode === "correct" && !number){ showErrorPopup("Enter invoice number"); return; }
+      if(editorMode === "correct" && !number){ showErrorPopup("Въведете номер на фактура"); return; }
       if(editorMode === "correct" && correctingInvoiceNumber && number !== correctingInvoiceNumber){
-        showErrorPopup("Invoice number cannot be changed when correcting. You are correcting invoice #" + correctingInvoiceNumber);
+        showErrorPopup("Номерът на фактурата не може да се промени при коригиране. Коригирате фактура №" + correctingInvoiceNumber);
         return;
       }
-      if(amtCents == null){ showErrorPopup("Enter valid amount"); return; }
-      if(!date){ showErrorPopup("Select date"); return; }
-      if(!selectedClientNickname){ showErrorPopup("Select a client"); return; }
+      if(amtCents == null){ showErrorPopup("Въведете валидна сума"); return; }
+      if(!date){ showErrorPopup("Изберете дата"); return; }
+      if(!selectedClientNickname){ showErrorPopup("Изберете клиент"); return; }
 
       closeConfirmSaveModal();
       const btnIssue = $("#btnIssue");
       btnIssue.disabled = true;
       btnIssue.classList.add("btn-loading");
-      showLoadingOverlay(editorMode === "issue" ? "Issuing invoice..." : "Saving correction...");
+      showLoadingOverlay(editorMode === "issue" ? "Издаване на фактура..." : "Запазване на корекция...");
       try {
         if(editorMode === "issue"){
           const r = await fetch("/api/invoices/issue", {
@@ -1530,8 +1531,8 @@
             body: JSON.stringify({ clientNickname: selectedClientNickname, amountCents: amtCents, date })
           });
           const data = await r.json();
-          if(!r.ok){ showErrorPopup(data.error || "Failed to issue invoice"); return; }
-          toast(`Issued invoice #${data.invoice?.number || "?"}`);
+          if(!r.ok){ showErrorPopup(data.error || "Неуспешно издаване на фактура"); return; }
+          toast(`Издадена фактура №${data.invoice?.number || "?"}`);
         }else{
           const r = await fetch("/api/invoices/correct", {
             method: "POST",
@@ -1539,8 +1540,8 @@
             body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date, correctInvoiceNumber: correctingInvoiceNumber })
           });
           const data = await r.json();
-          if(!r.ok){ showErrorPopup(data.error || "Failed to correct invoice"); return; }
-          toast(`Corrected invoice #${data.invoice?.number || number}`);
+          if(!r.ok){ showErrorPopup(data.error || "Неуспешно коригиране на фактура"); return; }
+          toast(`Коригирана фактура №${data.invoice?.number || number}`);
         }
         await refreshData();
         setView("dashboard");
@@ -1555,13 +1556,13 @@
       const number = ($("#inputNumber").value || "").trim();
       const amount = ($("#inputAmount").value || "").trim();
       const date = ($("#inputDate").value || "").trim();
-      if(editorMode === "correct" && !number){ showErrorPopup("Enter invoice number"); $("#inputNumber").focus(); return; }
-      if(!amount){ showErrorPopup("Enter amount"); $("#inputAmount").focus(); return; }
-      if(!date){ showErrorPopup("Select date"); $("#inputDate").focus(); return; }
+      if(editorMode === "correct" && !number){ showErrorPopup("Въведете номер на фактура"); $("#inputNumber").focus(); return; }
+      if(!amount){ showErrorPopup("Въведете сума"); $("#inputAmount").focus(); return; }
+      if(!date){ showErrorPopup("Изберете дата"); $("#inputDate").focus(); return; }
       const c = clients.find(x=>x.nickname === selectedClientNickname) || clients[0];
       const summary = editorMode === "issue"
-        ? `Issue invoice for ${c?.nickname || "?"} (${c?.name || "?"}) for € ${amount}.`
-        : `Save correction for invoice #${number} for ${c?.nickname || "?"} (${c?.name || "?"}) for € ${amount}.`;
+        ? `Издаване на фактура за ${c?.nickname || "?"} (${c?.name || "?"}) за € ${amount}.`
+        : `Запазване на корекция за фактура №${number} за ${c?.nickname || "?"} (${c?.name || "?"}) за € ${amount}.`;
       $("#modalConfirmSaveText").textContent = summary;
       $("#modalConfirmSave").classList.add("show");
       $("#modalConfirmSave").setAttribute("aria-hidden", "false");
@@ -1606,22 +1607,22 @@
 
     $("#btnViewAllInvoices").addEventListener("click", ()=> setView("allInvoices"));
     $("#btnViewAllClients").addEventListener("click", ()=> setView("allClients"));
-    $("#btnBackFromAllInvoices").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
-    $("#btnBackFromAllClients").addEventListener("click", ()=>{ setView("dashboard"); toast("Back to dashboard"); });
+    $("#btnBackFromAllInvoices").addEventListener("click", ()=>{ setView("dashboard"); toast("Обратно към начало"); });
+    $("#btnBackFromAllClients").addEventListener("click", ()=>{ setView("dashboard"); toast("Обратно към начало"); });
     $("#btnNewFromAllInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
     $("#btnNewClientFromAll").addEventListener("click", openNewClientModal);
 
     $("#btnDownloadPdf").addEventListener("click", ()=>{
       const num = ($("#inputNumber").value || "").trim();
       if(num) downloadPdf(num);
-      else showErrorPopup("Enter invoice number");
+      else showErrorPopup("Въведете номер на фактура");
     });
 
     function openClientPickerModal(){
       const root = $("#clientPickerList");
       root.innerHTML = "";
       if(clients.length === 0){
-        root.innerHTML = `<div class="muted" style="padding:14px;">No clients yet. Add one from the dashboard.</div>`;
+        root.innerHTML = `<div class="muted" style="padding:14px;">Все още няма клиенти. Добавете от началния екран.</div>`;
       }else{
         clients.forEach(c => {
           const el = document.createElement("div");
@@ -1633,7 +1634,7 @@
           el.addEventListener("click", ()=>{
             applyClientSelection(c.nickname);
             closeClientPickerModal();
-            toast(`Client: ${c.nickname}`);
+            toast(`Клиент: ${c.nickname}`);
           });
           el.addEventListener("keydown", (e)=>{
             if(e.key === "Enter" || e.key === " "){ e.preventDefault(); el.click(); }
@@ -1679,7 +1680,7 @@
     function openNewClientModal(){
       clientModalMode = "new";
       clientModalEditNickname = null;
-      $("#modalNewClientTitle").textContent = "New client";
+      $("#modalNewClientTitle").textContent = "Нов клиент";
       const d = newClientDraft;
       $("#clientNickname").value = d ? d.nickname : "";
       $("#clientName").value = d ? d.name : "";
@@ -1699,10 +1700,10 @@
 
     function openEditClientModal(nickname){
       const c = clients.find(x => x.nickname === nickname);
-      if(!c){ showErrorPopup("Client not found"); return; }
+      if(!c){ showErrorPopup("Клиентът не е намерен"); return; }
       clientModalMode = "edit";
       clientModalEditNickname = nickname;
-      $("#modalNewClientTitle").textContent = "Edit client";
+      $("#modalNewClientTitle").textContent = "Редактиране на клиент";
       $("#clientNickname").value = c.nickname;
       $("#clientName").value = c.name || "";
       $("#clientRep").value = c.rep || c.representativeName || "";
@@ -1731,8 +1732,8 @@
     $("#modalNewClientSave").addEventListener("click", async ()=>{
       const nickname = $("#clientNickname").value.trim();
       const name = $("#clientName").value.trim();
-      if(!nickname){ showErrorPopup("Enter nickname"); $("#clientNickname").focus(); return; }
-      if(!name){ showErrorPopup("Enter company name"); $("#clientName").focus(); return; }
+      if(!nickname){ showErrorPopup("Въведете псевдоним"); $("#clientNickname").focus(); return; }
+      if(!name){ showErrorPopup("Въведете име на фирма"); $("#clientName").focus(); return; }
       const body = {
         nickname,
         name,
@@ -1747,7 +1748,7 @@
       const btn = $("#modalNewClientSave");
       btn.disabled = true;
       btn.classList.add("btn-loading");
-      showLoadingOverlay("Saving client...");
+      showLoadingOverlay("Запазване на клиент...");
       try {
         if(clientModalMode === "edit"){
           const r = await fetch(`/api/clients/${encodeURIComponent(clientModalEditNickname)}`, {
@@ -1756,8 +1757,8 @@
             body: JSON.stringify(body)
           });
           const data = await r.json();
-          if(!r.ok){ showErrorPopup(data.error || "Failed to update client"); return; }
-          toast(`Client "${nickname}" updated`);
+          if(!r.ok){ showErrorPopup(data.error || "Неуспешна актуализация на клиент"); return; }
+          toast(`Клиент „${nickname}" актуализиран`);
         }else{
           const r = await fetch("/api/clients", {
             method: "POST",
@@ -1765,8 +1766,8 @@
             body: JSON.stringify(body)
           });
           const data = await r.json();
-          if(!r.ok){ showErrorPopup(data.error || "Client already exists"); return; }
-          toast(`Client "${nickname}" added`);
+          if(!r.ok){ showErrorPopup(data.error || "Клиентът вече съществува"); return; }
+          toast(`Клиент „${nickname}" добавен`);
         }
         closeNewClientModal(clientModalMode === "new");
         await refreshData();
@@ -1798,7 +1799,7 @@
         LineItems: [{ Description: "Services", Amount: { Cents: amtCents ?? 0, Currency: "Eur" } }]
       };
       const text = JSON.stringify(payload, null, 2);
-      navigator.clipboard.writeText(text).then(()=> toast("Copied to clipboard")).catch(()=> toast("Copy failed"));
+      navigator.clipboard.writeText(text).then(()=> toast("Копирано в клипборда")).catch(()=> toast("Копирането не успя"));
     });
 
     $$(".tab").forEach(btn => {
@@ -1817,15 +1818,15 @@
       const date = $("#inputDate").value || new Date().toISOString().slice(0,10);
 
       if(!clientNick || amtCents == null){
-        $("#previewStatus").textContent = "Preview: enter client and amount";
+        $("#previewStatus").textContent = "Преглед: въведете клиент и сума";
         $("#previewStatus").className = "chip";
-        $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Enter client and amount to see preview.</div>`;
+        $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Въведете клиент и сума за преглед.</div>`;
         $("#tab_details").innerHTML = "";
         document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
         return;
       }
 
-      $("#previewStatus").textContent = "Preview: updating...";
+      $("#previewStatus").textContent = "Преглед: обновяване...";
       $("#previewStatus").className = "chip";
 
       const c = clients.find(x=>x.nickname === clientNick);
@@ -1842,7 +1843,7 @@
         });
         if(!r.ok){
           const data = await r.json().catch(()=>({}));
-          $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Preview error: ${data.error || r.statusText}</div>`;
+          $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Грешка при преглед: ${data.error || r.statusText}</div>`;
           document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
         }else{
           const html = await r.text();
@@ -1885,11 +1886,11 @@
           const styleOverride = "<style>html,body{overflow:hidden !important;}</style>";
           frame.srcdoc = html.includes("</head>") ? html.replace("</head>", styleOverride + "</head>") : (html.includes("<head>") ? html.replace("<head>", "<head>" + styleOverride) : styleOverride + html);
         }
-        $("#previewStatus").textContent = "Preview: ready";
+        $("#previewStatus").textContent = "Преглед: готов";
         $("#previewStatus").className = "chip ok";
       }catch(err){
-        $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Preview failed: ${err.message}</div>`;
-        $("#previewStatus").textContent = "Preview: error";
+        $("#tab_preview").innerHTML = `<div class="muted" style="padding:14px;">Прегледът не успя: ${err.message}</div>`;
+        $("#previewStatus").textContent = "Преглед: грешка";
         $("#previewStatus").className = "chip fix";
         document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
       }
@@ -1899,8 +1900,8 @@
       $("#tab_details").innerHTML = `
         <div class="card" style="box-shadow:none;">
           <div class="card-head">
-            <div class="title"><h2>Structured details</h2><div class="hint">Debug data mapping</div></div>
-            <button class="btn small" type="button" id="btnCopyDetails" title="Copy to clipboard">Copy</button>
+            <div class="title"><h2>Структурирани данни</h2><div class="hint">Debug data mapping</div></div>
+            <button class="btn small" type="button" id="btnCopyDetails" title="Копирай в клипборда">Копирай</button>
           </div>
           <div class="card-body" style="padding:14px;">
             <pre style="margin:0; font-family:var(--mono); font-size:12px; white-space:pre-wrap;">${JSON.stringify({
