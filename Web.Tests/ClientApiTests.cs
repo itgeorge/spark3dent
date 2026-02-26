@@ -221,4 +221,101 @@ public class ClientApiTests
         var items = doc.RootElement.GetProperty("items");
         Assert.That(items.GetArrayLength(), Is.EqualTo(3));
     }
+
+    [Test]
+    public async Task PatchClientRename_WithValidNewNickname_Returns200AndUpdatedClient()
+    {
+        var body = new
+        {
+            nickname = "acme",
+            name = "ACME EOOD",
+            representativeName = "John Doe",
+            companyIdentifier = "BG123456789",
+            vatIdentifier = (string?)null,
+            address = "1 Main St",
+            city = "Sofia",
+            postalCode = "1000",
+            country = "Bulgaria"
+        };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        await _client.PostAsync("/api/clients", content);
+
+        var renameBody = new { newNickname = "acme-corp" };
+        var renameContent = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
+        var response = await _client.PatchAsync("/api/clients/acme/rename", renameContent);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("nickname").GetString(), Is.EqualTo("acme-corp"));
+        Assert.That(doc.RootElement.GetProperty("name").GetString(), Is.EqualTo("ACME EOOD"));
+
+        var getOld = await _client.GetAsync("/api/clients/acme");
+        Assert.That(getOld.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var getNew = await _client.GetAsync("/api/clients/acme-corp");
+        Assert.That(getNew.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task PatchClientRename_WhenClientNotExists_Returns404()
+    {
+        var renameBody = new { newNickname = "newname" };
+        var content = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
+        var response = await _client.PatchAsync("/api/clients/nonexistent/rename", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task PatchClientRename_WithEmptyNewNickname_Returns400()
+    {
+        var body = new
+        {
+            nickname = "acme",
+            name = "ACME EOOD",
+            representativeName = "John Doe",
+            companyIdentifier = "BG123456789",
+            vatIdentifier = (string?)null,
+            address = "1 Main St",
+            city = "Sofia",
+            postalCode = "1000",
+            country = "Bulgaria"
+        };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        await _client.PostAsync("/api/clients", content);
+
+        var renameBody = new { newNickname = "" };
+        var renameContent = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
+        var response = await _client.PatchAsync("/api/clients/acme/rename", renameContent);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task PatchClientRename_WhenNewNicknameAlreadyExists_Returns409()
+    {
+        foreach (var nick in new[] { "acme", "beta" })
+        {
+            var body = new
+            {
+                nickname = nick,
+                name = $"{nick} Corp",
+                representativeName = "Rep",
+                companyIdentifier = "BG111",
+                address = "1 St",
+                city = "Sofia",
+                postalCode = "1000",
+                country = "BG"
+            };
+            var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            await _client.PostAsync("/api/clients", content);
+        }
+
+        var renameBody = new { newNickname = "beta" };
+        var renameContent = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
+        var response = await _client.PatchAsync("/api/clients/acme/rename", renameContent);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.Conflict);
+    }
 }

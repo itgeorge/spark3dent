@@ -431,12 +431,24 @@
     .client-left{
       min-width:0;
     }
-    .client-left .nick{
+    .nick-row{
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .nick-row .nick{
       font-weight: 800;
       font-size: 13px;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
+    }
+    .btn-icon-small{
+      padding:2px 6px;
+      font-size:12px;
+      min-width:0;
+      flex-shrink:0;
+      border:none;
     }
     .client-left .detail{
       font-size:12px;
@@ -1390,14 +1402,19 @@
 
     function renderClients(list, rootEl){
       const root = rootEl || $("#clientList");
+      const showRename = root.id === "clientListAll";
       root.innerHTML = "";
       list.forEach(c => {
         const el = document.createElement("div");
         el.className = "client-item";
         const companyId = c.companyId ?? c.companyIdentifier ?? "";
+        const renameBtnHtml = showRename ? `<button class="btn small btn-icon-small" title="Преименувай" data-action="rename" data-client="${c.nickname}">&#9998;</button>` : "";
         el.innerHTML = `
           <div class="client-left">
-            <div class="nick">${c.nickname}</div>
+            <div class="nick-row">
+              <span class="nick">${c.nickname}</span>
+              ${renameBtnHtml}
+            </div>
             <div class="detail">${c.name} &#8226; <span class="muted">${companyId}</span></div>
             <div class="detail muted">${c.city || ""}, ${c.country || ""}</div>
           </div>
@@ -1410,6 +1427,8 @@
           </div>
         `;
         el.querySelector('button[data-action="edit"]').addEventListener("click", ()=> openEditClientModal(c.nickname));
+        const renameBtn = el.querySelector('button[data-action="rename"]');
+        if(renameBtn) renameBtn.addEventListener("click", (e)=> openRenameClient(c.nickname, e.target.closest(".nick-row")));
         el.querySelector('button[data-action="new"]').addEventListener("click", ()=> openEditorIssue(c.nickname));
         root.appendChild(el);
       });
@@ -1748,6 +1767,58 @@
       $("#modalNewClient").classList.add("show");
       $("#modalNewClient").setAttribute("aria-hidden", "false");
       $("#clientNickname").focus();
+    }
+
+    function openRenameClient(nickname, nickRowEl){
+      if(!nickRowEl) return;
+      const span = nickRowEl.querySelector(".nick");
+      if(!span) return;
+      const origHtml = nickRowEl.innerHTML;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = nickname;
+      input.className = "input nick-rename-input";
+      input.style.cssText = "font-weight:800;font-size:13px;min-width:120px;";
+      nickRowEl.innerHTML = "";
+      nickRowEl.appendChild(input);
+      input.focus();
+      input.select();
+
+      let saved = false;
+      function cancel(){
+        if(saved) return;
+        nickRowEl.innerHTML = origHtml;
+        const btn = nickRowEl.querySelector('[data-action="rename"]');
+        if(btn) btn.addEventListener("click", (e)=> openRenameClient(nickname, e.target.closest(".nick-row")));
+      }
+
+      async function save(){
+        const newNick = input.value.trim();
+        if(!newNick){ showErrorPopup("Въведете псевдоним"); input.focus(); return; }
+        if(newNick === nickname){ cancel(); return; }
+        saved = true;
+        showLoadingOverlay("Преименуване...");
+        try {
+          const r = await fetch(`/api/clients/${encodeURIComponent(nickname)}/rename`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ newNickname: newNick })
+          });
+          const data = await r.json().catch(()=>({}));
+          if(!r.ok){ saved = false; showErrorPopup(data.error || "Неуспешно преименуване"); return; }
+          if(selectedClientNickname === nickname) selectedClientNickname = newNick;
+          toast(`Клиент преименуван на „${newNick}"`);
+          await refreshData();
+        }finally{
+          hideLoadingOverlay();
+        }
+      }
+
+      input.addEventListener("keydown", function onKey(e){
+        if(e.key === "Enter"){ e.preventDefault(); save(); }
+        else if(e.key === "Escape"){ e.preventDefault(); cancel(); }
+      });
+      input.addEventListener("blur", ()=>{ setTimeout(cancel, 100); });
     }
 
     function openEditClientModal(nickname){

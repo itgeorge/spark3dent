@@ -152,6 +152,8 @@ public class FakeClientRepo : IClientRepo
 
                 if (newNickname != nickname)
                 {
+                    if (_storage.ContainsKey(newNickname))
+                        throw new InvalidOperationException($"Client with nickname '{newNickname}' already exists.");
                     _storage.Remove(nickname);
                 }
                 _storage[newNickname] = updated;

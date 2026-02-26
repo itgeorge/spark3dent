@@ -130,6 +130,8 @@ public class SqliteClientRepo : IClientRepo
 
             if (newNickname != nickname)
             {
+                if (await c.Clients.AnyAsync(x => x.Nickname == newNickname))
+                    throw new InvalidOperationException($"Client with nickname '{newNickname}' already exists.");
                 c.Clients.Remove(entity);
                 var newEntity = new Entities.ClientEntity
                 {

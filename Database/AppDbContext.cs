@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
         });
 
+        // TODO: now that we support renaming clients, we should probably change the key to be the company identifier
         modelBuilder.Entity<Entities.ClientEntity>(e =>
         {
             e.HasKey(x => x.Nickname);

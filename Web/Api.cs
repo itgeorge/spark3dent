@@ -127,6 +127,34 @@ public static class Api
             return Results.Json(ToClientDto(updated), JsonOptions);
         });
 
+        app.MapMethods("/api/clients/{nickname}/rename", new[] { "PATCH" }, async (string nickname, HttpContext ctx) =>
+        {
+            var body = await ReadJson<ClientRenameRequest>(ctx);
+            if (body == null)
+                return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400);
+
+            var newNickname = body.NewNickname?.Trim();
+            if (string.IsNullOrEmpty(newNickname))
+                return Results.Json(new { error = "newNickname is required." }, statusCode: 400);
+
+            try
+            {
+                var existing = await clientRepo.GetAsync(nickname);
+                var update = new IClientRepo.ClientUpdate(newNickname, null);
+                await clientRepo.UpdateAsync(nickname, update);
+                var updated = new Client(newNickname, existing.Address);
+                return Results.Json(ToClientDto(updated), JsonOptions);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 409);
+            }
+        });
+
         // --- Invoices API ---
         app.MapGet("/api/invoices", async (int? limit) =>
         {
@@ -422,6 +450,7 @@ public static class Api
 
     private record ClientCreateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
     private record ClientUpdateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
+    private record ClientRenameRequest(string? NewNickname);
     private record IssueInvoiceRequest(string? ClientNickname, int? AmountCents, string? Date);
     private record CorrectInvoiceRequest(string? InvoiceNumber, int? AmountCents, string? Date, string? CorrectInvoiceNumber);
     private record PreviewInvoiceRequest(string? ClientNickname, int AmountCents, string? Date, string? Format, string? InvoiceNumber);
