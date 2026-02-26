@@ -157,6 +157,45 @@ public class InvoiceManagement
         }
     }
 
+    /// <summary>
+    /// Imports a legacy invoice with a specific number. Used for importing manually-created PDF invoices.
+    /// If sourcePdfPath is provided, copies the original PDF to blob storage for download.
+    /// </summary>
+    public async Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, string? sourcePdfPath = null)
+    {
+        var content = BuildLegacyInvoiceContent(data);
+        var invoice = await _invoiceRepo.ImportAsync(content, data.Number);
+
+        if (!string.IsNullOrEmpty(sourcePdfPath) && File.Exists(sourcePdfPath))
+        {
+            try
+            {
+                await using var fileStream = File.OpenRead(sourcePdfPath);
+                await _blobStorage.UploadAsync(_invoicesBucket, LegacyImportObjectKey(data.Number), fileStream, "application/pdf");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to store legacy PDF for invoice {data.Number}", ex);
+            }
+        }
+
+        return invoice;
+    }
+
+    private Invoice.InvoiceContent BuildLegacyInvoiceContent(LegacyInvoiceData data)
+    {
+        var lineItems = new[]
+        {
+            new Invoice.LineItem("Зъботехнически услуги", new Amount(data.TotalCents, data.Currency))
+        };
+        return new Invoice.InvoiceContent(
+            Date: data.Date,
+            SellerAddress: _sellerAddress,
+            BuyerAddress: data.Recipient,
+            LineItems: lineItems,
+            BankTransferInfo: _bankTransferInfo);
+    }
+
     public Task<QueryResult<Invoice>> ListInvoicesAsync(int limit)
     {
         return _invoiceRepo.LatestAsync(limit);
@@ -169,14 +208,20 @@ public class InvoiceManagement
 
     /// <summary>
     /// Opens the PDF stream for an invoice and returns the suggested download filename.
+    /// For legacy imports, uses the stored original PDF. For regular invoices, uses the exported PDF.
     /// Throws FileNotFoundException if the PDF was not exported.
     /// </summary>
     public async Task<(Stream Stream, string DownloadFileName)> GetInvoicePdfStreamAsync(string number)
     {
         var invoice = await _invoiceRepo.GetAsync(number);
+        if (await _blobStorage.ExistsAsync(_invoicesBucket, LegacyImportObjectKey(number)))
+        {
+            var stream = await _blobStorage.OpenReadAsync(_invoicesBucket, LegacyImportObjectKey(number));
+            return (stream, $"invoice-{number}.pdf");
+        }
         var (objectKey, filename) = BuildInvoiceObjectKey(invoice.Number, invoice.Content.Date, _invoiceNumberPadding);
-        var stream = await _blobStorage.OpenReadAsync(_invoicesBucket, objectKey);
-        return (stream, filename);
+        var pdfStream = await _blobStorage.OpenReadAsync(_invoicesBucket, objectKey);
+        return (pdfStream, filename);
     }
 
     private Invoice.InvoiceContent BuildInvoiceContent(DateTime date, BillingAddress buyerAddress, int amountCents)
@@ -192,6 +237,8 @@ public class InvoiceManagement
             LineItems: lineItems,
             BankTransferInfo: _bankTransferInfo);
     }
+
+    private static string LegacyImportObjectKey(string number) => $"legacy/imported-{number}.pdf";
 
     private static (string ObjectKey, string Filename) BuildInvoiceObjectKey(string invoiceNumber, DateTime invoiceDate, int invoiceNumberPadding)
     {

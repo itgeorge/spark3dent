@@ -29,6 +29,22 @@ public class LoggingInvoiceRepo : IInvoiceRepo
         }
     }
 
+    public async Task<Invoice> ImportAsync(Invoice.InvoiceContent content, string number)
+    {
+        _logger.LogInfo($"InvoiceRepo.ImportAsync number={number}");
+        try
+        {
+            var invoice = await _inner.ImportAsync(content, number);
+            _logger.LogInfo($"InvoiceRepo.ImportAsync completed, number={invoice.Number}");
+            return invoice;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"InvoiceRepo.ImportAsync number={number} failed", ex);
+            throw;
+        }
+    }
+
     public async Task<Invoice> GetAsync(string number)
     {
         _logger.LogInfo($"InvoiceRepo.GetAsync number={number}");

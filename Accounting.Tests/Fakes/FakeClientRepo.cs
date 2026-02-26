@@ -19,6 +19,17 @@ public class FakeClientRepo : IClientRepo
         _invoiceRepo = invoiceRepo;
     }
 
+    public Task<Client?> FindByCompanyIdentifierAsync(string companyIdentifier)
+    {
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                return _storage.Values.FirstOrDefault(c => c.Address.CompanyIdentifier == companyIdentifier);
+            }
+        });
+    }
+
     public Task<Client> GetAsync(string nickname)
     {
         return Task.Run(() =>

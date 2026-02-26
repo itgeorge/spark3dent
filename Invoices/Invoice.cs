@@ -4,7 +4,8 @@ namespace Invoices;
 
 public enum Currency
 {
-    Eur
+    Eur,
+    Bgn
 }
 
 public record BillingAddress(string Name, string RepresentativeName, string CompanyIdentifier, string? VatIdentifier, string Address, string City, string PostalCode, string Country);
@@ -45,6 +46,7 @@ public record Invoice
     // TODO: it might be a good idea to client id (or other unique identifier) here, so that we can 
     //  easily retrieve the invoice by client id later - though we can probably do that through
     //  filtering by BillingAddress.CompanyIdentifier - so we should think this over more carefully once we need it
+    // TODO: add validation that all line items have same currency - if not, throw an exception
     public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems, BankTransferInfo BankTransferInfo);
 
     public Invoice(string number, InvoiceContent content, bool isCorrected = false)
@@ -57,5 +59,7 @@ public record Invoice
     public string Number { get; }
     public InvoiceContent Content { get; }
     public bool IsCorrected { get; }
-    public Amount TotalAmount => Content.LineItems.Aggregate(Amount.Zero(Currency.Eur), (acc, li) => acc + li.Amount);
+    public Amount TotalAmount => Content.LineItems.Length == 0
+        ? Amount.Zero(Currency.Eur)
+        : Content.LineItems.Aggregate(Amount.Zero(Content.LineItems[0].Amount.Currency), (acc, li) => acc + li.Amount);
 }

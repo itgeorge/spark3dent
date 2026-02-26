@@ -14,6 +14,20 @@ public class LoggingClientRepo : IClientRepo
         _logger = new SafeLogger(logger ?? throw new ArgumentNullException(nameof(logger)));
     }
 
+    public async Task<Client?> FindByCompanyIdentifierAsync(string companyIdentifier)
+    {
+        _logger.LogInfo($"ClientRepo.FindByCompanyIdentifierAsync eik={companyIdentifier}");
+        try
+        {
+            return await _inner.FindByCompanyIdentifierAsync(companyIdentifier);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"ClientRepo.FindByCompanyIdentifierAsync eik={companyIdentifier} failed", ex);
+            throw;
+        }
+    }
+
     public async Task<Client> GetAsync(string nickname)
     {
         _logger.LogInfo($"ClientRepo.GetAsync nickname={nickname}");

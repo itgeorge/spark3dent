@@ -2,13 +2,14 @@ using System.Globalization;
 using System.Text;
 using Invoices;
 using PuppeteerSharp;
+using UglyToad.PdfPig;
 using Utilities;
 
 namespace CliTools;
 
 internal static class CliToolsProgram
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
         Console.InputEncoding = Encoding.UTF8;
@@ -17,20 +18,20 @@ internal static class CliToolsProgram
 
         if (argsList != null)
         {
-            RunArgs(argsList);
+            await RunArgsAsync(argsList);
         }
         else
         {
-            RunInteractive();
+            await RunInteractiveAsync();
         }
     }
 
-    static void RunArgs(List<string> args)
+    static async Task RunArgsAsync(List<string> args)
     {
-        Execute(args);
+        await ExecuteAsync(args);
     }
 
-    static void RunInteractive()
+    static async Task RunInteractiveAsync()
     {
         while (true)
         {
@@ -38,17 +39,17 @@ internal static class CliToolsProgram
             var line = Console.ReadLine();
             if (line == null) break;
 
-            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+            var parts = CliOptsParser.ParseLineWithQuotes(line);
             if (parts.Count == 0) continue;
 
             if (parts[0].Equals("exit", StringComparison.OrdinalIgnoreCase))
                 break;
 
-            Execute(parts);
+            await ExecuteAsync(parts);
         }
     }
 
-    static void Execute(List<string> args)
+    static async Task ExecuteAsync(List<string> args)
     {
         var cmd = args[0].ToLowerInvariant();
 
@@ -76,6 +77,18 @@ internal static class CliToolsProgram
             return;
         }
 
+        if (cmd == "prompt")
+        {
+            RunPrompt(args.Skip(1).ToList());
+            return;
+        }
+
+        if (cmd == "extract-invoice")
+        {
+            await RunExtractInvoiceAsync(args.Skip(1).ToList());
+            return;
+        }
+
         Console.WriteLine($"Unknown command: {cmd}. Type 'help' for available commands.");
     }
 
@@ -99,6 +112,117 @@ internal static class CliToolsProgram
         Console.WriteLine("      Same options as template, --out defaults to invoice.pdf");
         Console.WriteLine("      --png        Also render a PNG image alongside the PDF");
         Console.WriteLine("      --line-items  Comma-separated description:cents (e.g. \"Item1:12000,Item2:8000\")");
+        Console.WriteLine("  prompt -m <message> -k <openaikey> [-f <filepath>] - Send a prompt to OpenAI (optionally with file attachment)");
+        Console.WriteLine("  extract-invoice -f <filepath> [-k <openaikey>] - Extract BillingAddress from legacy PDF using GPT (key from -k or OPENAI_API_KEY)");
+    }
+
+    static async Task RunExtractInvoiceAsync(List<string> args)
+    {
+        var opts = CliOptsParser.Parse(args, new Dictionary<string, string>
+        {
+            ["f"] = "file",
+            ["k"] = "openaikey",
+        });
+
+        if (!opts.TryGetValue("file", out var filePath) || string.IsNullOrWhiteSpace(filePath))
+        {
+            Console.WriteLine("Usage: extract-invoice -f <filepath> [-k <openaikey>]");
+            Console.WriteLine("  -f, --file      Path to legacy invoice PDF (required)");
+            Console.WriteLine("  -k, --openaikey OpenAI API key (optional; uses OPENAI_API_KEY env var if not provided)");
+            return;
+        }
+
+        var apiKey = opts.TryGetValue("openaikey", out var k) && !string.IsNullOrWhiteSpace(k)
+            ? k
+            : Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            Console.WriteLine("Error: OpenAI API key required. Provide -k <key> or set OPENAI_API_KEY environment variable.");
+            return;
+        }
+
+        if (!File.Exists(filePath))
+        {
+            Console.WriteLine($"Error: File not found: {filePath}");
+            return;
+        }
+
+        try
+        {
+            var result = await GptLegacyPdfParser.TryParseAsync(filePath, apiKey);
+            if (result == null)
+            {
+                Console.WriteLine("Failed to parse invoice.");
+                return;
+            }
+            Console.WriteLine($"Number: {result.Number}");
+            Console.WriteLine($"Date: {result.Date:yyyy-MM-dd}");
+            Console.WriteLine($"Total: {result.TotalCents / 100.0:F2} {result.Currency}");
+            Console.WriteLine($"Recipient: {result.Recipient.Name}");
+            Console.WriteLine($"  MOL: {result.Recipient.RepresentativeName}");
+            Console.WriteLine($"  EIK: {result.Recipient.CompanyIdentifier}");
+            Console.WriteLine($"  Address: {result.Recipient.Address}");
+            Console.WriteLine($"  City: {result.Recipient.City}");
+            Console.WriteLine($"  Country: {result.Recipient.Country}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    static void RunPrompt(List<string> args)
+    {
+        var opts = CliOptsParser.Parse(args, new Dictionary<string, string>
+        {
+            ["m"] = "message",
+            ["f"] = "file",
+            ["k"] = "openaikey",
+        });
+
+        if (!opts.TryGetValue("message", out var message) || string.IsNullOrWhiteSpace(message))
+        {
+            Console.WriteLine("Usage: prompt -m <message> -k <openaikey> [-f <filepath>]");
+            Console.WriteLine("  -m, --message   The prompt message (required)");
+            Console.WriteLine("  -k, --openaikey OpenAI API key (required)");
+            Console.WriteLine("  -f, --file      Optional file path to attach (e.g. PDF for extraction)");
+            return;
+        }
+
+        if (!opts.TryGetValue("openaikey", out var apiKey) || string.IsNullOrWhiteSpace(apiKey))
+        {
+            Console.WriteLine("Error: -k (openaikey) is required.");
+            return;
+        }
+
+        try
+        {
+            var facade = new OpenAiFacade(apiKey);
+            string response;
+
+            if (opts.TryGetValue("file", out var filePath) && !string.IsNullOrWhiteSpace(filePath))
+            {
+                if (!File.Exists(filePath))
+                {
+                    Console.WriteLine($"Error: File not found: {filePath}");
+                    return;
+                }
+                var fileBytes = File.ReadAllBytes(filePath);
+                var filename = Path.GetFileName(filePath);
+                response = facade.PromptAndFile(message, fileBytes, filename).GetAwaiter().GetResult();
+            }
+            else
+            {
+                response = facade.Prompt(message).GetAwaiter().GetResult();
+            }
+
+            Console.WriteLine(response);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
     }
 
     static void RunBgAmountTranscriber(List<string> args)

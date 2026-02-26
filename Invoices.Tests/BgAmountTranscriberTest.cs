@@ -284,4 +284,32 @@ public class BgAmountTranscriberTest
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Transcribe(amountCents));
     }
+
+    [Test]
+    [TestCase(0, "Нула лева и нула стотинки")]
+    [TestCase(1, "Нула лева и една стотинка")]
+    [TestCase(2, "Нула лева и две стотинки")]
+    [TestCase(100, "Един лев")]
+    [TestCase(200, "Два лева")]
+    [TestCase(101, "Един лев и една стотинка")]
+    [TestCase(152, "Един лев и петдесет и две стотинки")]
+    [TestCase(1234, "Дванадесет лева и тридесет и четири стотинки")]
+    [TestCase(1000, "Десет лева")]
+    [TestCase(10000, "Сто лева")]
+    [TestCase(12345, "Сто двадесет и три лева и четиридесет и пет стотинки")]
+    [TestCase(2000, "Двадесет лева")]
+    [TestCase(2100, "Двадесет и един лев")]
+    [TestCase(999999, "Девет хиляди деветстотин деветдесет и девет лева и деветдесет и девет стотинки")]
+    public void Transcribe_WhenBgnAmount_ThenTranscribes(int amountCents, string expected)
+    {
+        var result = Transcriber.Transcribe(new Amount(amountCents, Currency.Bgn));
+        Assert.That(result, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Transcribe_WhenUnsupportedCurrency_ThenThrows()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Transcriber.Transcribe(new Amount(100, (Currency)99)));
+    }
 }

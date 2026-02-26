@@ -14,6 +14,16 @@ public class SqliteClientRepo : IClientRepo
         _contextFactory = contextFactory;
     }
 
+    public async Task<Client?> FindByCompanyIdentifierAsync(string companyIdentifier)
+    {
+        await using var ctx = _contextFactory();
+
+        var entity = await ctx.Clients
+            .FirstOrDefaultAsync(c => c.CompanyIdentifier == companyIdentifier);
+
+        return entity == null ? null : ClientMapping.ToDomain(entity);
+    }
+
     public async Task<Client> GetAsync(string nickname)
     {
         await using var ctx = _contextFactory();

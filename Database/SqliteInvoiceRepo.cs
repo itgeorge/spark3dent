@@ -54,6 +54,38 @@ public class SqliteInvoiceRepo : IInvoiceRepo
         return result!;
     }
 
+    public async Task<Invoice> ImportAsync(Invoice.InvoiceContent content, string number)
+    {
+        await using var ctx = _contextFactory();
+
+        Invoice? result = null;
+        await SqliteImmediateTransaction.ExecuteAsync(ctx, async c =>
+        {
+            if (await c.Invoices.AnyAsync(i => i.Number == number))
+                throw new InvalidOperationException($"Invoice with number '{number}' already exists.");
+
+            await EnsureSequenceInitializedAsync(c);
+
+            var entity = InvoiceMapping.ToEntity(content);
+            InvoiceMapping.SetNumber(entity, number);
+            entity.Date = content.Date;
+            entity.IsCorrected = false;
+
+            c.Invoices.Add(entity);
+
+            var importedNumeric = entity.NumberNumeric;
+            var seq = await c.InvoiceSequence.FindAsync(SequenceId)
+                ?? throw new InvalidOperationException("Invoice sequence not initialized.");
+            if (importedNumeric > seq.LastNumber)
+                seq.LastNumber = (int)importedNumeric;
+
+            await c.SaveChangesAsync();
+            result = InvoiceMapping.ToDomain(entity);
+        });
+
+        return result!;
+    }
+
     public async Task<Invoice> GetAsync(string number)
     {
         await using var ctx = _contextFactory();

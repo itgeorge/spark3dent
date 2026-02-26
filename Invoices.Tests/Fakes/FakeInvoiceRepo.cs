@@ -19,6 +19,27 @@ public class FakeInvoiceRepo : IInvoiceRepo
         _nextNumber = startInvoiceNumber;
     }
 
+    public Task<Invoice> ImportAsync(Invoice.InvoiceContent content, string number)
+    {
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (_storage.ContainsKey(number))
+                    throw new InvalidOperationException($"Invoice with number '{number}' already exists.");
+
+                var invoice = new Invoice(number, content);
+                _storage[number] = invoice;
+
+                var importedNumeric = long.Parse(number);
+                if (importedNumeric >= _nextNumber)
+                    _nextNumber = (int)(importedNumeric + 1);
+
+                return invoice;
+            }
+        });
+    }
+
     public Task<Invoice> CreateAsync(Invoice.InvoiceContent content)
     {
         return Task.Run(() =>

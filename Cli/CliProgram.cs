@@ -56,8 +56,8 @@ class CliProgram
             var line = Console.ReadLine();
             if (line == null) break;
 
-            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) continue;
+            var parts = CliOptsParser.ParseLineWithQuotes(line);
+            if (parts.Count == 0) continue;
 
             if (parts[0].Equals("exit", StringComparison.OrdinalIgnoreCase))
             {
@@ -65,7 +65,7 @@ class CliProgram
                 break;
             }
 
-            await ExecuteCommandAsync(parts, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
+            await ExecuteCommandAsync(parts.ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
         }
     }
 
@@ -100,7 +100,7 @@ class CliProgram
 
             if (cmd == "invoices")
             {
-                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, pdfExporter, imageExporter);
+                await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter);
                 return;
             }
 
@@ -129,6 +129,8 @@ class CliProgram
         Console.WriteLine("                          - Correct an existing invoice");
         Console.WriteLine("  invoices issue/correct  - Add --exportPng to also export PNG image (in addition to PDF)");
         Console.WriteLine("  invoices list           - List recent invoices (newest first)");
+        Console.WriteLine("  invoices import <dir> [--dry-run] [-k <openaikey>] [--limit <n>] [--nickname-from-mol]");
+        Console.WriteLine("                          - Import legacy PDF invoices recursively; prompt for client nicknames");
     }
 
     static async Task RunClientsCommandAsync(string[] args, IClientRepo clientRepo)
@@ -256,12 +258,13 @@ class CliProgram
     static async Task RunInvoicesCommandAsync(
         string[] args,
         InvoiceManagement invoiceManagement,
+        IClientRepo clientRepo,
         IInvoiceExporter pdfExporter,
         IInvoiceExporter? imageExporter)
     {
         if (args.Length == 0)
         {
-            Console.WriteLine("Usage: invoices issue | invoices correct | invoices preview | invoices list");
+            Console.WriteLine("Usage: invoices issue | invoices correct | invoices preview | invoices list | invoices import");
             return;
         }
 
@@ -291,7 +294,13 @@ class CliProgram
             return;
         }
 
-        Console.WriteLine($"Unknown subcommand: {sub}. Use: invoices issue | invoices correct | invoices preview | invoices list");
+        if (sub == "import")
+        {
+            await InvoicesImportAsync(args.Skip(1).ToArray(), invoiceManagement, clientRepo);
+            return;
+        }
+
+        Console.WriteLine($"Unknown subcommand: {sub}. Use: invoices issue | invoices correct | invoices preview | invoices list | invoices import");
     }
 
     static async Task InvoicesIssueAsync(
@@ -487,6 +496,179 @@ class CliProgram
         {
             Console.WriteLine($"Error: {ex.Message}");
         }
+    }
+
+    static async Task InvoicesImportAsync(
+        string[] args,
+        InvoiceManagement invoiceManagement,
+        IClientRepo clientRepo)
+    {
+        var (opts, positional) = CliOptsParser.ParseWithPositional(args.ToList(), new Dictionary<string, string> { ["k"] = "openaikey", ["l"] = "limit" });
+        var dryRun = CliOptsParser.HasFlag(opts, "dry-run");
+        var nicknameFromMol = CliOptsParser.HasFlag(opts, "nickname-from-mol");
+
+        if (positional.Count < 1)
+        {
+            Console.WriteLine("Usage: invoices import <directory> [--dry-run] [-k <openaikey>] [--limit <n>] [--nickname-from-mol]");
+            Console.WriteLine("  Recursively imports legacy PDF invoices using GPT for parsing. Prompts for client nickname on first encounter of each EIK.");
+            Console.WriteLine("  -k, --openaikey       OpenAI API key (optional; uses OPENAI_API_KEY env var if not provided)");
+            Console.WriteLine("  --limit <n>           Process at most n PDFs (for testing)");
+            Console.WriteLine("  --nickname-from-mol   Use slug of RepresentativeName (MOL) as nickname instead of company name");
+            return;
+        }
+
+        int? limit = null;
+        if (opts.TryGetValue("limit", out var limitStr) && int.TryParse(limitStr, out var n) && n > 0)
+            limit = n;
+
+        var apiKey = opts.TryGetValue("openaikey", out var k) && !string.IsNullOrWhiteSpace(k)
+            ? k
+            : Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            Console.WriteLine("Error: OpenAI API key required for import. Provide -k <key> or set OPENAI_API_KEY environment variable.");
+            return;
+        }
+
+        var dir = ResolveDirectoryPath(positional);
+        if (dir == null)
+        {
+            Console.WriteLine($"Directory not found: {string.Join(" ", positional)}");
+            return;
+        }
+
+        var pdfs = Directory.GetFiles(dir, "*.pdf", SearchOption.AllDirectories).OrderBy(p => p).ToList();
+        if (pdfs.Count == 0)
+        {
+            Console.WriteLine("No PDF files found.");
+            return;
+        }
+
+        if (limit.HasValue)
+        {
+            pdfs = pdfs.Take(limit.Value).ToList();
+            Console.WriteLine($"Processing first {pdfs.Count} PDF(s) (--limit {limit.Value})");
+        }
+
+        var eikToNickname = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var imported = 0;
+        var skipped = 0;
+        var failed = 0;
+
+        foreach (var pdfPath in pdfs)
+        {
+            var data = await GptLegacyPdfParser.TryParseAsync(pdfPath, apiKey);
+            if (data == null)
+            {
+                Console.WriteLine($"Skip (parse failed): {Path.GetRelativePath(dir, pdfPath)}");
+                skipped++;
+                continue;
+            }
+
+            string nickname;
+            var existing = await clientRepo.FindByCompanyIdentifierAsync(data.Recipient.CompanyIdentifier);
+            if (existing != null)
+            {
+                nickname = existing.Nickname;
+            }
+            else if (eikToNickname.TryGetValue(data.Recipient.CompanyIdentifier, out var cached))
+            {
+                nickname = cached;
+            }
+            else
+            {
+                var molSlug = ToSlug(data.Recipient.RepresentativeName);
+                var suggested = nicknameFromMol
+                    ? (string.IsNullOrEmpty(molSlug) ? ToSlug(data.Recipient.Name) ?? data.Recipient.CompanyIdentifier : molSlug)
+                    : (ToSlug(data.Recipient.Name) ?? data.Recipient.CompanyIdentifier);
+                if (dryRun || nicknameFromMol)
+                {
+                    nickname = suggested;
+                    eikToNickname[data.Recipient.CompanyIdentifier] = nickname;
+                }
+                else
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("--- New client (EIK: " + data.Recipient.CompanyIdentifier + ") ---");
+                    Console.WriteLine($"  Company: {data.Recipient.Name}");
+                    Console.WriteLine($"  MOL: {data.Recipient.RepresentativeName}");
+                    Console.WriteLine($"  Address: {data.Recipient.Address}, {data.Recipient.City}");
+                    Console.WriteLine();
+                    var prompt = string.IsNullOrEmpty(ToSlug(data.Recipient.Name))
+                        ? "Enter nickname for this client"
+                        : $"Enter nickname for this client (or press Enter to use '{suggested}')";
+                    var input = ReadOptional(prompt);
+                    nickname = string.IsNullOrWhiteSpace(input) ? suggested : input.Trim();
+                    eikToNickname[data.Recipient.CompanyIdentifier] = nickname;
+                }
+            }
+
+            if (dryRun)
+            {
+                var currStr = data.Currency == Currency.Eur ? "евро" : "лв.";
+                Console.WriteLine($"[dry-run] Would import: {data.Number} | {data.Date:dd-MM-yyyy} | {data.Recipient.Name} | {nickname} | {data.TotalCents / 100}.{data.TotalCents % 100:D2} {currStr}");
+                imported++;
+                continue;
+            }
+
+            try
+            {
+                var existingClient = await clientRepo.FindByCompanyIdentifierAsync(data.Recipient.CompanyIdentifier);
+                if (existingClient == null)
+                {
+                    var client = new Client(nickname, data.Recipient);
+                    await clientRepo.AddAsync(client);
+                }
+
+                await invoiceManagement.ImportLegacyInvoiceAsync(data, pdfPath);
+                Console.WriteLine($"Imported: {data.Number} | {data.Recipient.Name}");
+                imported++;
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+            {
+                Console.WriteLine($"Skip (already exists): {data.Number}");
+                skipped++;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error importing {data.Number}: {ex.Message}");
+                failed++;
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Done. Imported: {imported}, Skipped: {skipped}, Failed: {failed}");
+    }
+
+    /// <summary>
+    /// Resolves a directory path from positional args, handling quoted paths that may be split across args.
+    /// </summary>
+    static string? ResolveDirectoryPath(List<string> positional)
+    {
+        if (positional.Count == 0) return null;
+
+        for (var take = 1; take <= positional.Count; take++)
+        {
+            var candidate = string.Join(" ", positional.Take(take)).Trim('"', '\'');
+            if (Directory.Exists(candidate))
+                return candidate;
+        }
+        return null;
+    }
+
+    static string ToSlug(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in name)
+        {
+            if (char.IsLetterOrDigit(c))
+                sb.Append(char.ToLowerInvariant(c));
+            else if (c == ' ' || c == '-' || c == '.')
+                sb.Append('-');
+        }
+        var slug = string.Join("-", sb.ToString().Split('-', StringSplitOptions.RemoveEmptyEntries));
+        return slug.Length > 40 ? slug[..40] : slug;
     }
 
     static async Task InvoicesListAsync(InvoiceManagement invoiceManagement)

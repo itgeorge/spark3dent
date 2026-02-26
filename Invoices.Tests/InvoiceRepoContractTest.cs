@@ -22,6 +22,74 @@ public abstract class InvoiceRepoContractTest
     }
 
     [Test]
+    public async Task Import_GivenValidContentAndNumber_WhenImporting_ThenReturnsInvoiceWithSpecifiedNumber()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+        const string number = "123";
+
+        var imported = await fixture.Repo.ImportAsync(content, number);
+
+        Assert.That(imported.Number, Is.EqualTo(number));
+        AssertInvoiceContentsEqual(content, imported.Content);
+        Assert.That(imported.IsCorrected, Is.False);
+    }
+
+    [Test]
+    public async Task Import_GivenValidContent_WhenImporting_ThenInvoiceIsRetrievable()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+        const string number = "124";
+
+        var imported = await fixture.Repo.ImportAsync(content, number);
+
+        var retrieved = await fixture.GetInvoiceAsync(imported.Number);
+        AssertInvoicesEqual(imported, retrieved);
+    }
+
+    [Test]
+    public async Task Import_GivenExistingNumber_WhenImporting_ThenThrows()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+        const string number = "125";
+
+        await fixture.Repo.ImportAsync(content, number);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Repo.ImportAsync(BuildValidInvoiceContent(buyerAddress: content.BuyerAddress with { Name = "Other" }), number));
+    }
+
+    [Test]
+    public async Task Import_GivenImportedInvoice_WhenCreatingNewInvoice_ThenSequenceAdvancesFromImported()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+        await fixture.Repo.ImportAsync(content, "999");
+
+        var created = await fixture.Repo.CreateAsync(BuildValidInvoiceContent(date: content.Date.AddDays(1)));
+
+        Assert.That(created.Number, Is.EqualTo("1000"), "Import should advance sequence; Create should get next number after imported");
+    }
+
+    [Test]
+    public async Task Import_GivenImportedInvoiceWithLowerNumber_WhenCreatingNewInvoice_ThenSequenceUsesHigherOfImportedOrExisting()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+        await fixture.Repo.ImportAsync(content, "999");
+        var created1 = await fixture.Repo.CreateAsync(BuildValidInvoiceContent(date: content.Date.AddDays(1)));
+        Assert.That(created1.Number, Is.EqualTo("1000"));
+
+        await fixture.Repo.ImportAsync(BuildValidInvoiceContent(date: content.Date.AddDays(-10)), "5");
+
+        var created2 = await fixture.Repo.CreateAsync(BuildValidInvoiceContent(date: content.Date.AddDays(2)));
+
+        Assert.That(created2.Number, Is.EqualTo("1001"), "Importing older invoice (5) should not regress sequence; Create should get 1001");
+    }
+
+    [Test]
     public async Task Create_GivenValidContent_WhenCreatingInvoice_ThenReturnsCreatedInvoiceWithGeneratedNumber()
     {
         var fixture = await SetUpAsync();

@@ -2,21 +2,28 @@ namespace Invoices;
 
 public class BgAmountTranscriber : IAmountTranscriber
 {
-    private const int MaxCents = 999_999_99; // 999,999.99 EUR
+    private const int MaxCents = 999_999_99; // 999,999.99 EUR or BGN
 
-    private enum AmountType { WholeEuros, Cents }  // евро=neuter (едно/две), евроцент=masculine (един/два)
+    private enum AmountType { WholeEuros, Cents, WholeLeva, Stotinki }
+    // евро=neuter (едно/две), евроцент=masculine (един/два)
+    // лев=masculine (един/два), стотинка=feminine (една/две)
 
     public string Transcribe(Amount amount)
     {
-        if (amount.Currency != Currency.Eur)
-            throw new ArgumentOutOfRangeException(nameof(amount), "Only EUR is supported.");
+        if (amount.Currency != Currency.Eur && amount.Currency != Currency.Bgn)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Only EUR and BGN are supported.");
 
         var cents = amount.Cents;
         if (cents < 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "Amount cannot be negative.");
         if (cents > MaxCents)
-            throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be less than 1,000,000 EUR.");
+            throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be less than 1,000,000.");
 
+        return amount.Currency == Currency.Bgn ? TranscribeBgn(cents) : TranscribeEur(cents);
+    }
+
+    private static string TranscribeEur(int cents)
+    {
         var wholeEuros = cents / 100;
         var remainingCents = cents % 100;
 
@@ -24,7 +31,7 @@ public class BgAmountTranscriber : IAmountTranscriber
             return "Нула евро и нула евроцента";
 
         var wholePart = ToBulgarian(wholeEuros, AmountType.WholeEuros);
-        var (centsPart, centsSuffix) = ToBulgarianWithSuffix(remainingCents);
+        var (centsPart, centsSuffix) = ToBulgarianWithEurSuffix(remainingCents);
 
         string result;
         if (remainingCents == 0)
@@ -37,11 +44,44 @@ public class BgAmountTranscriber : IAmountTranscriber
         return Capitalize(result);
     }
 
+    private static string TranscribeBgn(int cents)
+    {
+        var wholeLeva = cents / 100;
+        var remainingStotinki = cents % 100;
+
+        if (wholeLeva == 0 && remainingStotinki == 0)
+            return "Нула лева и нула стотинки";
+
+        var wholePart = ToBulgarian(wholeLeva, AmountType.WholeLeva);
+        var (stotinkiPart, stotinkiSuffix) = ToBulgarianWithStotinkiSuffix(remainingStotinki);
+
+        string result;
+        if (remainingStotinki == 0)
+            result = $"{wholePart} {GetLevaSuffix(wholeLeva)}";
+        else if (wholeLeva == 0)
+            result = $"Нула лева и {stotinkiPart} {stotinkiSuffix}";
+        else
+            result = $"{wholePart} {GetLevaSuffix(wholeLeva)} и {stotinkiPart} {stotinkiSuffix}";
+
+        return Capitalize(result);
+    }
+
+    private static string GetLevaSuffix(int n) =>
+        (n % 10 == 1 && n != 11) ? "лев" : "лева";
+
+    private static (string words, string suffix) ToBulgarianWithStotinkiSuffix(int n)
+    {
+        if (n == 0) return ("нула", "стотинки");
+        var words = ToBulgarian(n, AmountType.Stotinki);
+        var suffix = (n % 10 == 1 && n != 11) ? "стотинка" : "стотинки";
+        return (words, suffix);
+    }
+
     private static string Capitalize(string s) =>
         s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..] : s;
 
     /// <summary>Converts cents 0-99 to words and returns the correct noun form (евроцент/евроцента). Singular евроцент for 1,21,31,... (except 11).</summary>
-    private static (string words, string suffix) ToBulgarianWithSuffix(int n)
+    private static (string words, string suffix) ToBulgarianWithEurSuffix(int n)
     {
         if (n == 0) return ("нула", "евроцента");
         var words = ToBulgarian(n, AmountType.Cents);
@@ -60,12 +100,13 @@ public class BgAmountTranscriber : IAmountTranscriber
         {
             var thousands = n / 1000;
             n %= 1000;
+            var thousandsType = amountType == AmountType.WholeLeva ? AmountType.Stotinki : amountType;
             if (thousands == 1)
                 parts.Add("хиляда");
             else if (thousands == 2)
                 parts.Add("две хиляди");
             else
-                parts.Add(ToBulgarianUpTo999(thousands, amountType) + " хиляди");
+                parts.Add(ToBulgarianUpTo999(thousands, thousandsType) + " хиляди");
             if (n > 0 && NeedsConjunctionBeforeRemainder(n))
                 parts.Add("и");
         }
@@ -163,8 +204,18 @@ public class BgAmountTranscriber : IAmountTranscriber
 
     private static string ToBulgarianUnit(int n, AmountType amountType) => n switch
     {
-        1 => amountType == AmountType.Cents ? "един" : "едно",
-        2 => amountType == AmountType.Cents ? "два" : "две",
+        1 => amountType switch
+        {
+            AmountType.Cents or AmountType.WholeLeva => "един",
+            AmountType.Stotinki => "една",
+            _ => "едно"
+        },
+        2 => amountType switch
+        {
+            AmountType.Cents or AmountType.WholeLeva => "два",
+            AmountType.Stotinki => "две",
+            _ => "две"
+        },
         3 => "три",
         4 => "четири",
         5 => "пет",
