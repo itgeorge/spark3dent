@@ -175,6 +175,10 @@
     }
 
     .card-body{ padding: 0; }
+    .data-table{ border-collapse: collapse; }
+    .data-table th, .data-table td{ padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    .data-table th{ font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .data-table .num{ text-align: right; }
 
     /* Buttons */
     .btn{
@@ -1217,6 +1221,7 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
     }
+    function escapeHtml(s){ return escapeHtmlAttr(s); }
 
     function centsToFormatted(cents){
       const sign = cents < 0 ? "-" : "";
@@ -2109,8 +2114,69 @@
       const caption = `${clientNick} • ${formatDateISO(date)} • € ${centsToFormatted(amtCents)}`;
       $("#previewCaption").textContent = caption;
 
+      const invNum = (editorMode === "correct" ? ($("#inputNumber").value || "").trim() : "") || undefined;
+      const inv = invNum ? invoices.find(x=>x.number === invNum) : null;
+
+      if (inv?.isLegacy) {
+        $("#previewStatus").textContent = "Преглед: импортирана фактура";
+        $("#previewStatus").className = "chip ok";
+        let container = $("#tab_preview");
+        try {
+          const detailR = await fetch(`/api/invoices/${encodeURIComponent(invNum)}`);
+          if (!detailR.ok) throw new Error("Неуспешно зареждане на данни");
+          const detail = await detailR.json();
+          const buyer = detail.buyerAddress || {};
+          const seller = detail.sellerAddress || {};
+          const bank = detail.bankTransferInfo || {};
+          const lines = (detail.lineItems || []).map((li, i) =>
+            `<tr><td class="mono">${i + 1}</td><td>${escapeHtml(li.description || "")}</td><td class="mono num">${formatAmount(li.amountCents, detail.currency)}</td></tr>`
+          ).join("");
+          container.innerHTML = `
+            <div class="card" style="box-shadow:none;">
+              <div class="card-body" style="padding:14px;">
+                <p class="muted" style="margin:0 0 12px;">Импортирана фактура — използвайте бутона „Изтегли PDF” за оригиналния документ.</p>
+                <table class="data-table" style="width:100%; font-size:13px;">
+                  <tr><th style="width:100px;">Номер</th><td class="mono">${escapeHtml(detail.number || invNum)}</td></tr>
+                  <tr><th>Дата</th><td>${escapeHtml(detail.date || date)}</td></tr>
+                  <tr><th>Получател</th><td>${escapeHtml(buyer.name || inv.buyer || inv.buyerName || "—")}</td></tr>
+                  <tr><th>Адрес</th><td>${escapeHtml([buyer.address, buyer.city, buyer.postalCode, buyer.country].filter(Boolean).join(", ") || "—")}</td></tr>
+                  <tr><th>ЕИК</th><td class="mono">${escapeHtml(buyer.companyIdentifier || "—")}</td></tr>
+                </table>
+                <table class="data-table" style="width:100%; margin-top:16px; font-size:13px;">
+                  <thead><tr><th style="width:36px;">№</th><th>Описание</th><th class="num" style="width:120px;">Сума</th></tr></thead>
+                  <tbody>${lines || `<tr><td>1</td><td>—</td><td class="mono num">${formatAmount(detail.totalCents ?? amtCents, detail.currency)}</td></tr>`}</tbody>
+                </table>
+                <div style="margin-top:12px; font-weight:700;">Общо: ${formatAmount(detail.totalCents ?? amtCents, detail.currency)}</div>
+                ${bank.iban ? `<div class="muted" style="margin-top:12px; font-size:12px;">IBAN: ${escapeHtml(bank.iban)} • ${escapeHtml(bank.bankName || "")}</div>` : ""}
+              </div>
+            </div>
+          `;
+        } catch (err) {
+          container.innerHTML = `<div class="muted" style="padding:14px;">Грешка при зареждане: ${err.message}. Номер: ${escapeHtml(invNum)} • Сума: ${formatAmount(inv.cents ?? inv.totalCents ?? amtCents, inv.currency)}</div>`;
+        }
+        document.querySelector(".preview-panel")?.classList.remove("preview-scaled");
+        const mode = editorMode;
+        const number = (mode === "correct" ? ($("#inputNumber").value || "&#8212;") : "(auto)");
+        $("#tab_details").innerHTML = `
+          <div class="card" style="box-shadow:none;">
+            <div class="card-head">
+              <div class="title"><h2>Структурирани данни</h2><div class="hint">Debug data mapping</div></div>
+              <button class="btn small" type="button" id="btnCopyDetails" title="Копирай в клипборда">Копирай</button>
+            </div>
+            <div class="card-body" style="padding:14px;">
+              <pre style="margin:0; font-family:var(--mono); font-size:12px; white-space:pre-wrap;">${JSON.stringify({
+                Invoice: { Number: number, Date: date, TotalCents: amtCents },
+                Mode: mode,
+                Legacy: true,
+                Buyer: c ? { name: c.name, rep: c.rep, companyId: c.companyId } : null
+              }, null, 2)}</pre>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
       try {
-        const invNum = (editorMode === "correct" ? ($("#inputNumber").value || "").trim() : "") || undefined;
         const previewBody = { clientNickname: clientNick, amountCents: amtCents, date, format: "html", ...(invNum && { invoiceNumber: invNum }) };
         const r = await fetch("/api/invoices/preview", {
           method: "POST",

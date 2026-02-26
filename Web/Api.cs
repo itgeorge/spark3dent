@@ -320,6 +320,20 @@ public static class Api
             if (body.AmountCents < 0)
                 return Results.Json(new { error = "amountCents must be non-negative." }, statusCode: 400);
 
+            if (!string.IsNullOrWhiteSpace(body.InvoiceNumber))
+            {
+                try
+                {
+                    var existing = await invMgmt.GetInvoiceAsync(body.InvoiceNumber.Trim());
+                    if (existing.IsLegacy)
+                        return Results.Json(new { error = "Preview is not available for legacy imported invoices. Use the PDF view instead." }, statusCode: 400);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Invoice not found — PreviewInvoiceAsync will use the number as-is for correction preview
+                }
+            }
+
             if (format == "html")
             {
                 try
