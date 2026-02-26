@@ -428,6 +428,13 @@
     .client-item:hover{
       background: rgba(248,250,252,.6);
     }
+    .client-item.highlight{
+      animation: client-highlight 3s ease-out forwards;
+    }
+    @keyframes client-highlight{
+      0%{ background: rgba(124,58,237,.25); box-shadow: inset 0 0 0 2px rgba(124,58,237,.5); }
+      100%{ background: transparent; box-shadow: inset 0 0 0 0 transparent; }
+    }
     .client-left{
       min-width:0;
     }
@@ -449,6 +456,9 @@
       min-width:0;
       flex-shrink:0;
       border:none;
+    }
+    .btn-icon-small.btn-icon-bordered{
+      border:1px solid var(--border);
     }
     .client-left .detail{
       font-size:12px;
@@ -1302,7 +1312,7 @@
       refreshLists();
     }
     async function loadLatestClients(){
-      const r = await fetch("/api/clients/latest?limit=10");
+      const r = await fetch("/api/clients/latest?limit=5");
       if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
       const data = await r.json();
       latestClients = (data.items || []).map(mapClient);
@@ -1331,9 +1341,11 @@
     }
 
     function refreshLists(){
-      renderInvoices(applySearch(invoices));
-      renderInvoices(applySearch(invoices), $("#invoiceListAll"));
-      renderClients(applyClientSearch(latestClients), $("#clientList"));
+      const invoiceSearch = applySearch(invoices);
+      const clientSearch = applyClientSearch(latestClients);
+      renderInvoices(invoiceSearch.slice(0, 6));
+      renderInvoices(invoiceSearch, $("#invoiceListAll"));
+      renderClients(clientSearch.slice(0, 6), $("#clientList"));
       renderClients(applyClientSearch(clients), $("#clientListAll"));
     }
 
@@ -1403,12 +1415,17 @@
     function renderClients(list, rootEl){
       const root = rootEl || $("#clientList");
       const showRename = root.id === "clientListAll";
+      const isDashboard = root.id === "clientList";
       root.innerHTML = "";
       list.forEach(c => {
         const el = document.createElement("div");
         el.className = "client-item";
+        el.dataset.nickname = c.nickname;
         const companyId = c.companyId ?? c.companyIdentifier ?? "";
         const renameBtnHtml = showRename ? `<button class="btn small btn-icon-small" title="Преименувай" data-action="rename" data-client="${c.nickname}">&#9998;</button>` : "";
+        const firstBtnHtml = isDashboard
+          ? `<button class="btn small btn-icon-small btn-icon-bordered" title="Преглед в Клиенти" data-action="view" data-client="${c.nickname}">&#128065;</button>`
+          : `<button class="btn small" title="Редактирай клиент" data-action="edit" data-client="${c.nickname}">&#9998; Редактирай клиент</button>`;
         el.innerHTML = `
           <div class="client-left">
             <div class="nick-row">
@@ -1421,12 +1438,16 @@
           <div class="client-right">
             <div class="last">Последна фактура: <b>${lastInvoiceDateFor(c.nickname) ?? "&#8212;"}</b></div>
             <div class="client-actions">
-              <button class="btn small" title="Редактирай клиент" data-action="edit" data-client="${c.nickname}">&#9998; Редактирай клиент</button>
+              ${firstBtnHtml}
               <button class="btn small primary" data-action="new" data-client="${c.nickname}">&#65291; Нова фактура</button>
             </div>
           </div>
         `;
-        el.querySelector('button[data-action="edit"]').addEventListener("click", ()=> openEditClientModal(c.nickname));
+        const firstBtn = el.querySelector('button[data-action="edit"], button[data-action="view"]');
+        if(firstBtn){
+          if(firstBtn.dataset.action === "view") firstBtn.addEventListener("click", ()=> focusClientOnClientsPage(c.nickname));
+          else firstBtn.addEventListener("click", ()=> openEditClientModal(c.nickname));
+        }
         const renameBtn = el.querySelector('button[data-action="rename"]');
         if(renameBtn) renameBtn.addEventListener("click", (e)=> openRenameClient(c.nickname, e.target.closest(".nick-row")));
         el.querySelector('button[data-action="new"]').addEventListener("click", ()=> openEditorIssue(c.nickname));
@@ -1819,6 +1840,22 @@
         else if(e.key === "Escape"){ e.preventDefault(); cancel(); }
       });
       input.addEventListener("blur", ()=>{ setTimeout(cancel, 100); });
+    }
+
+    async function focusClientOnClientsPage(nickname){
+      if(clients.length === 0) await loadClients();
+      if($("#searchBox")) $("#searchBox").value = "";
+      setView("allClients");
+      requestAnimationFrame(()=>{
+        requestAnimationFrame(()=>{
+          const item = document.querySelector(`#clientListAll .client-item[data-nickname="${CSS.escape(nickname)}"]`);
+          if(item){
+            item.scrollIntoView({ behavior: "smooth", block: "center" });
+            item.classList.add("highlight");
+            setTimeout(()=> item.classList.remove("highlight"), 3000);
+          }
+        });
+      });
     }
 
     function openEditClientModal(nickname){
