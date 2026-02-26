@@ -201,6 +201,11 @@ public class InvoiceManagement
         return _invoiceRepo.LatestAsync(limit);
     }
 
+    public Task<QueryResult<Invoice>> ListInvoicesAsync(int limit, string? startAfterCursor)
+    {
+        return _invoiceRepo.LatestAsync(limit, startAfterCursor);
+    }
+
     public Task<Invoice> GetInvoiceAsync(string number)
     {
         return _invoiceRepo.GetAsync(number);

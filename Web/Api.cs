@@ -20,12 +20,12 @@ public static class Api
         var imageExporter = setup.ImageExporter;
 
         // --- Clients API ---
-        app.MapGet("/api/clients", async (int? limit) =>
+        app.MapGet("/api/clients", async (int? limit, string? startAfter) =>
         {
             var l = limit ?? 100;
-            var result = await clientRepo.ListAsync(l);
+            var result = await clientRepo.ListAsync(l, startAfter);
             var items = result.Items.Select(ToClientDto).ToList();
-            return Results.Json(new { items }, JsonOptions);
+            return Results.Json(new { items, nextStartAfter = result.NextStartAfter }, JsonOptions);
         });
 
         app.MapGet("/api/clients/latest", async (int? limit) =>
@@ -156,31 +156,36 @@ public static class Api
         });
 
         // --- Invoices API ---
-        app.MapGet("/api/invoices", async (int? limit) =>
+        app.MapGet("/api/invoices", async (int? limit, string? startAfter) =>
         {
-            var l = limit ?? 100;
-            var invoices = await invMgmt.ListInvoicesAsync(l);
-            var clients = await clientRepo.ListAsync(1000);
-            var clientByName = clients.Items.ToDictionary(c => c.Address.Name, c => c.Nickname, StringComparer.OrdinalIgnoreCase);
+            var limitOrDefault = limit ?? 100;
+            var invoices = await invMgmt.ListInvoicesAsync(limitOrDefault, startAfter);
+            var clientByCompanyId = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-            var items = invoices.Items.Select(inv =>
+            var items = new List<object>();
+            foreach (var inv in invoices.Items)
             {
-                var buyerName = inv.Content.BuyerAddress.Name;
-                var clientNickname = clientByName.GetValueOrDefault(buyerName);
-                return new
+                var companyId = inv.Content.BuyerAddress.CompanyIdentifier;
+                if (!clientByCompanyId.TryGetValue(companyId, out var clientNickname))
+                {
+                    var client = await clientRepo.FindByCompanyIdentifierAsync(companyId);
+                    clientNickname = client?.Nickname;
+                    clientByCompanyId[companyId] = clientNickname;
+                }
+                items.Add(new
                 {
                     number = inv.Number,
                     date = inv.Content.Date.ToString("yyyy-MM-dd"),
                     clientNickname,
-                    buyerName,
+                    buyerName = inv.Content.BuyerAddress.Name,
                     totalCents = inv.TotalAmount.Cents,
                     currency = inv.TotalAmount.Currency.ToString(),
                     status = inv.IsCorrected ? "Corrected" : "Issued",
                     isLegacy = inv.IsLegacy
-                };
-            }).ToList();
+                });
+            }
 
-            return Results.Json(new { items }, JsonOptions);
+            return Results.Json(new { items, nextStartAfter = invoices.NextStartAfter }, JsonOptions);
         });
 
         app.MapGet("/api/invoices/{number}", async (string number) =>

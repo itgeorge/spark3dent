@@ -30,6 +30,7 @@ public class ClientApiTests
         var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
         Assert.That(items.GetArrayLength(), Is.EqualTo(0));
+        Assert.That(doc.RootElement.GetProperty("nextStartAfter").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
     [Test]
@@ -220,6 +221,65 @@ public class ClientApiTests
         var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
         Assert.That(items.GetArrayLength(), Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task GetClients_WithCursor_ReturnsNextStartAfterAndPaginates()
+    {
+        foreach (var nick in new[] { "a", "b", "c", "d", "e" })
+        {
+            var body = new
+            {
+                nickname = nick,
+                name = $"{nick} Corp",
+                representativeName = "Rep",
+                companyIdentifier = "BG111",
+                address = "1 St",
+                city = "Sofia",
+                postalCode = "1000",
+                country = "BG"
+            };
+            var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            await _client.PostAsync("/api/clients", content);
+        }
+
+        var first = await _client.GetAsync("/api/clients?limit=2");
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var firstJson = await first.Content.ReadAsStringAsync();
+        var firstDoc = JsonDocument.Parse(firstJson);
+        var firstItems = firstDoc.RootElement.GetProperty("items");
+        Assert.That(firstItems.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(firstItems[0].GetProperty("nickname").GetString(), Is.EqualTo("a"));
+        Assert.That(firstItems[1].GetProperty("nickname").GetString(), Is.EqualTo("b"));
+        var nextStartAfter = firstDoc.RootElement.GetProperty("nextStartAfter").GetString();
+        Assert.That(nextStartAfter, Is.EqualTo("b"));
+
+        var second = await _client.GetAsync($"/api/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter!)}");
+        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var secondJson = await second.Content.ReadAsStringAsync();
+        var secondDoc = JsonDocument.Parse(secondJson);
+        var secondItems = secondDoc.RootElement.GetProperty("items");
+        Assert.That(secondItems.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(secondItems[0].GetProperty("nickname").GetString(), Is.EqualTo("c"));
+        Assert.That(secondItems[1].GetProperty("nickname").GetString(), Is.EqualTo("d"));
+        var nextStartAfter2 = secondDoc.RootElement.GetProperty("nextStartAfter").GetString();
+        Assert.That(nextStartAfter2, Is.EqualTo("d"));
+
+        var third = await _client.GetAsync($"/api/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter2!)}");
+        Assert.That(third.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var thirdJson = await third.Content.ReadAsStringAsync();
+        var thirdDoc = JsonDocument.Parse(thirdJson);
+        var thirdItems = thirdDoc.RootElement.GetProperty("items");
+        Assert.That(thirdItems.GetArrayLength(), Is.EqualTo(1));
+        Assert.That(thirdItems[0].GetProperty("nickname").GetString(), Is.EqualTo("e"));
+        var nextStartAfter3 = thirdDoc.RootElement.GetProperty("nextStartAfter").GetString();
+        Assert.That(nextStartAfter3, Is.EqualTo("e"));
+
+        var fourth = await _client.GetAsync($"/api/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter3!)}");
+        Assert.That(fourth.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var fourthDoc = JsonDocument.Parse(await fourth.Content.ReadAsStringAsync());
+        Assert.That(fourthDoc.RootElement.GetProperty("items").GetArrayLength(), Is.EqualTo(0));
+        Assert.That(fourthDoc.RootElement.GetProperty("nextStartAfter").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
     [Test]

@@ -1304,13 +1304,22 @@
         country: c.country
       };
     }
-    async function loadClients(){
-      const r = await fetch("/api/clients?limit=100");
-      if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
-      const data = await r.json();
-      clients = (data.items || []).map(mapClient);
-      refreshLists();
+    let allClientsLoaded = false;
+    let allInvoicesLoaded = false;
+    let dataNeedsRefresh = false;
+
+    async function refreshViewData(view){
+      if(view === "dashboard"){
+        await Promise.all([loadLatestClients(), loadInvoices()]);
+      }else if(view === "allClients"){
+        allClientsLoaded = false;
+        await loadAllClientsAsync();
+      }else if(view === "allInvoices"){
+        allInvoicesLoaded = false;
+        await loadAllInvoicesAsync();
+      }
     }
+
     async function loadLatestClients(){
       const r = await fetch("/api/clients/latest?limit=5");
       if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
@@ -1333,11 +1342,65 @@
         status: inv.status,
         isLegacy: inv.isLegacy ?? false
       }));
+      allInvoicesLoaded = false;
       refreshLists();
     }
 
-    async function refreshData(){
-      await Promise.all([loadClients(), loadLatestClients(), loadInvoices()]);
+    async function loadAllClientsAsync(){
+      if(allClientsLoaded) return;
+      const root = $("#clientListAll");
+      root.innerHTML = `<div class="loading-skeleton" style="min-height:120px;"></div>`;
+      const PAGE = 100;
+      let cursor = null;
+      clients = [];
+      try {
+        for(;;){
+          const url = cursor ? `/api/clients?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/clients?limit=${PAGE}`;
+          const r = await fetch(url);
+          if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
+          const data = await r.json();
+          const items = (data.items || []).map(mapClient);
+          clients = clients.concat(items);
+          cursor = data.nextStartAfter || null;
+          if(!cursor || items.length === 0) break;
+        }
+        allClientsLoaded = true;
+      }finally{
+        renderClients(applyClientSearch(clients), root);
+      }
+    }
+
+    async function loadAllInvoicesAsync(){
+      if(allInvoicesLoaded) return;
+      const root = $("#invoiceListAll");
+      root.innerHTML = `<div class="loading-skeleton" style="min-height:120px;"></div>`;
+      const PAGE = 100;
+      let cursor = null;
+      invoices = [];
+      try {
+        for(;;){
+          const url = cursor ? `/api/invoices?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoices?limit=${PAGE}`;
+          const r = await fetch(url);
+          if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на фактури"); return; }
+          const data = await r.json();
+          const items = (data.items || []).map(inv => ({
+            number: inv.number,
+            date: inv.date,
+            client: inv.clientNickname || "",
+            buyer: inv.buyerName || "",
+            cents: inv.totalCents,
+            currency: inv.currency || "Bgn",
+            status: inv.status,
+            isLegacy: inv.isLegacy ?? false
+          }));
+          invoices = invoices.concat(items);
+          cursor = data.nextStartAfter || null;
+          if(!cursor || items.length === 0) break;
+        }
+        allInvoicesLoaded = true;
+      }finally{
+        renderInvoices(applySearch(invoices), root);
+      }
     }
 
     function refreshLists(){
@@ -1349,7 +1412,13 @@
       renderClients(applyClientSearch(clients), $("#clientListAll"));
     }
 
-    function setView(view){
+    async function setView(view){
+      if(view === "dashboard"){
+        await refreshViewData("dashboard");
+      }else if(dataNeedsRefresh){
+        await refreshViewData(view);
+        dataNeedsRefresh = false;
+      }
       const dash = $("#viewDashboard");
       const allInv = $("#viewAllInvoices");
       const allCli = $("#viewAllClients");
@@ -1361,6 +1430,40 @@
       if(view === "allInvoices") renderInvoices(applySearch(invoices), $("#invoiceListAll"));
       if(view === "allClients") renderClients(applyClientSearch(clients), $("#clientListAll"));
       updateNavTabs(view);
+    }
+
+    async function openAllClientsView(){
+      if(dataNeedsRefresh){
+        allClientsLoaded = false;
+        dataNeedsRefresh = false;
+      }
+      const dash = $("#viewDashboard");
+      const allInv = $("#viewAllInvoices");
+      const allCli = $("#viewAllClients");
+      const ed = $("#viewEditor");
+      dash.classList.add("hidden");
+      allInv.classList.add("hidden");
+      allCli.classList.remove("hidden");
+      ed.classList.add("hidden");
+      updateNavTabs("allClients");
+      await loadAllClientsAsync();
+    }
+
+    async function openAllInvoicesView(){
+      if(dataNeedsRefresh){
+        allInvoicesLoaded = false;
+        dataNeedsRefresh = false;
+      }
+      const dash = $("#viewDashboard");
+      const allInv = $("#viewAllInvoices");
+      const allCli = $("#viewAllClients");
+      const ed = $("#viewEditor");
+      dash.classList.add("hidden");
+      allInv.classList.remove("hidden");
+      allCli.classList.add("hidden");
+      ed.classList.add("hidden");
+      updateNavTabs("allInvoices");
+      await loadAllInvoicesAsync();
     }
 
     function updateNavTabs(activeView){
@@ -1422,9 +1525,10 @@
         el.className = "client-item";
         el.dataset.nickname = c.nickname;
         const companyId = c.companyId ?? c.companyIdentifier ?? "";
+        el.dataset.companyId = companyId;
         const renameBtnHtml = showRename ? `<button class="btn small btn-icon-small" title="Преименувай" data-action="rename" data-client="${c.nickname}">&#9998;</button>` : "";
         const firstBtnHtml = isDashboard
-          ? `<button class="btn small btn-icon-small btn-icon-bordered" title="Преглед в Клиенти" data-action="view" data-client="${c.nickname}">&#128065;</button>`
+          ? `<button class="btn small btn-icon-small btn-icon-bordered" title="Преглед в Клиенти" data-action="view" data-company-id="${escapeHtmlAttr(companyId)}">&#128065;</button>`
           : `<button class="btn small" title="Редактирай клиент" data-action="edit" data-client="${c.nickname}">&#9998; Редактирай клиент</button>`;
         el.innerHTML = `
           <div class="client-left">
@@ -1445,7 +1549,7 @@
         `;
         const firstBtn = el.querySelector('button[data-action="edit"], button[data-action="view"]');
         if(firstBtn){
-          if(firstBtn.dataset.action === "view") firstBtn.addEventListener("click", ()=> focusClientOnClientsPage(c.nickname));
+          if(firstBtn.dataset.action === "view") firstBtn.addEventListener("click", ()=> focusClientOnClientsPage(companyId));
           else firstBtn.addEventListener("click", ()=> openEditClientModal(c.nickname));
         }
         const renameBtn = el.querySelector('button[data-action="rename"]');
@@ -1496,10 +1600,11 @@
       rebuildPreview();
     }
 
-    function openEditorIssue(clientNickname){
+    async function openEditorIssue(clientNickname){
+      await loadAllClientsAsync();
       editorMode = "issue";
       correctingInvoiceNumber = null;
-      const nick = clientNickname ?? selectedClientNickname ?? (clients[0]?.nickname ?? null);
+      const nick = clientNickname ?? selectedClientNickname ?? (clients[0]?.nickname ?? latestClients[0]?.nickname ?? null);
       applyClientSelection(nick);
       $("#editorTitle").textContent = "Издаване на фактура";
       $("#editorSubtitle").textContent = "Прегледът се обновява докато пишете";
@@ -1520,7 +1625,8 @@
       if(selectedClientNickname) toast(`Издаване за клиент: ${selectedClientNickname}`);
     }
 
-    function openEditorCorrect(invoiceNumber){
+    async function openEditorCorrect(invoiceNumber){
+      await loadAllClientsAsync();
       editorMode = "correct";
       correctingInvoiceNumber = invoiceNumber;
       const inv = invoices.find(x=>x.number === invoiceNumber);
@@ -1635,8 +1741,8 @@
           if(!r.ok){ showErrorPopup(data.error || "Неуспешно коригиране на фактура"); return; }
           toast(`Коригирана фактура №${data.invoice?.number || number}`);
         }
-        await refreshData();
-        setView("dashboard");
+        dataNeedsRefresh = true;
+        await setView("dashboard");
       }finally{
         btnIssue.disabled = false;
         btnIssue.classList.remove("btn-loading");
@@ -1688,17 +1794,17 @@
     $("#btnNewFromInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
 
     $$(".nav-tab").forEach(tab => {
-      tab.addEventListener("click", ()=>{
+      tab.addEventListener("click", async ()=>{
         const nav = tab.dataset.nav;
-        if(nav === "dashboard") setView("dashboard");
-        else if(nav === "allClients") setView("allClients");
-        else if(nav === "allInvoices") setView("allInvoices");
-        else if(nav === "editor") openEditorIssue(selectedClientNickname);
+        if(nav === "dashboard") await setView("dashboard");
+        else if(nav === "allClients") await openAllClientsView();
+        else if(nav === "allInvoices") await openAllInvoicesView();
+        else if(nav === "editor") await openEditorIssue(selectedClientNickname);
       });
     });
 
-    $("#btnViewAllInvoices").addEventListener("click", ()=> setView("allInvoices"));
-    $("#btnViewAllClients").addEventListener("click", ()=> setView("allClients"));
+    $("#btnViewAllInvoices").addEventListener("click", ()=> openAllInvoicesView());
+    $("#btnViewAllClients").addEventListener("click", ()=> openAllClientsView());
     $("#btnBackFromAllInvoices").addEventListener("click", ()=>{ setView("dashboard"); toast("Обратно към начало"); });
     $("#btnBackFromAllClients").addEventListener("click", ()=>{ setView("dashboard"); toast("Обратно към начало"); });
     $("#btnNewFromAllInvoices").addEventListener("click", ()=> openEditorIssue(selectedClientNickname));
@@ -1710,7 +1816,8 @@
       else showErrorPopup("Въведете номер на фактура");
     });
 
-    function openClientPickerModal(){
+    async function openClientPickerModal(){
+      await loadAllClientsAsync();
       const root = $("#clientPickerList");
       root.innerHTML = "";
       if(clients.length === 0){
@@ -1829,7 +1936,10 @@
           if(!r.ok){ saved = false; showErrorPopup(data.error || "Неуспешно преименуване"); return; }
           if(selectedClientNickname === nickname) selectedClientNickname = newNick;
           toast(`Клиент преименуван на „${newNick}"`);
-          await refreshData();
+          await refreshViewData("allClients");
+          dataNeedsRefresh = true;
+          const companyId = nickRowEl.closest(".client-item")?.dataset?.companyId;
+          if(companyId) await focusClientOnClientsPage(companyId);
         }finally{
           hideLoadingOverlay();
         }
@@ -1842,13 +1952,13 @@
       input.addEventListener("blur", ()=>{ setTimeout(cancel, 100); });
     }
 
-    async function focusClientOnClientsPage(nickname){
-      if(clients.length === 0) await loadClients();
+    async function focusClientOnClientsPage(companyIdentifier){
+      if(!companyIdentifier){ toast("Клиентът няма идентификатор на фирма"); return; }
       if($("#searchBox")) $("#searchBox").value = "";
-      setView("allClients");
+      await openAllClientsView();
       requestAnimationFrame(()=>{
         requestAnimationFrame(()=>{
-          const item = document.querySelector(`#clientListAll .client-item[data-nickname="${CSS.escape(nickname)}"]`);
+          const item = document.querySelector(`#clientListAll .client-item[data-company-id="${CSS.escape(companyIdentifier)}"]`);
           if(item){
             item.scrollIntoView({ behavior: "smooth", block: "center" });
             item.classList.add("highlight");
@@ -1858,7 +1968,8 @@
       });
     }
 
-    function openEditClientModal(nickname){
+    async function openEditClientModal(nickname){
+      await loadAllClientsAsync();
       const c = clients.find(x => x.nickname === nickname);
       if(!c){ showErrorPopup("Клиентът не е намерен"); return; }
       clientModalMode = "edit";
@@ -1930,7 +2041,12 @@
           toast(`Клиент „${nickname}" добавен`);
         }
         closeNewClientModal(clientModalMode === "new");
-        await refreshData();
+        const view = $("#viewAllClients").classList.contains("hidden") ? "dashboard" : "allClients";
+        await refreshViewData(view);
+        if(view === "dashboard") allClientsLoaded = false;
+        dataNeedsRefresh = true;
+        const companyId = body.companyIdentifier || "";
+        if(companyId) await focusClientOnClientsPage(companyId);
       }finally{
         btn.disabled = false;
         btn.classList.remove("btn-loading");
@@ -2118,8 +2234,8 @@
       $("#fieldInvoiceNumber").classList.add("hidden");
       $("#inputDate").value = new Date().toISOString().slice(0,10);
       updateDateDisplay();
-      await refreshData();
-      selectedClientNickname = clients[0]?.nickname ?? null;
+      await refreshViewData("dashboard");
+      selectedClientNickname = latestClients[0]?.nickname ?? null;
       selectedInvoiceNumber = invoices[0]?.number ?? null;
     }
 

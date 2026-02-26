@@ -50,6 +50,7 @@ public class InvoiceApiTests
         var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
         Assert.That(items.GetArrayLength(), Is.EqualTo(0));
+        Assert.That(doc.RootElement.GetProperty("nextStartAfter").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
     [Test]
@@ -194,5 +195,47 @@ public class InvoiceApiTests
         Assert.That(items.GetArrayLength(), Is.EqualTo(3));
         var numbers = items.EnumerateArray().Select(x => x.GetProperty("number").GetString()).ToList();
         Assert.That(long.Parse(numbers[0]!), Is.GreaterThan(long.Parse(numbers[2]!)));
+    }
+
+    [Test]
+    public async Task GetInvoices_WithCursor_ReturnsNextStartAfterAndPaginates()
+    {
+        await CreateClientAsync();
+        for (var i = 0; i < 5; i++)
+        {
+            var body = new { clientNickname = "acme", amountCents = (i + 1) * 1000, date = $"2026-02-2{i + 1}" };
+            var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            await _client.PostAsync("/api/invoices/issue", content);
+        }
+
+        var first = await _client.GetAsync("/api/invoices?limit=2");
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var firstDoc = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
+        var firstItems = firstDoc.RootElement.GetProperty("items");
+        Assert.That(firstItems.GetArrayLength(), Is.EqualTo(2));
+        var nextStartAfter = firstDoc.RootElement.GetProperty("nextStartAfter").GetString();
+        Assert.That(nextStartAfter, Is.Not.Null.And.Not.Empty);
+
+        var second = await _client.GetAsync($"/api/invoices?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter!)}");
+        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var secondDoc = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        var secondItems = secondDoc.RootElement.GetProperty("items");
+        Assert.That(secondItems.GetArrayLength(), Is.EqualTo(2));
+        var nextStartAfter2 = secondDoc.RootElement.GetProperty("nextStartAfter").GetString();
+        Assert.That(nextStartAfter2, Is.Not.Null.And.Not.Empty);
+
+        var third = await _client.GetAsync($"/api/invoices?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter2!)}");
+        Assert.That(third.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var thirdDoc = JsonDocument.Parse(await third.Content.ReadAsStringAsync());
+        var thirdItems = thirdDoc.RootElement.GetProperty("items");
+        Assert.That(thirdItems.GetArrayLength(), Is.EqualTo(1));
+        var nextStartAfter3 = thirdDoc.RootElement.GetProperty("nextStartAfter").GetString();
+        Assert.That(nextStartAfter3, Is.Not.Null.And.Not.Empty);
+
+        var fourth = await _client.GetAsync($"/api/invoices?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter3!)}");
+        Assert.That(fourth.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var fourthDoc = JsonDocument.Parse(await fourth.Content.ReadAsStringAsync());
+        Assert.That(fourthDoc.RootElement.GetProperty("items").GetArrayLength(), Is.EqualTo(0));
+        Assert.That(fourthDoc.RootElement.GetProperty("nextStartAfter").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 }
