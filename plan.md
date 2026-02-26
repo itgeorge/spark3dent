@@ -193,7 +193,7 @@ Depends on HtmlAgilityPack. Template loading + rendering with field substitution
 - [x] **3.3** Implement `Render_GivenValidTemplate_WhenRenderingInvoice_ThenAllFieldsPopulated`:
   - Load template via `InvoiceHtmlTemplate.LoadAsync` with `templateHtmlOverride`
   - Call `Render(invoice)`
-  - Assert all fields by ID: `invNo`, `invDate`, `sellerNameTop`,
+  - Assert all fields by ID: `invNo`, `invDate`,
     `sellerCompanyName`, `sellerCity`, `sellerAddr`, `sellerRepresentativeName`,
     `sellerBulstat`, `sellerVat`, `buyerCompanyName`, `buyerAddr`,
     `buyerRepresentativeName`, `buyerBulstat`, `buyerVat`, `totalWords`,
@@ -222,7 +222,7 @@ Depends on HtmlAgilityPack. Template loading + rendering with field substitution
   - If `templateHtmlOverride` is not null, use it; otherwise load
     `template.html` embedded resource via `EmbeddedResourceLoader`
   - Parse with `HtmlDocument`
-  - Validate all required element IDs exist (`invNo`, `invDate`, `sellerNameTop`,
+  - Validate all required element IDs exist (`invNo`, `invDate`,
     etc.) and `#items tbody` has at least one template row with `data-field`
     attributes for `idx`, `description`, `amount`
   - Throw descriptive errors for missing fields

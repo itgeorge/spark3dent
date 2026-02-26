@@ -12,7 +12,7 @@ public class InvoiceHtmlTemplate
     private const string TemplateResourceName = "template.html";
     private static readonly string[] RequiredElementIds =
     {
-        "invNo", "invDate", "sellerNameTop", "sellerCompanyName", "sellerCity", "sellerAddr",
+        "invNo", "invDate", "sellerCompanyName", "sellerCity", "sellerAddr",
         "sellerRepresentativeName", "sellerBulstat", "sellerVat", "buyerCompanyName", "buyerAddr",
         "buyerRepresentativeName", "buyerBulstat", "buyerVat", "totalWords", "taxBase", "vat20",
         "totalDue", "placeOfSupply", "taxEventDate", "paymentMethod", "iban", "bank", "bic"
@@ -101,7 +101,6 @@ public class InvoiceHtmlTemplate
             : invoice.Number.PadLeft(_invoiceNumberPadding, '0');
         SetField(doc, "invNo", formattedNumber);
         SetField(doc, "invDate", c.Date.ToString("dd.MM.yyyy 'г.'"));
-        SetField(doc, "sellerNameTop", seller.Name);
         SetField(doc, "sellerCompanyName", seller.Name);
         SetField(doc, "sellerCity", seller.City);
         SetField(doc, "sellerAddr", seller.Address);

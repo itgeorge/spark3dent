@@ -17,7 +17,7 @@ public class InvoiceHtmlTemplateTest
     <html>
     <body>
     <h1 id="docTitle">Invoice</h1>
-    <div id="sellerNameTop">Seller</div>
+    <div class="meta-row date" style="margin-top: 6px;"><span class="k">Оригинал</span></div>
     <p>Invoice number: <span id="invNo">1234567890</span></p>
     <p>Invoice date: <span id="invDate">2026-01-01</span></p>
     <section>
@@ -62,7 +62,7 @@ public class InvoiceHtmlTemplateTest
     <body>
     <div id="tpl-test-watermark">ZYXW-TEST-TEMPLATE-WATERMARK-9876</div>
     <h1 id="docTitle">Doc</h1>
-    <div id="sellerNameTop">S</div>
+    <div class="meta-row date" style="margin-top: 6px;"><span class="k">Оригинал</span></div>
     <span id="invNo">0</span>
     <span id="invDate">2026-01-01</span>
     <strong id="sellerCompanyName">S</strong>
@@ -310,7 +310,6 @@ public class InvoiceHtmlTemplateTest
             : invoice.Number.PadLeft(invoiceNumberPadding, '0');
         Assert.That(GetFieldValue(html, "invNo"), Is.EqualTo(expectedInvNo));
         Assert.That(GetFieldValue(html, "invDate"), Is.EqualTo(c.Date.ToString("dd.MM.yyyy 'г.'")));
-        Assert.That(GetFieldValue(html, "sellerNameTop"), Is.EqualTo(c.SellerAddress.Name));
         Assert.That(GetFieldValue(html, "sellerCompanyName"), Is.EqualTo(c.SellerAddress.Name));
         Assert.That(GetFieldValue(html, "sellerCity"), Is.EqualTo(c.SellerAddress.City));
         Assert.That(GetFieldValue(html, "sellerAddr"), Is.EqualTo(c.SellerAddress.Address));
