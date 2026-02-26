@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Utilities;
 
 /// <summary>
@@ -5,6 +7,54 @@ namespace Utilities;
 /// </summary>
 public static class CliOptsParser
 {
+    /// <summary>
+    /// Splits a line into arguments, respecting double and single-quoted strings.
+    /// E.g. <c>prompt -m "hello world" -f 'C:\My Path\file.pdf'</c> yields correct tokens.
+    /// </summary>
+    public static List<string> ParseLineWithQuotes(string line)
+    {
+        var result = new List<string>();
+        var current = new StringBuilder();
+        char? inQuote = null;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (inQuote.HasValue)
+            {
+                if (c == inQuote.Value)
+                {
+                    inQuote = null;
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            else if (c == '"' || c == '\'')
+            {
+                inQuote = c;
+            }
+            else if (char.IsWhiteSpace(c))
+            {
+                if (current.Length > 0)
+                {
+                    result.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        if (current.Length > 0)
+            result.Add(current.ToString());
+
+        return result;
+    }
+
     /// <summary>
     /// Parses command-line arguments into key-value options (supports --key and -s shortcuts)
     /// and returns remaining positional arguments.
