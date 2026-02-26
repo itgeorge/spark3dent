@@ -33,6 +33,7 @@ public class InvoiceEntity
     public string BankBic { get; set; } = string.Empty;
 
     public bool IsCorrected { get; set; }
+    public bool IsLegacy { get; set; }
 
     public ICollection<InvoiceLineItemEntity> LineItems { get; set; } = new List<InvoiceLineItemEntity>();
 }

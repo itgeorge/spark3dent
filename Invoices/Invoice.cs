@@ -49,16 +49,18 @@ public record Invoice
     // TODO: add validation that all line items have same currency - if not, throw an exception
     public record InvoiceContent(DateTime Date, BillingAddress SellerAddress, BillingAddress BuyerAddress, LineItem[] LineItems, BankTransferInfo BankTransferInfo);
 
-    public Invoice(string number, InvoiceContent content, bool isCorrected = false)
+    public Invoice(string number, InvoiceContent content, bool isCorrected = false, bool isLegacy = false)
     {
         Number = number;
         Content = content;
         IsCorrected = isCorrected;
+        IsLegacy = isLegacy;
     }
 
     public string Number { get; }
     public InvoiceContent Content { get; }
     public bool IsCorrected { get; }
+    public bool IsLegacy { get; }
     public Amount TotalAmount => Content.LineItems.Length == 0
         ? Amount.Zero(Currency.Eur)
         : Content.LineItems.Aggregate(Amount.Zero(Content.LineItems[0].Amount.Currency), (acc, li) => acc + li.Amount);

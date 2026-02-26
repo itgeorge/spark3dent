@@ -28,7 +28,7 @@ public class FakeInvoiceRepo : IInvoiceRepo
                 if (_storage.ContainsKey(number))
                     throw new InvalidOperationException($"Invoice with number '{number}' already exists.");
 
-                var invoice = new Invoice(number, content);
+                var invoice = new Invoice(number, content, isLegacy: true);
                 _storage[number] = invoice;
 
                 var importedNumeric = long.Parse(number);
@@ -85,6 +85,9 @@ public class FakeInvoiceRepo : IInvoiceRepo
             {
                 if (!_storage.TryGetValue(number, out var existing))
                     throw new InvalidOperationException($"Invoice with number {number} not found.");
+
+                if (existing.IsLegacy)
+                    throw new InvalidOperationException($"Legacy invoice {number} cannot be edited.");
 
                 var num = long.Parse(number);
                 var prev = _storage.Values

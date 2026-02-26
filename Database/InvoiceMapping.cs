@@ -37,7 +37,7 @@ public static class InvoiceMapping
             lineItems,
             bank);
 
-        return new Invoice(entity.Number, content, entity.IsCorrected);
+        return new Invoice(entity.Number, content, entity.IsCorrected, entity.IsLegacy);
     }
 
     public static void ApplyContent(Entities.InvoiceEntity entity, Invoice.InvoiceContent content)

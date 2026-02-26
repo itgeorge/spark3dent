@@ -146,7 +146,9 @@ public static class Api
                     clientNickname,
                     buyerName,
                     totalCents = inv.TotalAmount.Cents,
-                    status = inv.IsCorrected ? "Corrected" : "Issued"
+                    currency = inv.TotalAmount.Currency.ToString(),
+                    status = inv.IsCorrected ? "Corrected" : "Issued",
+                    isLegacy = inv.IsLegacy
                 };
             }).ToList();
 
@@ -217,6 +219,18 @@ public static class Api
             if (!string.IsNullOrWhiteSpace(body.CorrectInvoiceNumber) &&
                 !string.Equals(body.InvoiceNumber!.Trim(), body.CorrectInvoiceNumber.Trim(), StringComparison.OrdinalIgnoreCase))
                 return Results.Json(new { error = "Invoice number cannot be changed when correcting. You are correcting invoice #" + body.CorrectInvoiceNumber.Trim() + "." }, statusCode: 400);
+
+            Invoice existing;
+            try
+            {
+                existing = await invMgmt.GetInvoiceAsync(body.InvoiceNumber!.Trim());
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.Json(new { error = $"Invoice '{body.InvoiceNumber!.Trim()}' not found." }, statusCode: 404);
+            }
+            if (existing.IsLegacy)
+                return Results.Json(new { error = $"Legacy invoice {existing.Number} cannot be edited." }, statusCode: 400);
 
             DateTime? date = null;
             if (!string.IsNullOrWhiteSpace(body.Date))
@@ -345,7 +359,9 @@ public static class Api
         number = inv.Number,
         date = inv.Content.Date.ToString("yyyy-MM-dd"),
         totalCents = inv.TotalAmount.Cents,
+        currency = inv.TotalAmount.Currency.ToString(),
         status = inv.IsCorrected ? "Corrected" : "Issued",
+        isLegacy = inv.IsLegacy,
         sellerAddress = ToAddressDto(inv.Content.SellerAddress),
         buyerAddress = ToAddressDto(inv.Content.BuyerAddress),
         lineItems = inv.Content.LineItems.Select(li => new { description = li.Description, amountCents = li.Amount.Cents }).ToArray(),

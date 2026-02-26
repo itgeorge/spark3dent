@@ -70,6 +70,7 @@ public class SqliteInvoiceRepo : IInvoiceRepo
             InvoiceMapping.SetNumber(entity, number);
             entity.Date = content.Date;
             entity.IsCorrected = false;
+            entity.IsLegacy = true;
 
             c.Invoices.Add(entity);
 
@@ -108,6 +109,9 @@ public class SqliteInvoiceRepo : IInvoiceRepo
                 .Include(i => i.LineItems)
                 .FirstOrDefaultAsync(i => i.Number == number)
                 ?? throw new InvalidOperationException($"Invoice with number {number} not found.");
+
+            if (entity.IsLegacy)
+                throw new InvalidOperationException($"Legacy invoice {number} cannot be edited.");
 
             var num = entity.NumberNumeric;
             var prevInvoice = await c.Invoices

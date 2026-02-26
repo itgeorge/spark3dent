@@ -509,6 +509,21 @@
       color: var(--muted2);
     }
 
+    .legacy-banner{
+      margin: 0 14px 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(100,116,139,.12);
+      border: 1px solid rgba(100,116,139,.25);
+      color: var(--muted);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .legacy-banner.hidden{ display: none; }
+    .legacy-banner-icon{ font-size: 18px; opacity: .9; }
+
     .form{
       padding: 14px;
       display:flex;
@@ -979,6 +994,11 @@
               <span class="chip" id="modeChip">ИЗДАВАНЕ</span>
             </div>
 
+            <div class="legacy-banner hidden" id="legacyBanner" role="status">
+              <span class="legacy-banner-icon">&#8505;</span>
+              <span>Импортирани фактури не могат да се редактират. Данните са само за преглед.</span>
+            </div>
+
             <div class="form">
               <div class="field">
                 <label>Клиент</label>
@@ -1176,12 +1196,16 @@
         .replace(/>/g, "&gt;");
     }
 
-    function centsToEur(cents){
+    function centsToFormatted(cents){
       const sign = cents < 0 ? "-" : "";
       const abs = Math.abs(cents);
-      const euros = Math.floor(abs / 100);
+      const whole = Math.floor(abs / 100);
       const rem = abs % 100;
-      return `${sign}${euros}.${String(rem).padStart(2,'0')}`;
+      return `${sign}${whole}.${String(rem).padStart(2,'0')}`;
+    }
+    function formatAmount(cents, currency){
+      const formatted = centsToFormatted(cents ?? 0);
+      return currency === "Eur" ? `€ ${formatted}` : `${formatted} лв.`;
     }
 
     function formatDateISO(iso){
@@ -1283,7 +1307,9 @@
         client: inv.clientNickname || "",
         buyer: inv.buyerName || "",
         cents: inv.totalCents,
-        status: inv.status
+        currency: inv.currency || "Bgn",
+        status: inv.status,
+        isLegacy: inv.isLegacy ?? false
       }));
       refreshLists();
     }
@@ -1343,7 +1369,7 @@
           <div class="meta"><div class="invno">#${inv.number}</div><div class="date">${formatDateISO(inv.date)}</div></div>
           <div class="main" title="${escapeHtmlAttr(tooltipText)}"><div class="primaryline">${client}</div><div class="secondaryline">${buyer}</div></div>
           <div class="row-download"><button class="btn small" title="Изтегли PDF" data-action="download" data-number="${inv.number}">&#8595; PDF</button></div>
-          <div class="right"><span class="amount">&#8364; ${centsToEur(cents)}</span></div>
+          <div class="right"><span class="amount">${formatAmount(cents, inv.currency)}</span></div>
         `;
         row.querySelector('button[data-action="download"]').addEventListener("click", (e)=>{
           e.stopPropagation();
@@ -1446,6 +1472,8 @@
       $("#inputNumber").classList.remove("input-readonly");
       $("#tabPreviewBtn").textContent = "Преглед";
       $("#btnDownloadPdf").style.display = "none";
+      $("#legacyBanner").classList.add("hidden");
+      setEditorEditable(true);
       setDefaults();
       setView("editor");
       rebuildPreview();
@@ -1457,9 +1485,10 @@
       correctingInvoiceNumber = invoiceNumber;
       const inv = invoices.find(x=>x.number === invoiceNumber);
       selectedClientNickname = inv ? (inv.client||inv.clientNickname) : selectedClientNickname;
-      $("#editorTitle").textContent = "Преглед / Коригиране";
-      $("#editorSubtitle").textContent = "Променете данните и издайте корекция";
-      $("#modeChip").textContent = "ПРЕГЛЕД / КОРИГИРАНЕ";
+      const isLegacy = inv?.isLegacy ?? false;
+      $("#editorTitle").textContent = isLegacy ? "Преглед на фактура" : "Преглед / Коригиране";
+      $("#editorSubtitle").textContent = isLegacy ? "Импортирана фактура — само преглед" : "Променете данните и издайте корекция";
+      $("#modeChip").textContent = isLegacy ? "ИМПОРТИРАНА" : "ПРЕГЛЕД / КОРИГИРАНЕ";
       $("#modeChip").className = "chip fix";
       $("#btnIssue").textContent = "Запази корекция";
       $("#fieldInvoiceNumber").classList.remove("hidden");
@@ -1467,15 +1496,38 @@
       $("#inputNumber").classList.add("input-readonly");
       $("#tabPreviewBtn").textContent = "Преглед";
       $("#btnDownloadPdf").style.display = "";
+      $("#legacyBanner").classList.toggle("hidden", !isLegacy);
+      setEditorEditable(!isLegacy);
       setDefaults(inv);
       setView("editor");
       rebuildPreview();
     }
 
+    function setEditorEditable(editable){
+      ["#inputAmount", "#inputDate"].forEach(sel=>{
+        const el = $(sel);
+        if(el){ el.disabled = !editable; el.readOnly = !editable; el.classList.toggle("input-readonly", !editable); }
+      });
+      ["#btnChangeClient", "#btnEditDate"].forEach(sel=>{
+        const el = $(sel);
+        if(el){ el.disabled = !editable; }
+      });
+      const pill = $("#clientPill");
+      if(pill){
+        pill.style.pointerEvents = editable ? "" : "none";
+        pill.style.opacity = editable ? "" : "0.7";
+        pill.style.cursor = editable ? "pointer" : "default";
+      }
+      const dateWrap = $("#dateFieldWrap");
+      if(dateWrap) dateWrap.style.pointerEvents = editable ? "" : "none";
+      const btn = $("#btnIssue");
+      if(btn) btn.style.display = editable ? "" : "none";
+    }
+
     function setDefaults(inv){
       updateClientPill();
       if(inv){
-        $("#inputAmount").value = centsToEur(inv.cents ?? inv.totalCents ?? 0);
+        $("#inputAmount").value = centsToFormatted(inv.cents ?? inv.totalCents ?? 0);
         $("#inputDate").value = inv.date || "";
         $("#inputNumber").value = inv.number || "";
       }else{
@@ -1830,7 +1882,7 @@
       $("#previewStatus").className = "chip";
 
       const c = clients.find(x=>x.nickname === clientNick);
-      const caption = `${clientNick} • ${formatDateISO(date)} • € ${centsToEur(amtCents)}`;
+      const caption = `${clientNick} • ${formatDateISO(date)} • € ${centsToFormatted(amtCents)}`;
       $("#previewCaption").textContent = caption;
 
       try {

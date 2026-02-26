@@ -188,6 +188,22 @@ public abstract class InvoiceRepoContractTest
     }
 
     [Test]
+    public async Task Update_GivenLegacyInvoice_WhenUpdating_ThenThrows()
+    {
+        var fixture = await SetUpAsync();
+        var content = BuildValidInvoiceContent();
+        const string number = "999";
+        var imported = await fixture.Repo.ImportAsync(content, number);
+
+        var updatedContent = BuildValidInvoiceContent(
+            date: imported.Content.Date.AddDays(1),
+            buyerAddress: imported.Content.BuyerAddress with { Name = "Other Buyer" });
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Repo.UpdateAsync(number, updatedContent));
+    }
+
+    [Test]
     public async Task Update_GivenExistingInvoice_WhenUpdatingInvoice_ThenUpdatedInvoiceIsRetrievable()
     {
         var fixture = await SetUpAsync();
@@ -507,6 +523,7 @@ public abstract class InvoiceRepoContractTest
     {
         Assert.That(actual.Number, Is.EqualTo(expected.Number));
         Assert.That(actual.IsCorrected, Is.EqualTo(expected.IsCorrected));
+        Assert.That(actual.IsLegacy, Is.EqualTo(expected.IsLegacy));
         AssertInvoiceContentsEqual(expected.Content, actual.Content);
     }
 
