@@ -1,0 +1,79 @@
+name: Build & Publish (Web)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact_name: spark3dent-web-linux-x64
+          - os: windows-latest
+            rid: win-x64
+            artifact_name: spark3dent-web-win-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore ./Web/Web.csproj
+
+      - name: Publish (single-file, self-contained)
+        run: >
+          dotnet publish ./Web/Web.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o ./artifacts/publish/${{ matrix.rid }}
+
+      # Zip the publish output so it's easy to download as one file
+      - name: Zip (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd ./artifacts/publish/${{ matrix.rid }}
+          tar -czf ../../${{ matrix.artifact_name }}.tar.gz .
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $src = "artifacts/publish/${{ matrix.rid }}"
+          $dst = "artifacts/${{ matrix.artifact_name }}.zip"
+          Compress-Archive -Path "$src/*" -DestinationPath $dst -Force
+
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.artifact_name }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.artifact_name }}.zip
+          if-no-files-found: error
