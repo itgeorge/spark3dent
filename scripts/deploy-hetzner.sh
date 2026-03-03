@@ -124,7 +124,11 @@ IMAGE_TAR_SHA256="$(compute_sha256 "${IMAGE_TAR}")"
 IMAGE_TAR_SIZE_BYTES="$(wc -c < "${IMAGE_TAR}" | tr -d '[:space:]')"
 
 echo "Preparing remote directory ${REMOTE_DIR} on ${SSH_HOST}..."
-ssh "${SSH_OPTS[@]}" "${SSH_HOST}" "mkdir -p ${REMOTE_DIR}/chunks"
+ssh "${SSH_OPTS[@]}" "${SSH_HOST}" bash -s -- "${REMOTE_DIR}" <<'EOF'
+set -euo pipefail
+remote_dir="$1"
+mkdir -p "${remote_dir}/chunks"
+EOF
 
 if [[ "${SKIP_UPLOAD}" == "true" ]]; then
   echo "Skip-upload mode enabled. Skipping chunked upload; assuming chunks already on server."
@@ -151,12 +155,26 @@ scp_with_retry "${REPO_ROOT}/scripts/deploy-hetzner-remote.sh" "${SSH_HOST}:${RE
 REMOTE_IMAGE_TAR="${REMOTE_DIR}/${IMAGE_FILE_NAME}"
 echo "Running remote deployment..."
 # Normalize line endings after scp (Windows CRLF -> Linux LF), then execute remotely.
-ssh "${SSH_OPTS[@]}" "${SSH_HOST}" \
-  "sed -i 's/\r$//' ${REMOTE_DIR}/deploy-hetzner-remote.sh && \
-   chmod +x ${REMOTE_DIR}/deploy-hetzner-remote.sh && \
-   IMAGE_NAME='${IMAGE_NAME}' IMAGE_TAG='${IMAGE_TAG}' SPARK3DENT_PORT='${SPARK3DENT_PORT}' \
-   REMOTE_DIR=${REMOTE_DIR} IMAGE_TAR=${REMOTE_IMAGE_TAR} IMAGE_TAR_CHUNK_PREFIX='${CHUNK_PREFIX}' \
-   IMAGE_TAR_SHA256='${IMAGE_TAR_SHA256}' IMAGE_TAR_SIZE_BYTES='${IMAGE_TAR_SIZE_BYTES}' \
-   ${REMOTE_DIR}/deploy-hetzner-remote.sh"
+ssh "${SSH_OPTS[@]}" "${SSH_HOST}" bash -s -- \
+  "${REMOTE_DIR}" "${IMAGE_NAME}" "${IMAGE_TAG}" "${SPARK3DENT_PORT}" \
+  "${REMOTE_IMAGE_TAR}" "${CHUNK_PREFIX}" "${IMAGE_TAR_SHA256}" "${IMAGE_TAR_SIZE_BYTES}" <<'EOF'
+set -euo pipefail
+remote_dir="$1"
+image_name="$2"
+image_tag="$3"
+spark3dent_port="$4"
+remote_image_tar="$5"
+chunk_prefix="$6"
+image_tar_sha256="$7"
+image_tar_size_bytes="$8"
+
+sed -i 's/\r$//' "${remote_dir}/deploy-hetzner-remote.sh"
+chmod +x "${remote_dir}/deploy-hetzner-remote.sh"
+
+IMAGE_NAME="${image_name}" IMAGE_TAG="${image_tag}" SPARK3DENT_PORT="${spark3dent_port}" \
+REMOTE_DIR="${remote_dir}" IMAGE_TAR="${remote_image_tar}" IMAGE_TAR_CHUNK_PREFIX="${chunk_prefix}" \
+IMAGE_TAR_SHA256="${image_tar_sha256}" IMAGE_TAR_SIZE_BYTES="${image_tar_size_bytes}" \
+"${remote_dir}/deploy-hetzner-remote.sh"
+EOF
 
 echo "Deployment complete."

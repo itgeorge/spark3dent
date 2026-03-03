@@ -11,7 +11,7 @@ services:
       SingleBox__BlobStoragePath: /var/opt/spark3dent/blobs
       SingleBox__LogDirectory: /var/log/spark3dent
     ports:
-      - "${SPARK3DENT_PORT:-8080}:${SPARK3DENT_PORT:-8080}"
+      - "127.0.0.1:${SPARK3DENT_PORT:-8080}:${SPARK3DENT_PORT:-8080}"
     volumes:
       - ${SPARK3DENT_DATA_DIR:-./data}:/var/opt/spark3dent/data
       - ${SPARK3DENT_BLOB_DIR:-./blobs}:/var/opt/spark3dent/blobs

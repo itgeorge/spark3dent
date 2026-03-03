@@ -10,3 +10,12 @@ publish/
 *.suo
 *.tmp
 *.log
+
+# Local runtime artifacts and secrets
+.docker/
+.env
+.env.*
+**/.env
+**/.env.*
+**/appsettings.*.local.json
+**/secrets/
