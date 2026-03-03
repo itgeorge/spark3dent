@@ -59,3 +59,9 @@ nunit-*.xml
 
 # Publish
 publish/*
+
+# Legacy invoice test data (sensitive, not for open source)
+Invoices/test-data/legacy-invoices/
+
+# Local Docker runtime data and deployment artifacts
+.docker/

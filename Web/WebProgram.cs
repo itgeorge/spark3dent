@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 var config = await LoadConfigAsync(builder.Configuration);
 
-var logDir = config.Desktop.LogDirectory;
+var logDir = config.SingleBox.LogDirectory;
 Directory.CreateDirectory(logDir);
 var logPath = Path.Combine(logDir, "spark3dent-web.log");
 using var fileLogger = new FileLogger(logPath);
@@ -23,8 +23,8 @@ if (setup == null)
     throw new InvalidOperationException("SellerAddress and SellerBankTransferInfo must be configured in appsettings.json.");
 }
 
-var port = GetPort(builder.Configuration);
-var url = $"http://127.0.0.1:{port}";
+var (bindAddress, port) = ResolveEndpoint(config, builder.Configuration);
+var url = $"http://{bindAddress}:{port}";
 builder.WebHost.UseUrls(url);
 
 var app = builder.Build();
@@ -69,9 +69,10 @@ var env = builder.Environment.EnvironmentName;
 const string DevelopmentEnvName = "Development";
 const string MvpEnvName = "Mvp";
 const string TestEnvName = "Test";
-var shouldOpenBrowser = config.App.ShouldOpenBrowserOnStart
-    ?? (string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase));
+var shouldOpenBrowser = config.Runtime.HostingMode == HostingMode.Desktop &&
+    (config.App.ShouldOpenBrowserOnStart
+     ?? (string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase)));
 var shouldWaitForShutdown = !string.Equals(env, TestEnvName, StringComparison.OrdinalIgnoreCase);
 
 if (shouldOpenBrowser)
@@ -88,12 +89,38 @@ else
 if (shouldWaitForShutdown)
     await app.WaitForShutdownAsync();
 
-static int GetPort(IConfiguration configuration)
+static (string BindAddress, int Port) ResolveEndpoint(Config config, IConfiguration configuration)
 {
-    var portStr = configuration["Port"] ?? Environment.GetEnvironmentVariable("PORT");
-    if (int.TryParse(portStr, out var port) && port >= 0)
-        return port;
-    using var listener = new TcpListener(IPAddress.Loopback, 0);
+    var bindAddress = ResolveBindAddress(config.Runtime);
+    var port = ResolvePort(config, configuration, bindAddress);
+    return (bindAddress, port);
+}
+
+static string ResolveBindAddress(RuntimeConfig runtimeConfig)
+{
+    if (!string.IsNullOrWhiteSpace(runtimeConfig.BindAddress))
+        return runtimeConfig.BindAddress;
+
+    return runtimeConfig.HostingMode == HostingMode.Desktop ? "127.0.0.1" : "0.0.0.0";
+}
+
+static int ResolvePort(Config config, IConfiguration configuration, string bindAddress)
+{
+    if (config.Runtime.Port is >= 0)
+        return config.Runtime.Port.Value;
+
+    if (config.Runtime.HostingMode == HostingMode.HetznerDocker)
+    {
+        throw new InvalidOperationException(
+            "Runtime.Port must be configured for HetznerDocker deployments.");
+    }
+
+    var portStr = configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT");
+    if (int.TryParse(portStr, out var envPort) && envPort >= 0)
+        return envPort;
+
+    var listenerAddress = bindAddress == "0.0.0.0" ? IPAddress.Any : IPAddress.Loopback;
+    using var listener = new TcpListener(listenerAddress, 0);
     listener.Start();
     return ((IPEndPoint)listener.LocalEndpoint).Port;
 }
@@ -101,8 +128,9 @@ static int GetPort(IConfiguration configuration)
 static Task<Config> LoadConfigAsync(IConfiguration configuration)
 {
     var config = configuration.Get<Config>() ?? new Config();
-    config.Desktop ??= new DesktopConfig();
-    AppBootstrap.ResolveDesktopDefaults(config);
+    config.Runtime ??= new RuntimeConfig();
+    config.SingleBox ??= new SingleBoxConfig();
+    AppBootstrap.ResolveSingleBoxDefaults(config);
     return Task.FromResult(config);
 }
 

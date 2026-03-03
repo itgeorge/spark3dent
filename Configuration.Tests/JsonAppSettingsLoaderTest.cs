@@ -46,7 +46,11 @@ public class JsonAppSettingsLoaderTest
                   "Country": "Bulgaria"
                 }
               },
-              "Desktop": {
+              "Runtime": {
+                "HostingMode": "Desktop",
+                "Port": 5077
+              },
+              "SingleBox": {
                 "DatabasePath": "/path/to/db",
                 "BlobStoragePath": "/path/to/blobs",
                 "LogDirectory": "/path/to/logs"
@@ -67,14 +71,17 @@ public class JsonAppSettingsLoaderTest
         Assert.That(config.App.SellerAddress!.City, Is.EqualTo("Sofia"));
         Assert.That(config.App.SellerAddress!.PostalCode, Is.EqualTo("1000"));
         Assert.That(config.App.SellerAddress!.Country, Is.EqualTo("Bulgaria"));
-        Assert.That(config.Desktop, Is.Not.Null);
-        Assert.That(config.Desktop!.DatabasePath, Is.EqualTo("/path/to/db"));
-        Assert.That(config.Desktop!.BlobStoragePath, Is.EqualTo("/path/to/blobs"));
-        Assert.That(config.Desktop!.LogDirectory, Is.EqualTo("/path/to/logs"));
+        Assert.That(config.Runtime, Is.Not.Null);
+        Assert.That(config.Runtime.HostingMode, Is.EqualTo(HostingMode.Desktop));
+        Assert.That(config.Runtime.Port, Is.EqualTo(5077));
+        Assert.That(config.SingleBox, Is.Not.Null);
+        Assert.That(config.SingleBox!.DatabasePath, Is.EqualTo("/path/to/db"));
+        Assert.That(config.SingleBox!.BlobStoragePath, Is.EqualTo("/path/to/blobs"));
+        Assert.That(config.SingleBox!.LogDirectory, Is.EqualTo("/path/to/logs"));
     }
 
     [Test]
-    public async Task LoadAsync_GivenAppSettingsWithMissingOptionalFields_WhenLoading_ThenUsesDefaults()
+    public async Task LoadAsync_GivenAppSettingsWithMissingOptionalFields_WhenLoading_ThenStayEmpty()
     {
         WriteAppSettings("{}");
 
@@ -83,10 +90,13 @@ public class JsonAppSettingsLoaderTest
 
         Assert.That(config.App.StartInvoiceNumber, Is.EqualTo(1));
         Assert.That(config.App.SellerAddress, Is.Null);
-        Assert.That(config.Desktop, Is.Not.Null);
-        Assert.That(config.Desktop!.DatabasePath, Is.Empty);
-        Assert.That(config.Desktop!.BlobStoragePath, Is.Empty);
-        Assert.That(config.Desktop!.LogDirectory, Is.Empty);
+        Assert.That(config.Runtime, Is.Not.Null);
+        Assert.That(config.Runtime.HostingMode, Is.EqualTo(HostingMode.Desktop));
+        Assert.That(config.Runtime.Port, Is.Null);
+        Assert.That(config.SingleBox, Is.Not.Null);
+        Assert.That(config.SingleBox!.DatabasePath, Is.Empty);
+        Assert.That(config.SingleBox!.BlobStoragePath, Is.Empty);
+        Assert.That(config.SingleBox!.LogDirectory, Is.Empty);
     }
 
     [Test]
@@ -107,7 +117,7 @@ public class JsonAppSettingsLoaderTest
               "App": {
                 "StartInvoiceNumber": 42
               },
-              "Desktop": {}
+              "SingleBox": {}
             }
             """);
         try
@@ -142,7 +152,7 @@ public class JsonAppSettingsLoaderTest
                   "Country": "Bulgaria"
                 }
               },
-              "Desktop": {}
+              "SingleBox": {}
             }
             """);
 
@@ -171,7 +181,7 @@ public class JsonAppSettingsLoaderTest
                   "Country": "България"
                 }
               },
-              "Desktop": {}
+              "SingleBox": {}
             }
             """);
 
@@ -197,7 +207,7 @@ public class JsonAppSettingsLoaderTest
                   "Bic": "UNCRBGSF"
                 }
               },
-              "Desktop": {}
+              "SingleBox": {}
             }
             """);
 

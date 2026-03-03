@@ -36,7 +36,21 @@ public record AppConfig
     public SellerBankTransferInfo? SellerBankTransferInfo { get; init; }
 }
 
-public record DesktopConfig
+public enum HostingMode
+{
+    Desktop,
+    LocalDocker,
+    HetznerDocker
+}
+
+public record RuntimeConfig
+{
+    public HostingMode HostingMode { get; set; } = HostingMode.Desktop;
+    public int? Port { get; set; }
+    public string? BindAddress { get; set; }
+}
+
+public record SingleBoxConfig
 {
     public string DatabasePath { get; set; } = string.Empty;
     public string BlobStoragePath { get; set; } = string.Empty;
@@ -46,5 +60,6 @@ public record DesktopConfig
 public record Config
 {
     public AppConfig App { get; set; } = new();
-    public DesktopConfig Desktop { get; set; } = new();
+    public RuntimeConfig Runtime { get; set; } = new();
+    public SingleBoxConfig SingleBox { get; set; } = new();
 }

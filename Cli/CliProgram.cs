@@ -18,7 +18,7 @@ class CliProgram
 
         var config = await AppBootstrap.LoadAndResolveConfigAsync();
 
-        var logDir = config.Desktop.LogDirectory;
+        var logDir = config.SingleBox.LogDirectory;
         Directory.CreateDirectory(logDir);
         var logPath = Path.Combine(logDir, "spark3dent.log");
         using var fileLogger = new FileLogger(logPath);

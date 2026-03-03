@@ -1,0 +1,22 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Web/Dockerfile
+    image: spark3dent-web:local
+    container_name: spark3dent-web-local
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Runtime__HostingMode: LocalDocker
+      Runtime__Port: 8080
+      Runtime__BindAddress: 0.0.0.0
+      SingleBox__DatabasePath: /var/opt/spark3dent/data/spark3dent.db
+      SingleBox__BlobStoragePath: /var/opt/spark3dent/blobs
+      SingleBox__LogDirectory: /var/log/spark3dent
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./.docker/local/data:/var/opt/spark3dent/data
+      - ./.docker/local/blobs:/var/opt/spark3dent/blobs
+      - ./.docker/local/logs:/var/log/spark3dent
+    restart: unless-stopped

@@ -15,31 +15,31 @@ public static class AppBootstrap
     private const string InvoicesBucket = "invoices";
     private const int InvoiceNumberPadding = 10;
 
-    /// <summary>Fills empty Desktop paths with defaults. Returns true if any were applied.</summary>
-    public static bool ResolveDesktopDefaults(Config config)
+    /// <summary>Fills empty SingleBox paths with defaults. Returns true if any were applied.</summary>
+    public static bool ResolveSingleBoxDefaults(Config config)
     {
-        var desktop = config.Desktop;
+        var singleBox = config.SingleBox;
         var defaultsUsed = false;
 
-        if (string.IsNullOrEmpty(desktop.DatabasePath))
+        if (string.IsNullOrEmpty(singleBox.DatabasePath))
         {
-            desktop.DatabasePath = Path.Combine(
+            singleBox.DatabasePath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Spark3Dent", "spark3dent.db");
             defaultsUsed = true;
         }
 
-        if (string.IsNullOrEmpty(desktop.BlobStoragePath))
+        if (string.IsNullOrEmpty(singleBox.BlobStoragePath))
         {
-            desktop.BlobStoragePath = Path.Combine(
+            singleBox.BlobStoragePath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 "Spark3Dent");
             defaultsUsed = true;
         }
 
-        if (string.IsNullOrEmpty(desktop.LogDirectory))
+        if (string.IsNullOrEmpty(singleBox.LogDirectory))
         {
-            desktop.LogDirectory = Path.Combine(
+            singleBox.LogDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Spark3Dent", "logs");
             defaultsUsed = true;
@@ -48,16 +48,16 @@ public static class AppBootstrap
         return defaultsUsed;
     }
 
-    /// <summary>Loads config via JsonAppSettingsLoader, resolves default Desktop paths, writes back defaults if needed. Returns Config.</summary>
+    /// <summary>Loads config via JsonAppSettingsLoader, resolves default SingleBox paths, writes back defaults if needed. Returns Config.</summary>
     public static async Task<Config> LoadAndResolveConfigAsync(string? basePath = null)
     {
         var loader = new JsonAppSettingsLoader(basePath);
         var config = await loader.LoadAsync();
 
-        if (ResolveDesktopDefaults(config))
+        if (ResolveSingleBoxDefaults(config))
         {
             var appSettingsPath = loader.GetAppSettingsPath();
-            var json = JsonSerializer.Serialize(new { App = config.App, Desktop = config.Desktop },
+            var json = JsonSerializer.Serialize(new { App = config.App, Runtime = config.Runtime, SingleBox = config.SingleBox },
                 new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(appSettingsPath, json);
         }
@@ -74,7 +74,7 @@ public static class AppBootstrap
         var sellerAddress = ConfigToBillingAddress(config.App.SellerAddress);
         var bankTransferInfo = ConfigToBankTransferInfo(config.App.SellerBankTransferInfo);
 
-        var dbPath = config.Desktop.DatabasePath;
+        var dbPath = config.SingleBox.DatabasePath;
         var dbDir = Path.GetDirectoryName(dbPath);
         if (!string.IsNullOrEmpty(dbDir))
             Directory.CreateDirectory(dbDir);
@@ -105,7 +105,7 @@ public static class AppBootstrap
         var loggingImageExporter = new LoggingInvoiceExporter(imageExporter, logger);
         var contentTypeMap = BuildContentTypeMap(loggingPdfExporter, loggingImageExporter);
         var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
-        var invoicesDir = Path.Combine(config.Desktop.BlobStoragePath, "invoices");
+        var invoicesDir = Path.Combine(config.SingleBox.BlobStoragePath, "invoices");
         blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
         var loggingBlobStorage = new LoggingBlobStorage(blobStorage, logger);
 

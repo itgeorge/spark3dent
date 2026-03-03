@@ -15,14 +15,18 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string _dbPath;
     private readonly string _blobPath;
     private readonly string _startInvoiceNumber;
+    private readonly string _runtimeHostingMode;
+    private readonly string? _runtimePort;
 
-    public ApiTestFixture(string startInvoiceNumber = "1")
+    public ApiTestFixture(string startInvoiceNumber = "1", string runtimeHostingMode = "Desktop", string? runtimePort = "0")
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
         _dbPath = Path.Combine(_tempDir, "test.db");
         _blobPath = Path.Combine(_tempDir, "blob");
         _startInvoiceNumber = startInvoiceNumber;
+        _runtimeHostingMode = runtimeHostingMode;
+        _runtimePort = runtimePort;
     }
 
     public HttpClient Client => CreateClient();
@@ -32,14 +36,17 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         builder.UseEnvironment("Test");
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            var inMemory = new Dictionary<string, string?>
             {
-                ["Port"] = "0",
-                ["Desktop:DatabasePath"] = _dbPath,
-                ["Desktop:BlobStoragePath"] = _blobPath,
-                ["Desktop:LogDirectory"] = _tempDir,
+                ["Runtime:HostingMode"] = _runtimeHostingMode,
+                ["SingleBox:DatabasePath"] = _dbPath,
+                ["SingleBox:BlobStoragePath"] = _blobPath,
+                ["SingleBox:LogDirectory"] = _tempDir,
                 ["App:StartInvoiceNumber"] = _startInvoiceNumber
-            });
+            };
+            if (_runtimePort != null)
+                inMemory["Runtime:Port"] = _runtimePort;
+            config.AddInMemoryCollection(inMemory);
         });
     }
 
@@ -48,14 +55,17 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         builder.UseEnvironment("Test");
         builder.ConfigureHostConfiguration(config =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            var inMemory = new Dictionary<string, string?>
             {
-                ["Port"] = "0",
-                ["Desktop:DatabasePath"] = _dbPath,
-                ["Desktop:BlobStoragePath"] = _blobPath,
-                ["Desktop:LogDirectory"] = _tempDir,
+                ["Runtime:HostingMode"] = _runtimeHostingMode,
+                ["SingleBox:DatabasePath"] = _dbPath,
+                ["SingleBox:BlobStoragePath"] = _blobPath,
+                ["SingleBox:LogDirectory"] = _tempDir,
                 ["App:StartInvoiceNumber"] = _startInvoiceNumber
-            });
+            };
+            if (_runtimePort != null)
+                inMemory["Runtime:Port"] = _runtimePort;
+            config.AddInMemoryCollection(inMemory);
         });
         return base.CreateHost(builder);
     }

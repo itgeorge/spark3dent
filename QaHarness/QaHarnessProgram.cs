@@ -133,16 +133,16 @@ internal static class QaHarnessProgram
         if (root == null)
             return Error($"appsettings.json parsed to null");
 
-        var desktop = root["Desktop"]?.AsObject();
-        if (desktop == null)
+        var singleBox = root["SingleBox"]?.AsObject();
+        if (singleBox == null)
         {
-            desktop = new JsonObject();
-            root["Desktop"] = desktop;
+            singleBox = new JsonObject();
+            root["SingleBox"] = singleBox;
         }
 
-        desktop["DatabasePath"] = Path.Combine(stagingDir, "data", "spark3dent.db");
-        desktop["BlobStoragePath"] = Path.Combine(stagingDir, "blobs");
-        desktop["LogDirectory"] = Path.Combine(stagingDir, "logs");
+        singleBox["DatabasePath"] = Path.Combine(stagingDir, "data", "spark3dent.db");
+        singleBox["BlobStoragePath"] = Path.Combine(stagingDir, "blobs");
+        singleBox["LogDirectory"] = Path.Combine(stagingDir, "logs");
 
         var writeOptions = new JsonSerializerOptions
         {

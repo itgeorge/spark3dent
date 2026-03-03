@@ -29,7 +29,7 @@ public class LoggingConfigLoaderTest
     [Test]
     public async Task LoadAsync_WhenWrappingJsonLoader_ThenDelegatesAndReturnsConfig()
     {
-        WriteAppSettings("""{"App":{"StartInvoiceNumber":42},"Desktop":{}}""");
+        WriteAppSettings("""{"App":{"StartInvoiceNumber":42},"SingleBox":{}}""");
         var inner = new JsonAppSettingsLoader(_tempDir);
         var logger = new CapturingLogger();
         var sut = new LoggingConfigLoader(inner, logger);
@@ -58,7 +58,7 @@ public class LoggingConfigLoaderTest
     [Test]
     public async Task LoadAsync_WhenLoggerThrows_ThenOperationSucceedsAnyway()
     {
-        WriteAppSettings("""{"App":{"StartInvoiceNumber":99},"Desktop":{}}""");
+        WriteAppSettings("""{"App":{"StartInvoiceNumber":99},"SingleBox":{}}""");
         var inner = new JsonAppSettingsLoader(_tempDir);
         var logger = new ThrowingLogger();
         var sut = new LoggingConfigLoader(inner, logger);

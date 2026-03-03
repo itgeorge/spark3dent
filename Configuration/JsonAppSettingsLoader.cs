@@ -30,7 +30,8 @@ public class JsonAppSettingsLoader : IConfigLoader
 
         var config = new Config();
         configuration.Bind(config);
-        config.Desktop ??= new DesktopConfig();
+        config.Runtime ??= new RuntimeConfig();
+        config.SingleBox ??= new SingleBoxConfig();
         return await Task.FromResult(config);
     }
 }

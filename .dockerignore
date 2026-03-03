@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/.cursor/
+**/TestResults/
+publish/
+.git/
+*.user
+*.suo
+*.tmp
+*.log

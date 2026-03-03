@@ -32,13 +32,13 @@ public class InvoiceExportApiTests
     {
         var config = _fixture.Server.Services.GetRequiredService<IConfiguration>();
         var configObj = config.Get<Config>() ?? new Config();
-        configObj.Desktop ??= new DesktopConfig();
-        configObj.Desktop.DatabasePath = config["Desktop:DatabasePath"] ?? configObj.Desktop.DatabasePath;
-        if (string.IsNullOrEmpty(configObj.Desktop.DatabasePath))
-            throw new InvalidOperationException("Desktop:DatabasePath not configured");
+        configObj.SingleBox ??= new SingleBoxConfig();
+        configObj.SingleBox.DatabasePath = config["SingleBox:DatabasePath"] ?? configObj.SingleBox.DatabasePath;
+        if (string.IsNullOrEmpty(configObj.SingleBox.DatabasePath))
+            throw new InvalidOperationException("SingleBox:DatabasePath not configured");
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite($"Data Source={configObj.Desktop.DatabasePath}")
+            .UseSqlite($"Data Source={configObj.SingleBox.DatabasePath}")
             .Options;
 
         AppDbContext ContextFactory() => new AppDbContext(options);
