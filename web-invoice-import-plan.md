@@ -67,21 +67,21 @@ Dependencies: none.
 
 ## Phase 2 - Backend Import API Contract
 
-- [ ] **TDD (RED):** add failing API tests for `POST /api/invoices/import/analyze` and `POST /api/invoices/import/commit` (invalid payloads, missing files, response shape).
-- [ ] **TDD (GREEN):** implement endpoint contract until these tests pass and existing API tests remain green.
-- [ ] Define request/response DTOs in `Web/Api.cs` (or a dedicated file under `Web/`):
-  - analyze request options (`nicknameFromMol`, optional `limit`)
-  - analyze result (`files`, `unresolvedCompanies`, parse errors)
+- [x] **TDD (RED):** add failing API tests for `POST /api/invoices/import/analyze` and `POST /api/invoices/import/commit` (invalid payloads, missing files, response shape).
+- [x] **TDD (GREEN):** implement endpoint contract until these tests pass and existing API tests remain green.
+- [x] Define request/response DTOs in `Web/ImportDtos.cs`:
+  - analyze request options (`nicknameFromMol`, optional `limit` from form)
+  - analyze result (`files`, `unresolvedCompanies`)
   - import request (`items`, `companyIdentifier -> nickname` map, dry-run flag optional)
   - import result summary (`imported`, `skipped`, `failed`, item statuses)
-- [ ] Add endpoint `POST /api/invoices/import/analyze` accepting `multipart/form-data` with multiple PDF files.
-- [ ] Add endpoint `POST /api/invoices/import/commit` accepting JSON payload from analysis output plus nickname map.
-- [ ] Validate input constraints:
+- [x] Add endpoint `POST /api/invoices/import/analyze` accepting `multipart/form-data` with multiple PDF files.
+- [x] Add endpoint `POST /api/invoices/import/commit` accepting JSON payload from analysis output plus nickname map.
+- [x] Validate input constraints:
   - only `.pdf`
   - non-empty upload list
-  - max file count and max file size guardrails (configurable constants)
-  - unique company-id mapping conflicts
-- [ ] Ensure error shape stays consistent with existing API style (`{ error: ... }`).
+  - max file count (500) and max file size (1MB) guardrails
+  - (unique company-id mapping conflicts deferred to Phase 3)
+- [x] Ensure error shape stays consistent with existing API style (`{ error: ... }`).
 
 Dependencies: Phase 1.
 

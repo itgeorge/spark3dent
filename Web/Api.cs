@@ -2,11 +2,15 @@ using System.Text.Json;
 using Accounting;
 using Configuration;
 using Invoices;
+using Microsoft.AspNetCore.Http;
 
 namespace Web;
 
 public static class Api
 {
+    private const int ImportMaxFileCount = 500;
+    private const int ImportMaxFileSizeBytes = 1024 * 1024; // 1MB
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -379,10 +383,20 @@ public static class Api
                 return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
 
             var form = await ctx.Request.ReadFormAsync();
-            if (form.Files.Count == 0)
+            var fileList = form.Files.ToList();
+            if (fileList.Count == 0)
                 return Results.Json(new { error = "At least one PDF file is required." }, statusCode: 400);
 
-            return Results.Json(new { files = Array.Empty<object>(), unresolvedCompanies = Array.Empty<object>() }, JsonOptions);
+            var validateErr = ValidateImportAnalyzeFiles(fileList);
+            if (validateErr != null)
+                return Results.Json(new { error = validateErr }, statusCode: 400);
+
+            var nicknameFromMol = string.Equals(form["nicknameFromMol"].FirstOrDefault(), "true", StringComparison.OrdinalIgnoreCase);
+            var limitStr = form["limit"].FirstOrDefault();
+            int? limit = int.TryParse(limitStr, out var n) && n > 0 ? n : null;
+
+            var response = new ImportAnalyzeResponse(Array.Empty<ImportAnalyzeFileResult>(), Array.Empty<string>());
+            return Results.Json(response, JsonOptions);
         });
 
         app.MapPost("/api/invoices/import/commit", async (HttpContext ctx) =>
@@ -395,7 +409,8 @@ public static class Api
             if (body == null)
                 return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400);
 
-            return Results.Json(new { imported = 0, skipped = 0, failed = 0, itemStatuses = Array.Empty<object>() }, JsonOptions);
+            var response = new ImportCommitResponse(0, 0, 0, Array.Empty<ImportCommitItemStatus>());
+            return Results.Json(response, JsonOptions);
         });
 
         app.MapGet("/api/invoices/{number}/pdf", async (string number) =>
@@ -498,6 +513,24 @@ public static class Api
     private static string? ResolveOpenAiKey(Config config) =>
         config.App.OpenAiKey?.Trim() ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
 
+    private static string? ValidateImportAnalyzeFiles(IReadOnlyList<IFormFile> files)
+    {
+        if (files.Count > ImportMaxFileCount)
+            return $"Maximum {ImportMaxFileCount} files allowed per request.";
+
+        foreach (var file in files)
+        {
+            var fileName = file.FileName ?? "";
+            if (!fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                return "Only PDF files are accepted. Rejected: " + (string.IsNullOrEmpty(fileName) ? "(unnamed)" : fileName);
+
+            if (file.Length > ImportMaxFileSizeBytes)
+                return $"File size must not exceed {ImportMaxFileSizeBytes / (1024 * 1024)}MB. Rejected: " + (string.IsNullOrEmpty(fileName) ? "(unnamed)" : fileName);
+        }
+
+        return null;
+    }
+
     private static string GetMissingOpenAiKeyError()
     {
         var envKey = Config.ToEnvKey(nameof(Config.App), nameof(AppConfig.OpenAiKey));
@@ -510,5 +543,4 @@ public static class Api
     private record IssueInvoiceRequest(string? ClientNickname, int? AmountCents, string? Date);
     private record CorrectInvoiceRequest(string? InvoiceNumber, int? AmountCents, string? Date, string? CorrectInvoiceNumber);
     private record PreviewInvoiceRequest(string? ClientNickname, int AmountCents, string? Date, string? Format, string? InvoiceNumber);
-    private record ImportCommitRequest(object[]? Items, Dictionary<string, string>? NicknameMap);
 }
