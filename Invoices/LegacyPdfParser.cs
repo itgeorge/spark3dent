@@ -93,8 +93,8 @@ public static class LegacyPdfParser
 
     private static string? ExtractInvoiceNumber(string text)
     {
-        // Номер 0000000106 or Номер 14
-        var m = Regex.Match(text, @"Номер\s+(\d+)");
+        // Номер 0000000106 or Номер: 14 or Номер - 42
+        var m = Regex.Match(text, @"Номер\s*[:\s\-]*\s*(\d+)", RegexOptions.IgnoreCase);
         return m.Success ? m.Groups[1].Value.TrimStart('0').IfEmpty("0") : null;
     }
 
@@ -114,8 +114,8 @@ public static class LegacyPdfParser
 
     private static (int? Cents, Currency Currency) ExtractTotalAndCurrency(string text)
     {
-        // Сума за плащане: 270.00 лв. or 190.00 лв. or 320.00 евро - use last match (final total)
-        var matches = Regex.Matches(text, @"Сума\s+за\s+плащане\s*:\s*([\d\s]+[.,]\d{2})\s*(лева|лв\.|евро)");
+        // Сума за плащане: 270.00 лв. or Сума за плащане - 190.00 лв. - use last match (final total)
+        var matches = Regex.Matches(text, @"Сума\s+за\s+плащане\s*[:\s\-]*\s*([\d\s]+[.,]\d{2})\s*(лева|лв\.|евро)", RegexOptions.IgnoreCase);
         if (matches.Count == 0) return (null, Currency.Bgn);
         var m = matches[^1];
         var amountStr = m.Groups[1].Value.Replace(" ", "").Replace(",", ".");
@@ -172,9 +172,11 @@ public static class LegacyPdfParser
         return "";
     }
 
+    private static readonly RegexOptions IgnoreCaseSingleline = RegexOptions.IgnoreCase | RegexOptions.Singleline;
+
     private static (string? Address, string? City) ExtractAddress(string afterPoluchatel)
     {
-        var m = Regex.Match(afterPoluchatel, @"Адрес\s*:\s*(.+?)(?=ЕИК|МОЛ|№|$)", RegexOptions.Singleline);
+        var m = Regex.Match(afterPoluchatel, @"Адрес\s*[:\s\-]*\s*(.+?)(?=ЕИК|МОЛ|№|$)", IgnoreCaseSingleline);
         if (!m.Success) return (null, null);
         var addrBlock = m.Groups[1].Value.Trim();
         // Format: гр.Килифарево, ул."Ал.Стамболийски"10 or ул.Юрий Венелин 22 гр.Габрово
@@ -187,14 +189,70 @@ public static class LegacyPdfParser
 
     private static string? ExtractEik(string afterPoluchatel)
     {
-        var m = Regex.Match(afterPoluchatel, @"ЕИК\s+по\s+Булстат\s*:\s*(\d+)");
-        return m.Success ? m.Groups[1].Value : null;
+        var labelSep = @"\s*[:\s\-]*\s*";
+        var patterns = new[]
+        {
+            @"ЕИК\s+по\s+Булстат" + labelSep + @"(\d+)",
+            @"ЕИК" + labelSep + @"(\d+)",
+            @"ЕИК\s+(\d+)"
+        };
+        foreach (var p in patterns)
+        {
+            var m = Regex.Match(afterPoluchatel, p, RegexOptions.IgnoreCase);
+            if (m.Success) return m.Groups[1].Value;
+        }
+        return null;
     }
 
     private static string? ExtractMol(string afterPoluchatel)
     {
-        var m = Regex.Match(afterPoluchatel, @"МОЛ\s*:\s*([^№]+?)(?=№|ЕИК|Адрес|$)", RegexOptions.Singleline);
-        return m.Success ? m.Groups[1].Value.Trim() : null;
+        var labelSep = @"\s*[:\s\-]*\s*";
+        var m = Regex.Match(afterPoluchatel, @"МОЛ" + labelSep + @"([^№]+?)(?=№|ЕИК|Адрес|Сума|$)", IgnoreCaseSingleline);
+        if (m.Success) return m.Groups[1].Value.Trim();
+
+        return ExtractMolFromUnlabeledNamesAfterEik(afterPoluchatel);
+    }
+
+    /// <summary>
+    /// When МОЛ label is missing, detect 2-3 Cyrillic names after the ЕИК number as the representative.
+    /// </summary>
+    private static string? ExtractMolFromUnlabeledNamesAfterEik(string afterPoluchatel)
+    {
+        var pos = GetEndOfEikBlockPosition(afterPoluchatel);
+        if (pos == null) return null;
+
+        var afterEik = afterPoluchatel[pos.Value..];
+        var sumIdx = afterEik.IndexOf("Сума", StringComparison.OrdinalIgnoreCase);
+        var numIdx = afterEik.IndexOf("№");
+        var end = sumIdx >= 0 ? sumIdx : (numIdx >= 0 ? numIdx : afterEik.Length);
+        var candidate = afterEik[..end].Trim();
+
+        // 2-3 Cyrillic name words, optionally prefixed with д-р (doctor)
+        var nameMatch = Regex.Match(candidate, @"^(д-р\s+)?[\p{IsCyrillic}\s\-]+$");
+        if (!nameMatch.Success || candidate.Length < 4) return null;
+
+        var namePart = candidate.StartsWith("д-р", StringComparison.Ordinal)
+            ? candidate["д-р".Length..].TrimStart()
+            : candidate;
+        var words = Regex.Matches(namePart, @"[\p{IsCyrillic}]+").Select(x => x.Value).ToList();
+        return words.Count >= 2 && words.Count <= 3 ? candidate : null;
+    }
+
+    private static int? GetEndOfEikBlockPosition(string afterPoluchatel)
+    {
+        var labelSep = @"\s*[:\s\-]*\s*";
+        var patterns = new[]
+        {
+            @"ЕИК\s+по\s+Булстат" + labelSep + @"\d+",
+            @"ЕИК" + labelSep + @"\d+",
+            @"ЕИК\s+\d+"
+        };
+        foreach (var p in patterns)
+        {
+            var m = Regex.Match(afterPoluchatel, p, RegexOptions.IgnoreCase);
+            if (m.Success) return m.Index + m.Length;
+        }
+        return null;
     }
 
     private static string IfEmpty(this string s, string defaultValue) =>
