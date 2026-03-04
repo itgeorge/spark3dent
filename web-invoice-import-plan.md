@@ -125,7 +125,7 @@ Dependencies: Phase 2.
   - skip existing invoice numbers (`already exists`)
   - report skipped vs failed separately
 - [x] Return per-file diagnostics suitable for UI table rendering.
-- [ ] Add structured logging for analyze and commit operations (counts + timings; no secret logging).
+- [x] Add structured logging for analyze and commit operations (counts + timings; no secret logging).
 
 Dependencies: Phase 3.
 

@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using Accounting;
 using Invoices;
 using Microsoft.AspNetCore.Http;
 using Storage;
+using Utilities;
 
 namespace Web;
 
@@ -35,23 +37,27 @@ public sealed class InvoiceImporter : IInvoiceImporter
     private readonly ILegacyInvoiceParser _parser;
     private readonly IBlobStorage _blobStorage;
     private readonly string _tempBucket;
+    private readonly Utilities.ILogger? _logger;
 
     public InvoiceImporter(
         IClientRepo clientRepo,
         IInvoiceOperations invoiceOps,
         ILegacyInvoiceParser parser,
         IBlobStorage blobStorage,
-        string tempBucket)
+        string tempBucket,
+        Utilities.ILogger? logger = null)
     {
         _clientRepo = clientRepo;
         _invoiceOps = invoiceOps;
         _parser = parser;
         _blobStorage = blobStorage;
         _tempBucket = tempBucket;
+        _logger = logger;
     }
 
     public async Task<ImportAnalyzeResponse> AnalyzeAsync(ImportAnalyzeRequest request, CancellationToken cancellationToken = default)
     {
+        var sw = Stopwatch.StartNew();
         var files = request.Files;
         if (request.Options.Limit is > 0)
             files = files.Take(request.Options.Limit.Value).ToArray();
@@ -92,11 +98,16 @@ public sealed class InvoiceImporter : IInvoiceImporter
                 null));
         }
 
+        sw.Stop();
+        var okCount = results.Count(r => r.Error == null);
+        var errorCount = results.Count(r => r.Error != null);
+        _logger?.LogInfo($"Import analyze completed: {results.Count} files, {okCount} parsed, {errorCount} errors, {unresolved.Count} unresolved companies, {sw.ElapsedMilliseconds}ms");
         return new ImportAnalyzeResponse(results.ToArray(), unresolved.Order(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     public async Task<ImportCommitResponse> CommitAsync(ImportCommitRequest request, CancellationToken cancellationToken = default)
     {
+        var sw = Stopwatch.StartNew();
         var statuses = new List<ImportCommitItemStatus>();
         var imported = 0;
         var skipped = 0;
@@ -157,6 +168,8 @@ public sealed class InvoiceImporter : IInvoiceImporter
             }
         }
 
+        sw.Stop();
+        _logger?.LogInfo($"Import commit completed: {imported} imported, {skipped} skipped, {failed} failed, {sw.ElapsedMilliseconds}ms");
         return new ImportCommitResponse(imported, skipped, failed, statuses.ToArray());
     }
 
