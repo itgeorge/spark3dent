@@ -103,28 +103,28 @@ Dependencies: Phase 2.
 
 ## Phase 4 - Importer Abstraction and Execution Logic
 
-- [ ] **TDD (RED):** add failing importer behavior tests for parity (parse failure skip, duplicate invoice skip, client creation, mixed summary).
-- [ ] **TDD (GREEN):** implement importer flow until behavior tests pass and existing suites remain green.
-- [ ] Introduce `IInvoiceImporter` owning both operations:
+- [x] **TDD (RED):** add failing importer behavior tests for parity (parse failure skip, duplicate invoice skip, client creation, mixed summary). (`Web.Tests/InvoiceImporterContractTest.cs`)
+- [x] **TDD (GREEN):** implement importer flow until behavior tests pass and existing suites remain green. (`dotnet test Web.Tests`)
+- [x] Introduce `IInvoiceImporter` owning both operations:
   - `AnalyzeAsync(...)`
   - `CommitAsync(...)`
-- [ ] Create importer contract tests using base abstract test structure analogous to `Accounting.Tests/ClientRepoContractTest.cs`.
-- [ ] Add concrete importer test suites:
+- [x] Create importer contract tests using base abstract test structure analogous to `Accounting.Tests/ClientRepoContractTest.cs`.
+- [x] Add concrete importer test suites:
   - real implementation tests analogous to `Database.Tests/SqliteClientRepoTest.cs`
   - fake implementation tests analogous to `Accounting.Tests/Fakes/FakeClientRepoTest.cs`
-- [ ] Implement real `InvoiceImporter` to mirror CLI behavior:
+- [x] Implement real `InvoiceImporter` to mirror CLI behavior:
   - parse each uploaded PDF via `GptLegacyPdfParser`
   - resolve existing clients by company identifier
   - generate fallback nickname with MOL slug default (per decision)
   - create missing clients before import
   - call `InvoiceManagement.ImportLegacyInvoiceAsync(...)`
-- [ ] Replace CLI path-based parsing with stream/temp-file strategy for uploaded files:
+- [x] Replace CLI path-based parsing with stream/temp-file strategy for uploaded files:
   - write uploads to temp files for parser compatibility
   - ensure cleanup in `finally`
-- [ ] Keep idempotent behavior:
+- [x] Keep idempotent behavior:
   - skip existing invoice numbers (`already exists`)
   - report skipped vs failed separately
-- [ ] Return per-file diagnostics suitable for UI table rendering.
+- [x] Return per-file diagnostics suitable for UI table rendering.
 - [ ] Add structured logging for analyze and commit operations (counts + timings; no secret logging).
 
 Dependencies: Phase 3.

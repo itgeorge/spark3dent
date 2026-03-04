@@ -6,10 +6,17 @@ public record ImportAnalyzeOptions(bool NicknameFromMol = false, int? Limit = nu
 /// <summary>Per-file result from analyze.</summary>
 public record ImportAnalyzeFileResult(
     string FileName,
+    string? TempFileToken,
     string? InvoiceNumber,
     string? Date,
     int? TotalCents,
     string? CompanyIdentifier,
+    string? Name,
+    string? RepresentativeName,
+    string? Address,
+    string? City,
+    string? PostalCode,
+    string? Country,
     string? Error);
 
 /// <summary>Response from POST /api/invoices/import/analyze.</summary>
@@ -26,10 +33,17 @@ public record ImportCommitRequest(
 /// <summary>Single item from analyze to import.</summary>
 public record ImportCommitItem(
     string FileName,
+    string? TempFileToken,
     string? InvoiceNumber,
     string? Date,
     int? TotalCents,
-    string? CompanyIdentifier);
+    string? CompanyIdentifier,
+    string? Name,
+    string? RepresentativeName,
+    string? Address,
+    string? City,
+    string? PostalCode,
+    string? Country);
 
 /// <summary>Per-item status from commit.</summary>
 public record ImportCommitItemStatus(

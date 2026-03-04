@@ -17,9 +17,21 @@ public static class LegacyPdfParser
         if (!File.Exists(pdfPath))
             return null;
 
+        var bytes = File.ReadAllBytes(pdfPath);
+        return TryParse(bytes);
+    }
+
+    /// <summary>
+    /// Attempts to parse a legacy invoice PDF from raw bytes. Returns null if parsing fails.
+    /// </summary>
+    public static LegacyInvoiceData? TryParse(byte[] pdfBytes)
+    {
+        if (pdfBytes == null || pdfBytes.Length == 0)
+            return null;
+
         try
         {
-            var text = ExtractRawText(pdfPath);
+            var text = ExtractRawText(pdfBytes);
             return TryParseFromText(text);
         }
         catch
@@ -65,7 +77,17 @@ public static class LegacyPdfParser
     /// </summary>
     public static string ExtractRawText(string pdfPath)
     {
-        using var doc = PdfDocument.Open(pdfPath);
+        var bytes = File.ReadAllBytes(pdfPath);
+        return ExtractRawText(bytes);
+    }
+
+    /// <summary>
+    /// Extracts raw text from PDF bytes (for debugging/analysis).
+    /// </summary>
+    public static string ExtractRawText(byte[] pdfBytes)
+    {
+        using var ms = new MemoryStream(pdfBytes);
+        using var doc = PdfDocument.Open(ms);
         return string.Join(" ", doc.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text));
     }
 

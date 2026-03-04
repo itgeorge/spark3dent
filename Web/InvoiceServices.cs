@@ -12,6 +12,7 @@ public interface IInvoiceOperations
     Task<InvoiceOperationResult> CorrectInvoiceAsync(string invoiceNumber, int? amountCents, DateTime? date, IInvoiceExporter exporter);
     Task<InvoiceOperationResult> ReExportInvoiceAsync(string invoiceNumber, IInvoiceExporter exporter);
     Task<ExportResult> PreviewInvoiceAsync(string clientNickname, int amountCents, DateTime? date, IInvoiceExporter exporter, string? invoiceNumber = null);
+    Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes = null);
     Task<(Stream Stream, string DownloadFileName)> GetInvoicePdfStreamAsync(string number);
 }
 
@@ -41,6 +42,9 @@ public sealed class InvoiceManagementAdapter : IInvoiceOperations
 
     public Task<ExportResult> PreviewInvoiceAsync(string clientNickname, int amountCents, DateTime? date, IInvoiceExporter exporter, string? invoiceNumber = null) =>
         _inner.PreviewInvoiceAsync(clientNickname, amountCents, date, exporter, invoiceNumber);
+
+    public Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes = null) =>
+        _inner.ImportLegacyInvoiceAsync(data, sourcePdfBytes);
 
     public Task<(Stream Stream, string DownloadFileName)> GetInvoicePdfStreamAsync(string number) =>
         _inner.GetInvoicePdfStreamAsync(number);

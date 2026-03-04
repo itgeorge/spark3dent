@@ -161,6 +161,7 @@ public class InvoiceManagement
     /// Imports a legacy invoice with a specific number. Used for importing manually-created PDF invoices.
     /// If sourcePdfPath is provided, copies the original PDF to blob storage for download.
     /// </summary>
+    // TODO: this method should be removed in favor of using the new ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes) method
     public async Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, string? sourcePdfPath = null)
     {
         var content = BuildLegacyInvoiceContent(data);
@@ -171,7 +172,31 @@ public class InvoiceManagement
             try
             {
                 await using var fileStream = File.OpenRead(sourcePdfPath);
-                await _blobStorage.UploadAsync(_invoicesBucket, LegacyImportObjectKey(data.Number), fileStream, "application/pdf");
+                await UploadLegacyPdfAsync(data.Number, fileStream);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to store legacy PDF for invoice {data.Number}", ex);
+            }
+        }
+
+        return invoice;
+    }
+
+    /// <summary>
+    /// Imports a legacy invoice and stores original PDF bytes when provided.
+    /// </summary>
+    public async Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes)
+    {
+        var content = BuildLegacyInvoiceContent(data);
+        var invoice = await _invoiceRepo.ImportAsync(content, data.Number);
+
+        if (sourcePdfBytes is { Length: > 0 })
+        {
+            try
+            {
+                await using var ms = new MemoryStream(sourcePdfBytes, writable: false);
+                await UploadLegacyPdfAsync(data.Number, ms);
             }
             catch (Exception ex)
             {
@@ -244,6 +269,9 @@ public class InvoiceManagement
     }
 
     private static string LegacyImportObjectKey(string number) => $"legacy/imported-{number}.pdf";
+
+    private Task UploadLegacyPdfAsync(string number, Stream source) =>
+        _blobStorage.UploadAsync(_invoicesBucket, LegacyImportObjectKey(number), source, "application/pdf");
 
     private static (string ObjectKey, string Filename) BuildInvoiceObjectKey(string invoiceNumber, DateTime invoiceDate, int invoiceNumberPadding)
     {

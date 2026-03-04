@@ -28,10 +28,18 @@ if (setup == null)
 builder.Services.AddSingleton(setup.Config);
 builder.Services.AddSingleton(setup.ClientRepo);
 builder.Services.AddSingleton<IClientRepo>(setup.ClientRepo);
+builder.Services.AddSingleton(setup.BlobStorage);
 builder.Services.AddSingleton<IInvoiceOperations>(new InvoiceManagementAdapter(setup.InvoiceManagement));
 builder.Services.AddSingleton<IPdfInvoiceExporter>(new PdfInvoiceExporterAdapter(setup.PdfExporter));
 builder.Services.AddSingleton<IImageInvoiceExporter>(new ImageInvoiceExporterAdapter(setup.ImageExporter));
-builder.Services.AddSingleton<IInvoiceImporter, NoopInvoiceImporter>();
+builder.Services.AddSingleton<ILegacyInvoiceParser, GptLegacyInvoiceParser>();
+builder.Services.AddSingleton<IInvoiceImporter>(sp =>
+    new InvoiceImporter(
+        sp.GetRequiredService<IClientRepo>(),
+        sp.GetRequiredService<IInvoiceOperations>(),
+        sp.GetRequiredService<ILegacyInvoiceParser>(),
+        sp.GetRequiredService<Storage.IBlobStorage>(),
+        setup.ImportTempBucket));
 
 var (bindAddress, port) = ResolveEndpoint(config, builder.Configuration);
 var url = $"http://{bindAddress}:{port}";

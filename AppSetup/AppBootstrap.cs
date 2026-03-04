@@ -13,6 +13,7 @@ namespace AppSetup;
 public static class AppBootstrap
 {
     private const string InvoicesBucket = "invoices";
+    private const string ImportTempBucket = "invoice-import-temp";
     private const int InvoiceNumberPadding = 10;
 
     /// <summary>Fills empty SingleBox paths with defaults. Returns true if any were applied.</summary>
@@ -106,7 +107,9 @@ public static class AppBootstrap
         var contentTypeMap = BuildContentTypeMap(loggingPdfExporter, loggingImageExporter);
         var blobStorage = new LocalFileSystemBlobStorage(contentTypeMap);
         var invoicesDir = Path.Combine(config.SingleBox.BlobStoragePath, "invoices");
+        var importTempDir = Path.Combine(config.SingleBox.BlobStoragePath, "invoice-import-temp");
         blobStorage.DefineBucket(InvoicesBucket, invoicesDir);
+        blobStorage.DefineBucket(ImportTempBucket, importTempDir);
         var loggingBlobStorage = new LoggingBlobStorage(blobStorage, logger);
 
         var invoiceManagement = new InvoiceManagement(
@@ -125,6 +128,8 @@ public static class AppBootstrap
             loggingClientRepo,
             loggingPdfExporter,
             loggingImageExporter,
+            loggingBlobStorage,
+            ImportTempBucket,
             config);
     }
 
@@ -173,5 +178,7 @@ public static class AppBootstrap
         IClientRepo ClientRepo,
         IInvoiceExporter PdfExporter,
         IInvoiceExporter ImageExporter,
+        IBlobStorage BlobStorage,
+        string ImportTempBucket,
         Config Config);
 }
