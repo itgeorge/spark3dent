@@ -3,6 +3,7 @@ using Accounting;
 using Configuration;
 using Invoices;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Web;
 
@@ -17,12 +18,14 @@ public static class Api
         PropertyNameCaseInsensitive = true
     };
 
-    public static void MapRoutes(WebApplication app, AppSetup.AppBootstrap.SetupResult setup)
+    public static void MapRoutes(WebApplication app)
     {
-        var invMgmt = setup.InvoiceManagement;
-        var clientRepo = setup.ClientRepo;
-        var pdfExporter = setup.PdfExporter;
-        var imageExporter = setup.ImageExporter;
+        var invMgmt = app.Services.GetRequiredService<IInvoiceOperations>();
+        var clientRepo = app.Services.GetRequiredService<IClientRepo>();
+        var pdfExporter = app.Services.GetRequiredService<IPdfInvoiceExporter>().Exporter;
+        var imageExporter = app.Services.GetRequiredService<IImageInvoiceExporter>().Exporter;
+        var config = app.Services.GetRequiredService<Config>();
+        var importer = app.Services.GetRequiredService<IInvoiceImporter>();
 
         // --- Clients API ---
         app.MapGet("/api/clients", async (int? limit, string? startAfter) =>
@@ -378,7 +381,7 @@ public static class Api
         // --- Invoice Import API (legacy PDF) ---
         app.MapPost("/api/invoices/import/analyze", async (HttpContext ctx) =>
         {
-            var apiKey = ResolveOpenAiKey(setup.Config);
+            var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
                 return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
 
@@ -395,13 +398,15 @@ public static class Api
             var limitStr = form["limit"].FirstOrDefault();
             int? limit = int.TryParse(limitStr, out var n) && n > 0 ? n : null;
 
-            var response = new ImportAnalyzeResponse(Array.Empty<ImportAnalyzeFileResult>(), Array.Empty<string>());
+            var options = new ImportAnalyzeOptions(nicknameFromMol, limit);
+            var request = new ImportAnalyzeRequest(fileList, options, apiKey!);
+            var response = await importer.AnalyzeAsync(request, ctx.RequestAborted);
             return Results.Json(response, JsonOptions);
         });
 
         app.MapPost("/api/invoices/import/commit", async (HttpContext ctx) =>
         {
-            var apiKey = ResolveOpenAiKey(setup.Config);
+            var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
                 return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
 
@@ -409,7 +414,7 @@ public static class Api
             if (body == null)
                 return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400);
 
-            var response = new ImportCommitResponse(0, 0, 0, Array.Empty<ImportCommitItemStatus>());
+            var response = await importer.CommitAsync(body, ctx.RequestAborted);
             return Results.Json(response, JsonOptions);
         });
 

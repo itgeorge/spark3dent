@@ -5,7 +5,10 @@ using NUnit.Framework;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.TestHost;
 
 namespace Web.Tests;
 
@@ -18,8 +21,14 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string _runtimeHostingMode;
     private readonly string? _runtimePort;
     private readonly string? _openAiKey;
+    private readonly IInvoiceImporter? _invoiceImporterOverride;
 
-    public ApiTestFixture(string startInvoiceNumber = "1", string runtimeHostingMode = "Desktop", string? runtimePort = "0", string? openAiKey = null)
+    public ApiTestFixture(
+        string startInvoiceNumber = "1",
+        string runtimeHostingMode = "Desktop",
+        string? runtimePort = "0",
+        string? openAiKey = null,
+        IInvoiceImporter? invoiceImporterOverride = null)
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
@@ -29,6 +38,7 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _runtimeHostingMode = runtimeHostingMode;
         _runtimePort = runtimePort;
         _openAiKey = openAiKey;
+        _invoiceImporterOverride = invoiceImporterOverride;
     }
 
     public HttpClient Client => CreateClient();
@@ -51,6 +61,15 @@ public class ApiTestFixture : WebApplicationFactory<Program>
             if (_openAiKey != null)
                 inMemory["App:OpenAiKey"] = _openAiKey;
             config.AddInMemoryCollection(inMemory);
+        });
+
+        builder.ConfigureTestServices(services =>
+        {
+            if (_invoiceImporterOverride == null)
+                return;
+
+            services.RemoveAll<IInvoiceImporter>();
+            services.AddSingleton(_invoiceImporterOverride);
         });
     }
 

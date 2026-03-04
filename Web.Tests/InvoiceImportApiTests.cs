@@ -9,6 +9,24 @@ namespace Web.Tests;
 [TestFixture]
 public class InvoiceImportApiTests
 {
+    private sealed class FakeInvoiceImporter : IInvoiceImporter
+    {
+        private readonly ImportAnalyzeResponse _analyzeResponse;
+        private readonly ImportCommitResponse _commitResponse;
+
+        public FakeInvoiceImporter(ImportAnalyzeResponse analyzeResponse, ImportCommitResponse commitResponse)
+        {
+            _analyzeResponse = analyzeResponse;
+            _commitResponse = commitResponse;
+        }
+
+        public Task<ImportAnalyzeResponse> AnalyzeAsync(ImportAnalyzeRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_analyzeResponse);
+
+        public Task<ImportCommitResponse> CommitAsync(ImportCommitRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_commitResponse);
+    }
+
     private static string MinimalPdfPath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", "minimal.pdf");
     [Test]
@@ -86,8 +104,6 @@ public class InvoiceImportApiTests
         }
     }
 
-    // --- Phase 2: API contract validation ---
-
     [Test]
     public async Task PostImportAnalyze_WithNonPdfFile_Returns400WithError()
     {
@@ -134,6 +150,36 @@ public class InvoiceImportApiTests
     }
 
     [Test]
+    public async Task PostImportAnalyze_UsesDiInjectedImporterResponse()
+    {
+        var pdfPath = MinimalPdfPath;
+        if (!File.Exists(pdfPath))
+        {
+            Assert.Ignore($"Minimal PDF not found at {pdfPath}");
+            return;
+        }
+
+        var fakeAnalyze = new ImportAnalyzeResponse(
+            [new ImportAnalyzeFileResult("invoice.pdf", "42", "2026-01-01", 12345, "BG123", null)],
+            ["BG999"]);
+        var fakeCommit = new ImportCommitResponse(0, 0, 0, []);
+        using var fixture = new ApiTestFixture(
+            openAiKey: "sk-dummy",
+            invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit));
+
+        var content = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(pdfPath));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        content.Add(fileContent, "files", "invoice.pdf");
+
+        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("files")[0].GetProperty("invoiceNumber").GetString(), Is.EqualTo("42"));
+        Assert.That(doc.RootElement.GetProperty("unresolvedCompanies")[0].GetString(), Is.EqualTo("BG999"));
+    }
+
+    [Test]
     public async Task PostImportCommit_WithInvalidJson_Returns400()
     {
         using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
@@ -160,6 +206,31 @@ public class InvoiceImportApiTests
         Assert.That(doc.RootElement.TryGetProperty("failed", out var failed), Is.True);
         Assert.That(doc.RootElement.TryGetProperty("itemStatuses", out var statuses), Is.True);
         Assert.That(statuses.ValueKind, Is.EqualTo(JsonValueKind.Array));
+    }
+
+    [Test]
+    public async Task PostImportCommit_UsesDiInjectedImporterResponse()
+    {
+        var fakeAnalyze = new ImportAnalyzeResponse([], []);
+        var fakeCommit = new ImportCommitResponse(
+            1,
+            2,
+            3,
+            [new ImportCommitItemStatus("invoice.pdf", "failed", "parse failed")]);
+        using var fixture = new ApiTestFixture(
+            openAiKey: "sk-dummy",
+            invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit));
+
+        var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>(), dryRun = false };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        var response = await fixture.Client.PostAsync("/api/invoices/import/commit", content);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("imported").GetInt32(), Is.EqualTo(1));
+        Assert.That(doc.RootElement.GetProperty("skipped").GetInt32(), Is.EqualTo(2));
+        Assert.That(doc.RootElement.GetProperty("failed").GetInt32(), Is.EqualTo(3));
+        Assert.That(doc.RootElement.GetProperty("itemStatuses")[0].GetProperty("status").GetString(), Is.EqualTo("failed"));
     }
 
     [Test]

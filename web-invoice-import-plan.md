@@ -80,21 +80,44 @@ Dependencies: none.
   - only `.pdf`
   - non-empty upload list
   - max file count (500) and max file size (1MB) guardrails
-  - (unique company-id mapping conflicts deferred to Phase 3)
+  - (unique company-id mapping conflicts deferred to Phase 4)
 - [x] Ensure error shape stays consistent with existing API style (`{ error: ... }`).
 
 Dependencies: Phase 1.
 
-## Phase 3 - Backend Import Execution Logic
+## Phase 3 - DI Seam and Testability Foundation
 
-- [ ] **TDD (RED):** add failing behavior tests for import execution parity (parse failure skip, duplicate invoice skip, client creation, mixed summary).
-- [ ] **TDD (GREEN):** implement coordinator and flow until behavior tests pass; verify no regression in existing suites.
-- [ ] Implement reusable import coordinator (in `Web` or shared service) that mirrors CLI behavior:
+- [x] **TDD (RED):** add failing Web API tests proving import endpoints can run without real OpenAI/network calls when importer dependency is replaced in test host. (Added DI-override tests in `Web.Tests/InvoiceImportApiTests.cs`)
+- [x] **TDD (GREEN):** implement DI seam in `Web/WebProgram.cs` with bootstrap-to-service wiring until tests pass. (`dotnet test Web.Tests`)
+- [x] Add true DI seam in `Web/WebProgram.cs` for dependencies currently carried via bootstrap object:
+  - invoice-management abstraction (interface around `Accounting/InvoiceManagement.cs`)
+  - `IClientRepo`
+  - invoice exporters used by current endpoints
+  - import service dependency
+- [x] Introduce interface abstraction for `InvoiceManagement` usage in Web layer (narrow facade is preferred over exposing whole class surface). (`Web/IInvoiceOperations` + adapter)
+- [x] Keep production behavior parity (same concrete runtime behavior after wiring).
+- [x] Allow `Web.Tests/ApiTestFixture.cs` to override services via DI for deterministic endpoint tests.
+- [x] Ensure all API paths keep existing error style (`{ error: ... }`).
+
+Dependencies: Phase 2.
+
+## Phase 4 - Importer Abstraction and Execution Logic
+
+- [ ] **TDD (RED):** add failing importer behavior tests for parity (parse failure skip, duplicate invoice skip, client creation, mixed summary).
+- [ ] **TDD (GREEN):** implement importer flow until behavior tests pass and existing suites remain green.
+- [ ] Introduce `IInvoiceImporter` owning both operations:
+  - `AnalyzeAsync(...)`
+  - `CommitAsync(...)`
+- [ ] Create importer contract tests using base abstract test structure analogous to `Accounting.Tests/ClientRepoContractTest.cs`.
+- [ ] Add concrete importer test suites:
+  - real implementation tests analogous to `Database.Tests/SqliteClientRepoTest.cs`
+  - fake implementation tests analogous to `Accounting.Tests/Fakes/FakeClientRepoTest.cs`
+- [ ] Implement real `InvoiceImporter` to mirror CLI behavior:
   - parse each uploaded PDF via `GptLegacyPdfParser`
   - resolve existing clients by company identifier
-  - generate fallback nickname by company name / MOL slug (`ToSlug` parity with CLI)
+  - generate fallback nickname with MOL slug default (per decision)
   - create missing clients before import
-  - call `invoiceManagement.ImportLegacyInvoiceAsync(...)`
+  - call `InvoiceManagement.ImportLegacyInvoiceAsync(...)`
 - [ ] Replace CLI path-based parsing with stream/temp-file strategy for uploaded files:
   - write uploads to temp files for parser compatibility
   - ensure cleanup in `finally`
@@ -104,9 +127,9 @@ Dependencies: Phase 1.
 - [ ] Return per-file diagnostics suitable for UI table rendering.
 - [ ] Add structured logging for analyze and commit operations (counts + timings; no secret logging).
 
-Dependencies: Phase 2.
+Dependencies: Phase 3.
 
-## Phase 4 - Web UI: Settings Dropdown and Import UX
+## Phase 5 - Web UI: Settings Dropdown and Import UX
 
 - [ ] **Manual Review Baseline:** capture pre-change behavior notes for settings button, modal interactions, and list refresh behavior.
 - [ ] Convert `#btnTopSettings` from placeholder into dropdown trigger in `Web/wwwroot/index.html`.
@@ -127,41 +150,44 @@ Dependencies: Phase 2.
   - keep modal keyboard/escape behavior consistent with current dialogs
 - [ ] **Manual Review Validation:** run UI checklist (select files -> analyze -> resolve nicknames -> commit -> data refresh) and record pass/fail notes.
 
-Dependencies: Phase 2 and Phase 3.
+Dependencies: Phase 2, Phase 3, and Phase 4.
 
-## Phase 5 - Tests (Backend + UI-Surface Expectations)
+## Phase 6 - Tests (Backend + UI-Surface Expectations)
 
 - [ ] **TDD (RED):** add/expand failing backend tests for remaining edge cases not covered by prior phases.
 - [ ] **TDD (GREEN):** implement only missing server behavior required to make these tests pass.
-- [ ] Add Web API tests for analyze endpoint:
+- [ ] Refactor `Web.Tests/InvoiceImportApiTests.cs` to use DI-injected `FakeInvoiceImporter` for non-key-gating tests.
+- [ ] Keep dedicated key-gating tests for missing OpenAI key behavior.
+- [ ] Add/adjust Web API tests for analyze endpoint:
   - rejects missing files
-  - rejects missing OpenAI key
+  - rejects invalid file type/size/count
   - accepts multipart with multiple files
-  - returns unresolved companies when client lookup misses
-- [ ] Add Web API tests for commit endpoint:
-  - imports with provided nickname map
-  - skips duplicate invoice number
-  - creates missing clients then imports
+  - returns expected response shape from importer
+- [ ] Add/adjust Web API tests for commit endpoint:
+  - validates payload contract
+  - validates company-id mapping conflicts
+  - returns expected summary shape from importer
   - reports mixed outcomes correctly
-- [ ] Add test fixture support for import-key configuration injection (`App:OpenAiKey`) using in-memory config in `Web.Tests/ApiTestFixture.cs`.
+- [ ] Add/adjust test fixture support in `Web.Tests/ApiTestFixture.cs` for service override registration (`IInvoiceImporter` and related interfaces).
 - [ ] Update manual UI checklist in docs (client-side verification remains manual for this scope).
 
-Dependencies: Phases 2-4.
+Dependencies: Phases 3-5.
 
-## Phase 6 - Deployment and Documentation
+## Phase 7 - Deployment and Documentation
 
 - [ ] **Verification TODO:** confirm env-injected `App__OpenAiKey` behavior in dev/test deployment and confirm missing-key failure messaging is still correct.
 - [ ] Update `deployments.md` environment variables table with `App__OpenAiKey` (placeholder value).
 - [ ] Update `docker-compose.local.yml` and `docker-compose.hetzner.yml` guidance to pass `App__OpenAiKey` from environment (avoid hardcoding value in committed files).
 - [ ] Confirm no sensitive data is committed (no real key in any tracked file).
 
-Dependencies: Phase 1 complete, preferably after Phase 5.
+Dependencies: Phase 1 complete, preferably after Phase 6.
 
-## Phase 7 - Final Validation and Rollout Checklist
+## Phase 8 - Final Validation and Rollout Checklist
 
 - [ ] **Server TDD Closure:** verify every server-side phase has explicit RED and GREEN evidence in checklist/PR notes.
 - [ ] Run targeted tests:
   - `dotnet test Web.Tests --filter "Invoice|Client|Startup|Error"`
+  - importer contract tests (real + fake)
   - newly added import tests
 - [ ] Manual web verification:
   - settings dropdown opens/closes correctly
@@ -182,9 +208,10 @@ Dependencies: all previous phases.
 ## Suggested Agent Parallelization
 
 - Agent A: Phase 1 + Phase 2 (config + API contract).
-- Agent B: Phase 3 (import coordinator/service internals) after Phase 2 DTO contract is stable.
-- Agent C: Phase 4 (frontend dropdown + modal workflow) after endpoint contracts are defined.
-- Agent D: Phase 5 + Phase 6 (tests + docs/deployment updates) once A/B/C merge shape is clear.
+- Agent B: Phase 3 (DI seam and Web testability) after Phase 2 DTO contract is stable.
+- Agent C: Phase 4 (importer abstraction + real/fake implementations) after Phase 3 DI seam is in place.
+- Agent D: Phase 5 (frontend dropdown + modal workflow) after Phase 4 endpoint internals are stable.
+- Agent E: Phase 6 + Phase 7 (tests + docs/deployment updates) once B/C/D merge shape is clear.
 
 ## Open Decisions to Confirm Before Coding
 

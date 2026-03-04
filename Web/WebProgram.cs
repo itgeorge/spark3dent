@@ -2,9 +2,11 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using Accounting;
 using AppSetup;
 using Configuration;
 using Utilities;
+using Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +24,14 @@ if (setup == null)
     logger.LogError("Failed to initialize dependencies. Check config: SellerAddress and SellerBankTransferInfo are required.", new InvalidOperationException("Missing config"));
     throw new InvalidOperationException("SellerAddress and SellerBankTransferInfo must be configured in appsettings.json.");
 }
+
+builder.Services.AddSingleton(setup.Config);
+builder.Services.AddSingleton(setup.ClientRepo);
+builder.Services.AddSingleton<IClientRepo>(setup.ClientRepo);
+builder.Services.AddSingleton<IInvoiceOperations>(new InvoiceManagementAdapter(setup.InvoiceManagement));
+builder.Services.AddSingleton<IPdfInvoiceExporter>(new PdfInvoiceExporterAdapter(setup.PdfExporter));
+builder.Services.AddSingleton<IImageInvoiceExporter>(new ImageInvoiceExporterAdapter(setup.ImageExporter));
+builder.Services.AddSingleton<IInvoiceImporter, NoopInvoiceImporter>();
 
 var (bindAddress, port) = ResolveEndpoint(config, builder.Configuration);
 var url = $"http://{bindAddress}:{port}";
@@ -59,7 +69,7 @@ app.MapGet("/", async () =>
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
-Web.Api.MapRoutes(app, setup);
+Web.Api.MapRoutes(app);
 
 Console.WriteLine($"Running on {url}");
 await app.StartAsync();
