@@ -17,8 +17,9 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string _startInvoiceNumber;
     private readonly string _runtimeHostingMode;
     private readonly string? _runtimePort;
+    private readonly string? _openAiKey;
 
-    public ApiTestFixture(string startInvoiceNumber = "1", string runtimeHostingMode = "Desktop", string? runtimePort = "0")
+    public ApiTestFixture(string startInvoiceNumber = "1", string runtimeHostingMode = "Desktop", string? runtimePort = "0", string? openAiKey = null)
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
@@ -27,6 +28,7 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _startInvoiceNumber = startInvoiceNumber;
         _runtimeHostingMode = runtimeHostingMode;
         _runtimePort = runtimePort;
+        _openAiKey = openAiKey;
     }
 
     public HttpClient Client => CreateClient();
@@ -46,6 +48,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
             };
             if (_runtimePort != null)
                 inMemory["Runtime:Port"] = _runtimePort;
+            if (_openAiKey != null)
+                inMemory["App:OpenAiKey"] = _openAiKey;
             config.AddInMemoryCollection(inMemory);
         });
     }
@@ -65,6 +69,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
             };
             if (_runtimePort != null)
                 inMemory["Runtime:Port"] = _runtimePort;
+            if (_openAiKey != null)
+                inMemory["App:OpenAiKey"] = _openAiKey;
             config.AddInMemoryCollection(inMemory);
         });
         return base.CreateHost(builder);

@@ -53,13 +53,13 @@
 
 ## Phase 1 - Configuration and Secret Wiring
 
-- [ ] **TDD (RED):** add/update server-side tests that assert import endpoints return an error when OpenAI key is not configured.
-- [ ] **TDD (GREEN):** confirm those tests pass once key is supplied via config/env.
-- [ ] Add `OpenAiKey` to `AppConfig` in `Configuration/Config.cs` (nullable string).
-- [ ] Keep `Web/appsettings.json` without real key (placeholder/empty only; never commit secret).
-- [ ] Read key in Web import API path from config (`setup.Config.App.OpenAiKey`) with optional fallback to `OPENAI_API_KEY` for compatibility.
-- [ ] Add validation/error message for missing key in import endpoints (`400` with actionable error).
-- [ ] Document env injection usage:
+- [x] **TDD (RED):** add/update server-side tests that assert import endpoints return an error when OpenAI key is not configured. (InvoiceImportApiTests)
+- [x] **TDD (GREEN):** confirm those tests pass once key is supplied via config/env.
+- [x] Add `OpenAiKey` to `AppConfig` in `Configuration/Config.cs` (nullable string).
+- [x] Keep `Web/appsettings.json` without real key (placeholder/empty only; never commit secret).
+- [x] Read key in Web import API path from config (`setup.Config.App.OpenAiKey`) with optional fallback to `OPENAI_API_KEY` for compatibility.
+- [x] Add validation/error message for missing key in import endpoints (`400` with actionable error).
+- [x] Document env injection usage:
   - Desktop: `App__OpenAiKey=...`
   - Update instructions in `deployments.md` for Docker Compose local/hetzner: pass `App__OpenAiKey` through environment (or env file not committed).
 

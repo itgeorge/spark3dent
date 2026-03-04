@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Accounting;
+using Configuration;
 using Invoices;
 
 namespace Web;
@@ -370,6 +371,33 @@ public static class Api
             }
         });
 
+        // --- Invoice Import API (legacy PDF) ---
+        app.MapPost("/api/invoices/import/analyze", async (HttpContext ctx) =>
+        {
+            var apiKey = ResolveOpenAiKey(setup.Config);
+            if (string.IsNullOrWhiteSpace(apiKey))
+                return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
+
+            var form = await ctx.Request.ReadFormAsync();
+            if (form.Files.Count == 0)
+                return Results.Json(new { error = "At least one PDF file is required." }, statusCode: 400);
+
+            return Results.Json(new { files = Array.Empty<object>(), unresolvedCompanies = Array.Empty<object>() }, JsonOptions);
+        });
+
+        app.MapPost("/api/invoices/import/commit", async (HttpContext ctx) =>
+        {
+            var apiKey = ResolveOpenAiKey(setup.Config);
+            if (string.IsNullOrWhiteSpace(apiKey))
+                return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
+
+            var body = await ReadJson<ImportCommitRequest>(ctx);
+            if (body == null)
+                return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400);
+
+            return Results.Json(new { imported = 0, skipped = 0, failed = 0, itemStatuses = Array.Empty<object>() }, JsonOptions);
+        });
+
         app.MapGet("/api/invoices/{number}/pdf", async (string number) =>
         {
             try
@@ -467,10 +495,20 @@ public static class Api
         }
     }
 
+    private static string? ResolveOpenAiKey(Config config) =>
+        config.App.OpenAiKey?.Trim() ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
+
+    private static string GetMissingOpenAiKeyError()
+    {
+        var envKey = Config.ToEnvKey(nameof(Config.App), nameof(AppConfig.OpenAiKey));
+        return $"OpenAI API key is not configured. Set {envKey} in appsettings.json or pass {envKey} / OPENAI_API_KEY via environment variables. Never commit real keys to source control.";
+    }
+
     private record ClientCreateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
     private record ClientUpdateRequest(string? Nickname, string? Name, string? RepresentativeName, string? CompanyIdentifier, string? VatIdentifier, string? Address, string? City, string? PostalCode, string? Country);
     private record ClientRenameRequest(string? NewNickname);
     private record IssueInvoiceRequest(string? ClientNickname, int? AmountCents, string? Date);
     private record CorrectInvoiceRequest(string? InvoiceNumber, int? AmountCents, string? Date, string? CorrectInvoiceNumber);
     private record PreviewInvoiceRequest(string? ClientNickname, int AmountCents, string? Date, string? Format, string? InvoiceNumber);
+    private record ImportCommitRequest(object[]? Items, Dictionary<string, string>? NicknameMap);
 }

@@ -90,6 +90,7 @@ Run the app in a container for local testing. Uses `HostingMode.LocalDocker`, po
 - Image: `spark3dent-web:local`
 - Port: `8080:8080` (reachable at `http://localhost:8080`)
 - Data: `.docker/local/data`, `.docker/local/blobs`, `.docker/local/logs`
+- For legacy PDF import: pass `App__OpenAiKey` via environment (e.g. in `.env` file, not committed)
 
 ---
 
@@ -134,7 +135,7 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 **Remote paths (default `~/spark3dent-deploy`):**
 - `data/`, `blobs/`, `logs/` — app persistence
 - `Caddy/Caddyfile` — Caddy config
-- `.env` — `SPARK3DENT_IMAGE`, `SPARK3DENT_PORT`
+- `.env` — `SPARK3DENT_IMAGE`, `SPARK3DENT_PORT`, `App__OpenAiKey` (for legacy PDF import; never commit real keys)
 
 ---
 
@@ -143,6 +144,8 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 | Variable | Scope | Default | Description |
 |----------|-------|---------|-------------|
 | `ASPNETCORE_ENVIRONMENT` | Web | - | `Development`, `Production`, etc. |
+| `App__OpenAiKey` | Web | null | OpenAI API key for legacy PDF import. **Never commit real keys.** Use env or env file. |
+| `OPENAI_API_KEY` | Web | - | Fallback for OpenAI key (alternative to `App__OpenAiKey`) |
 | `Runtime__HostingMode` | Web | Desktop | `Desktop`, `LocalDocker`, `HetznerDocker` |
 | `Runtime__Port` | Web | null | Port to bind (required for HetznerDocker) |
 | `Runtime__BindAddress` | Web | mode-based | Override bind address |

@@ -2,6 +2,7 @@ services:
   web:
     image: ${SPARK3DENT_IMAGE:-spark3dent-web:latest}
     container_name: spark3dent-web
+    # For legacy PDF import, add App__OpenAiKey via .env or environment (never commit real keys)
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Runtime__HostingMode: HetznerDocker

@@ -30,6 +30,8 @@ public record SellerBankTransferInfo
 public record AppConfig
 {
     public int StartInvoiceNumber { get; init; } = 1;
+    /// <summary>OpenAI API key for legacy PDF parsing. Set via App__OpenAiKey or OPENAI_API_KEY env var. Never commit real keys.</summary>
+    public string? OpenAiKey { get; init; }
     /// <summary>When set, overrides the environment-based check for opening the browser on web app start. Null = use ASPNETCORE_ENVIRONMENT (Development/Mvp = open).</summary>
     public bool? ShouldOpenBrowserOnStart { get; init; }
     public SellerAddress? SellerAddress { get; init; }
@@ -59,6 +61,9 @@ public record SingleBoxConfig
 
 public record Config
 {
+    /// <summary>Builds the environment variable key for a nested config property (e.g. App__OpenAiKey).</summary>
+    public static string ToEnvKey(string sectionName, string propertyName) => $"{sectionName}__{propertyName}";
+
     public AppConfig App { get; set; } = new();
     public RuntimeConfig Runtime { get; set; } = new();
     public SingleBoxConfig SingleBox { get; set; } = new();
