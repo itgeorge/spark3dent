@@ -158,32 +158,6 @@ public class InvoiceManagement
     }
 
     /// <summary>
-    /// Imports a legacy invoice with a specific number. Used for importing manually-created PDF invoices.
-    /// If sourcePdfPath is provided, copies the original PDF to blob storage for download.
-    /// </summary>
-    // TODO: this method should be removed in favor of using the new ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes) method
-    public async Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, string? sourcePdfPath = null)
-    {
-        var content = BuildLegacyInvoiceContent(data);
-        var invoice = await _invoiceRepo.ImportAsync(content, data.Number);
-
-        if (!string.IsNullOrEmpty(sourcePdfPath) && File.Exists(sourcePdfPath))
-        {
-            try
-            {
-                await using var fileStream = File.OpenRead(sourcePdfPath);
-                await UploadLegacyPdfAsync(data.Number, fileStream);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to store legacy PDF for invoice {data.Number}", ex);
-            }
-        }
-
-        return invoice;
-    }
-
-    /// <summary>
     /// Imports a legacy invoice and stores original PDF bytes when provided.
     /// </summary>
     public async Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes)

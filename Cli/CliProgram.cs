@@ -620,7 +620,8 @@ class CliProgram
                     await clientRepo.AddAsync(client);
                 }
 
-                await invoiceManagement.ImportLegacyInvoiceAsync(data, pdfPath);
+                var pdfBytes = File.Exists(pdfPath) ? await File.ReadAllBytesAsync(pdfPath) : null;
+                await invoiceManagement.ImportLegacyInvoiceAsync(data, pdfBytes);
                 Console.WriteLine($"Imported: {data.Number} | {data.Recipient.Name}");
                 imported++;
             }

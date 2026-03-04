@@ -17,7 +17,12 @@ public record ImportAnalyzeFileResult(
     string? City,
     string? PostalCode,
     string? Country,
-    string? Error);
+    string? Error)
+{
+    /// <summary>Creates an error result for a file that failed to parse.</summary>
+    public static ImportAnalyzeFileResult ForError(string fileName, string message) =>
+        new(fileName, null, null, null, null, null, null, null, null, null, null, null, message);
+}
 
 /// <summary>Response from POST /api/invoices/import/analyze.</summary>
 public record ImportAnalyzeResponse(

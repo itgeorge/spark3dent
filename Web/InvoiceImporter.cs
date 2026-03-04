@@ -66,21 +66,7 @@ public sealed class InvoiceImporter : IInvoiceImporter
             var parsed = await _parser.TryParseAsync(pdfBytes, request.OpenAiKey, cancellationToken);
             if (parsed == null)
             {
-                // TODO: introduce a ImportAnalyzeFileResult.Error() builder method and replace the below with it
-                results.Add(new ImportAnalyzeFileResult(
-                    file.FileName,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    "Parse failed"));
+                results.Add(ImportAnalyzeFileResult.ForError(file.FileName, "Parse failed"));
                 continue;
             }
 
