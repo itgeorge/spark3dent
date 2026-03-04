@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using NUnit.Framework;
+using Utilities.Tests;
 
 namespace Web.Tests;
 
@@ -30,43 +31,42 @@ public class InvoiceImportApiTests
     private static string MinimalPdfPath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", "minimal.pdf");
     [Test]
-    public async Task PostImportAnalyze_WhenOpenAiKeyNotConfigured_Returns400WithActionableError()
+    public async Task PostImportAnalyze_WhenOpenAiKeyNotConfigured_Returns500AndLogsOpenAiError()
     {
-        using var fixture = new ApiTestFixture(openAiKey: null);
+        var capturingLogger = new CapturingLogger();
+        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger);
         var client = fixture.Client;
 
         var content = new MultipartFormDataContent();
         var response = await client.PostAsync("/api/invoices/import/analyze", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
-        var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
-        var error = doc.RootElement.GetProperty("error").GetString();
-        Assert.That(error, Does.Contain("OpenAI").Or.Contain("key").Or.Contain("API key"));
-        Assert.That(error, Does.Contain("App__OpenAiKey").Or.Contain("OPENAI_API_KEY"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.InternalServerError);
+        Assert.That(capturingLogger.ErrorEntries, Has.Count.GreaterThanOrEqualTo(1));
+        var loggedMessage = capturingLogger.ErrorEntries[0].Message;
+        Assert.That(loggedMessage, Does.Contain("OpenAI").Or.Contain("OpenAi").Or.Contain("API key"));
     }
 
     [Test]
-    public async Task PostImportCommit_WhenOpenAiKeyNotConfigured_Returns400WithActionableError()
+    public async Task PostImportCommit_WhenOpenAiKeyNotConfigured_Returns500AndLogsOpenAiError()
     {
-        using var fixture = new ApiTestFixture(openAiKey: null);
+        var capturingLogger = new CapturingLogger();
+        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger);
         var client = fixture.Client;
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>() };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
         var response = await client.PostAsync("/api/invoices/import/commit", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
-        var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
-        var error = doc.RootElement.GetProperty("error").GetString();
-        Assert.That(error, Does.Contain("OpenAI").Or.Contain("key").Or.Contain("API key"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.InternalServerError);
+        Assert.That(capturingLogger.ErrorEntries, Has.Count.GreaterThanOrEqualTo(1));
+        var loggedMessage = capturingLogger.ErrorEntries[0].Message;
+        Assert.That(loggedMessage, Does.Contain("OpenAI").Or.Contain("OpenAi").Or.Contain("API key"));
     }
 
     [Test]
-    public async Task PostImportAnalyze_WhenOpenAiKeyConfigured_DoesNotReturnMissingKeyError()
+    public async Task PostImportAnalyze_WhenOpenAiKeyConfigured_DoesNotReturn500ForMissingKey()
     {
         using var fixture = new ApiTestFixture(openAiKey: "sk-test-dummy-key");
         var client = fixture.Client;
@@ -74,34 +74,37 @@ public class InvoiceImportApiTests
         var content = new MultipartFormDataContent();
         var response = await client.PostAsync("/api/invoices/import/analyze", content);
 
-        // Key is present, so we should NOT get the "missing key" error.
-        // We may get 400 for other reasons (e.g. no files) but error must not mention missing key.
-        var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.TryGetProperty("error", out var err))
-        {
-            var error = err.GetString() ?? "";
-            Assert.That(error, Does.Not.Contain("OpenAI key is not configured"));
-        }
+        // Key is present, so we should NOT get 500 (missing key). We may get 400 for no files.
+        Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.InternalServerError));
     }
 
     [Test]
-    public async Task PostImportCommit_WhenOpenAiKeyConfigured_DoesNotReturnMissingKeyError()
+    public async Task PostImportCommit_WhenOpenAiKeyConfigured_DoesNotReturn500ForMissingKey()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-test-dummy-key");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
         var client = fixture.Client;
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>() };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
         var response = await client.PostAsync("/api/invoices/import/commit", content);
 
+        Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.InternalServerError));
+    }
+
+    [Test]
+    public async Task PostImportAnalyze_WithInvalidMultipartForm_Returns422WithDevFriendlyMessage()
+    {
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        var content = new MultipartFormDataContent();
+        // Empty MultipartFormDataContent produces invalid multipart body (no valid Content-Disposition).
+        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
+        await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.UnprocessableEntity);
         var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.TryGetProperty("error", out var err))
-        {
-            var error = err.GetString() ?? "";
-            Assert.That(error, Does.Not.Contain("OpenAI key is not configured"));
-        }
+        var error = JsonDocument.Parse(json).RootElement.GetProperty("error").GetString();
+        Assert.That(error, Does.Contain("form").Or.Contain("multipart").Or.Contain("Content-Disposition"),
+            "Error message should be dev-friendly and hint at the form/multipart issue");
     }
 
     [Test]

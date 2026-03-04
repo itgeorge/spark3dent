@@ -11,6 +11,7 @@ public static class Api
 {
     private const int ImportMaxFileCount = 500;
     private const int ImportMaxFileSizeBytes = 1024 * 1024; // 1MB
+    private const int DevFriendlyErrorStatusCode = 422; // Unprocessable Entity — client error with dev-friendly message
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -26,6 +27,7 @@ public static class Api
         var imageExporter = app.Services.GetRequiredService<IImageInvoiceExporter>().Exporter;
         var config = app.Services.GetRequiredService<Config>();
         var importer = app.Services.GetRequiredService<IInvoiceImporter>();
+        var logger = app.Services.GetRequiredService<Utilities.ILogger>();
 
         // --- Clients API ---
         app.MapGet("/api/clients", async (int? limit, string? startAfter) =>
@@ -383,9 +385,20 @@ public static class Api
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
-                return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
+            {
+                logger.LogError(GetMissingOpenAiKeyError(), new InvalidOperationException("OpenAI API key not configured"));
+                return Results.Json(new { error = "An internal server error occurred." }, statusCode: 500);
+            }
 
-            var form = await ctx.Request.ReadFormAsync();
+            IFormCollection form;
+            try
+            {
+                form = await ctx.Request.ReadFormAsync();
+            }
+            catch (InvalidDataException ex)
+            {
+                return DevFriendlyError($"Invalid multipart form data: {ex.Message}");
+            }
             var fileList = form.Files.ToList();
             if (fileList.Count == 0)
                 return Results.Json(new { error = "At least one PDF file is required." }, statusCode: 400);
@@ -408,7 +421,10 @@ public static class Api
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
-                return Results.Json(new { error = GetMissingOpenAiKeyError() }, statusCode: 400);
+            {
+                logger.LogError(GetMissingOpenAiKeyError(), new InvalidOperationException("OpenAI API key not configured"));
+                return Results.Json(new { error = "An internal server error occurred." }, statusCode: 500);
+            }
 
             var body = await ReadJson<ImportCommitRequest>(ctx);
             if (body == null)
@@ -517,6 +533,9 @@ public static class Api
 
     private static string? ResolveOpenAiKey(Config config) =>
         config.App.OpenAiKey?.Trim() ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
+
+    private static IResult DevFriendlyError(string message) =>
+        Results.Json(new { error = message }, statusCode: DevFriendlyErrorStatusCode);
 
     private static string? ValidateImportAnalyzeFiles(IReadOnlyList<IFormFile> files)
     {

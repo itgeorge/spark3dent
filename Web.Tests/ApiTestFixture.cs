@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Utilities;
 
 namespace Web.Tests;
 
@@ -22,13 +23,15 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string? _runtimePort;
     private readonly string? _openAiKey;
     private readonly IInvoiceImporter? _invoiceImporterOverride;
+    private readonly Utilities.ILogger? _loggerOverride;
 
     public ApiTestFixture(
         string startInvoiceNumber = "1",
         string runtimeHostingMode = "Desktop",
         string? runtimePort = "0",
         string? openAiKey = null,
-        IInvoiceImporter? invoiceImporterOverride = null)
+        IInvoiceImporter? invoiceImporterOverride = null,
+        Utilities.ILogger? loggerOverride = null)
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
@@ -39,6 +42,7 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _runtimePort = runtimePort;
         _openAiKey = openAiKey;
         _invoiceImporterOverride = invoiceImporterOverride;
+        _loggerOverride = loggerOverride;
     }
 
     public HttpClient Client => CreateClient();
@@ -65,11 +69,16 @@ public class ApiTestFixture : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
-            if (_invoiceImporterOverride == null)
-                return;
-
-            services.RemoveAll<IInvoiceImporter>();
-            services.AddSingleton(_invoiceImporterOverride);
+            if (_loggerOverride != null)
+            {
+                services.RemoveAll<Utilities.ILogger>();
+                services.AddSingleton(_loggerOverride);
+            }
+            if (_invoiceImporterOverride != null)
+            {
+                services.RemoveAll<IInvoiceImporter>();
+                services.AddSingleton(_invoiceImporterOverride);
+            }
         });
     }
 
