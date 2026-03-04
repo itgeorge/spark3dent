@@ -2585,21 +2585,29 @@
           html += `</div>`;
         }
         html += `<p class="muted" style="margin:0 0 8px;">${parsed.length} файл(а) готови за импорт.</p>`;
+        const suggestions = data.unresolvedNicknameSuggestions || {};
         if(unresolved.length === 0){
           html += `<p class="muted" style="margin:0;">Всички фирми са намерени в базата.</p>`;
         }else{
-          html += unresolved.map(cid=>`
+          html += unresolved.map(cid=>{
+            const suggested = suggestions[cid] ?? cid;
+            return `
             <div class="import-nickname-row" data-company-id="${escapeHtmlAttr(cid)}">
               <div>
                 <label>${escapeHtml(cid)}</label>
-                <input class="input" type="text" placeholder="псевдоним на клиент" data-nickname-for="${escapeHtmlAttr(cid)}" style="margin-top:4px;" />
+                <input class="input" type="text" placeholder="псевдоним на клиент" data-nickname-for="${escapeHtmlAttr(cid)}" value="${escapeHtmlAttr(suggested)}" style="margin-top:4px;" />
               </div>
             </div>
-          `).join("");
+          `;
+          }).join("");
         }
         listEl.innerHTML = html;
         $("#btnImportCommit").style.display = "";
-        $("#btnImportCommit").disabled = parsed.length === 0 || unresolved.length > 0;
+        const allFilled = unresolved.every(id=>{
+          const inp = listEl.querySelector(`[data-nickname-for="${CSS.escape(id)}"]`);
+          return inp && inp.value.trim().length > 0;
+        });
+        $("#btnImportCommit").disabled = parsed.length === 0 || !allFilled;
         unresolved.forEach(cid=>{
           const input = listEl.querySelector(`[data-nickname-for="${CSS.escape(cid)}"]`);
           if(input) input.addEventListener("input", ()=>{

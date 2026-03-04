@@ -27,7 +27,8 @@ public record ImportAnalyzeFileResult(
 /// <summary>Response from POST /api/invoices/import/analyze.</summary>
 public record ImportAnalyzeResponse(
     ImportAnalyzeFileResult[] Files,
-    string[] UnresolvedCompanies);
+    string[] UnresolvedCompanies,
+    IReadOnlyDictionary<string, string>? UnresolvedNicknameSuggestions = null);
 
 /// <summary>Request for POST /api/invoices/import/commit.</summary>
 public record ImportCommitRequest(

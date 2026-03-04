@@ -15,20 +15,20 @@ public static class GptLegacyPdfParser
     private const string OpisanieMarker = "Описание";
 
     /// <summary>
-    /// Attempts to parse a legacy invoice PDF, using GPT to extract the BillingAddress from the recipient region.
+    /// Attempts to parse a legacy invoice PDF from raw bytes, using GPT to extract the BillingAddress from the recipient region.
     /// Returns null if parsing fails.
     /// </summary>
-    public static async Task<LegacyInvoiceData?> TryParseAsync(string pdfPath, string apiKey, CancellationToken cancellationToken = default)
+    public static async Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string apiKey, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(pdfPath))
+        if (pdfBytes == null || pdfBytes.Length == 0)
             return null;
 
         try
         {
-            var fullText = LegacyPdfParser.ExtractRawText(pdfPath);
+            var fullText = LegacyPdfParser.ExtractRawText(pdfBytes);
             var (number, date, totalCents, currency) = LegacyPdfParser.ExtractMetadata(fullText);
 
-            var regionText = ExtractTextFromRegion(pdfPath);
+            var regionText = ExtractTextFromRegion(pdfBytes);
             var recipient = await ExtractBillingAddressWithGptAsync(regionText, apiKey, cancellationToken);
 
             if (number == null || !date.HasValue || !totalCents.HasValue || recipient == null)
@@ -48,11 +48,34 @@ public static class GptLegacyPdfParser
     }
 
     /// <summary>
+    /// Attempts to parse a legacy invoice PDF, using GPT to extract the BillingAddress from the recipient region.
+    /// Returns null if parsing fails.
+    /// </summary>
+    public static async Task<LegacyInvoiceData?> TryParseAsync(string pdfPath, string apiKey, CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(pdfPath))
+            return null;
+
+        var pdfBytes = await File.ReadAllBytesAsync(pdfPath, cancellationToken);
+        return await TryParseAsync(pdfBytes, apiKey, cancellationToken);
+    }
+
+    /// <summary>
     /// Extracts text from the recipient region: from the top of "Получател" to the bottom of "Описание на стоката/услугата", full page width.
     /// </summary>
     public static string ExtractTextFromRegion(string pdfPath)
     {
-        using var doc = PdfDocument.Open(pdfPath);
+        var pdfBytes = File.ReadAllBytes(pdfPath);
+        return ExtractTextFromRegion(pdfBytes);
+    }
+
+    /// <summary>
+    /// Extracts text from the recipient region: from the top of "Получател" to the bottom of "Описание на стоката/услугата", full page width.
+    /// </summary>
+    public static string ExtractTextFromRegion(byte[] pdfBytes)
+    {
+        using var ms = new MemoryStream(pdfBytes);
+        using var doc = PdfDocument.Open(ms);
         var page = doc.GetPage(1);
         var region = FindRecipientRegion(page);
         if (region is not { } r)

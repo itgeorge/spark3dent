@@ -164,7 +164,8 @@ public class InvoiceImportApiTests
 
         var fakeAnalyze = new ImportAnalyzeResponse(
             [new ImportAnalyzeFileResult("invoice.pdf", "tok", "42", "2026-01-01", 12345, "BG123", "ACME", "John", "addr", "Sofia", "1000", "Bulgaria", null)],
-            ["BG999"]);
+            ["BG999"],
+            new Dictionary<string, string> { ["BG999"] = "john" });
         var fakeCommit = new ImportCommitResponse(0, 0, 0, []);
         using var fixture = new ApiTestFixture(
             openAiKey: "sk-dummy",

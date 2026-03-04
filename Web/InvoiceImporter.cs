@@ -26,7 +26,7 @@ public interface ILegacyInvoiceParser
 public sealed class GptLegacyInvoiceParser : ILegacyInvoiceParser
 {
     public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default) =>
-        Task.FromResult(LegacyPdfParser.TryParse(pdfBytes));
+        GptLegacyPdfParser.TryParseAsync(pdfBytes, openAiKey, cancellationToken);
 }
 
 public sealed class InvoiceImporter : IInvoiceImporter
@@ -98,11 +98,37 @@ public sealed class InvoiceImporter : IInvoiceImporter
                 null));
         }
 
+        var suggestions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var firstByCompany = new Dictionary<string, ImportAnalyzeFileResult>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in results.Where(x => x.Error == null && !string.IsNullOrWhiteSpace(x.CompanyIdentifier)))
+        {
+            if (!firstByCompany.ContainsKey(r.CompanyIdentifier!))
+                firstByCompany[r.CompanyIdentifier!] = r;
+        }
+        foreach (var cid in unresolved)
+        {
+            if (firstByCompany.TryGetValue(cid, out var item))
+            {
+                var suggested = SuggestNickname(item.RepresentativeName, item.Name, cid, request.Options.NicknameFromMol);
+                if (!string.IsNullOrWhiteSpace(suggested))
+                    suggestions[cid] = suggested;
+            }
+        }
+
         sw.Stop();
         var okCount = results.Count(r => r.Error == null);
         var errorCount = results.Count(r => r.Error != null);
         _logger?.LogInfo($"Import analyze completed: {results.Count} files, {okCount} parsed, {errorCount} errors, {unresolved.Count} unresolved companies, {sw.ElapsedMilliseconds}ms");
-        return new ImportAnalyzeResponse(results.ToArray(), unresolved.Order(StringComparer.OrdinalIgnoreCase).ToArray());
+        return new ImportAnalyzeResponse(results.ToArray(), unresolved.Order(StringComparer.OrdinalIgnoreCase).ToArray(), suggestions);
+    }
+
+    private static string SuggestNickname(string? representativeName, string? name, string companyIdentifier, bool nicknameFromMol)
+    {
+        var molSlug = ToSlug(representativeName);
+        var nameSlug = ToSlug(name);
+        if (nicknameFromMol)
+            return !string.IsNullOrEmpty(molSlug) ? molSlug : (!string.IsNullOrEmpty(nameSlug) ? nameSlug : companyIdentifier);
+        return !string.IsNullOrEmpty(nameSlug) ? nameSlug : (!string.IsNullOrEmpty(molSlug) ? molSlug : companyIdentifier);
     }
 
     public async Task<ImportCommitResponse> CommitAsync(ImportCommitRequest request, CancellationToken cancellationToken = default)
