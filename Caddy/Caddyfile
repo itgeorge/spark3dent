@@ -1,0 +1,8 @@
+spark3dent.com {
+    encode gzip zstd
+    reverse_proxy web:8080
+}
+
+www.spark3dent.com {
+    redir https://spark3dent.com{uri} permanent
+}

@@ -10,10 +10,28 @@ services:
       SingleBox__DatabasePath: /var/opt/spark3dent/data/spark3dent.db
       SingleBox__BlobStoragePath: /var/opt/spark3dent/blobs
       SingleBox__LogDirectory: /var/log/spark3dent
-    ports:
-      - "127.0.0.1:${SPARK3DENT_PORT:-8080}:${SPARK3DENT_PORT:-8080}"
+    expose:
+      - "${SPARK3DENT_PORT:-8080}"
     volumes:
       - ${SPARK3DENT_DATA_DIR:-./data}:/var/opt/spark3dent/data
       - ${SPARK3DENT_BLOB_DIR:-./blobs}:/var/opt/spark3dent/blobs
       - ${SPARK3DENT_LOG_DIR:-./logs}:/var/log/spark3dent
     restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    container_name: spark3dent-caddy
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -127,7 +127,7 @@ echo "Preparing remote directory ${REMOTE_DIR} on ${SSH_HOST}..."
 ssh "${SSH_OPTS[@]}" "${SSH_HOST}" bash -s -- "${REMOTE_DIR}" <<'EOF'
 set -euo pipefail
 remote_dir="$1"
-mkdir -p "${remote_dir}/chunks"
+mkdir -p "${remote_dir}/chunks" "${remote_dir}/Caddy"
 EOF
 
 if [[ "${SKIP_UPLOAD}" == "true" ]]; then
@@ -150,6 +150,7 @@ else
 fi
 
 scp_with_retry "${REPO_ROOT}/docker-compose.hetzner.yml" "${SSH_HOST}:${REMOTE_DIR}/"
+scp_with_retry "${REPO_ROOT}/Caddy/Caddyfile" "${SSH_HOST}:${REMOTE_DIR}/Caddy/"
 scp_with_retry "${REPO_ROOT}/scripts/deploy-hetzner-remote.sh" "${SSH_HOST}:${REMOTE_DIR}/"
 
 REMOTE_IMAGE_TAR="${REMOTE_DIR}/${IMAGE_FILE_NAME}"
