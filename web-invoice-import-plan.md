@@ -131,20 +131,20 @@ Dependencies: Phase 3.
 
 ## Phase 5 - Web UI: Settings Dropdown and Import UX
 
-- [ ] **Manual Review Baseline:** capture pre-change behavior notes for settings button, modal interactions, and list refresh behavior.
-- [ ] Convert `#btnTopSettings` from placeholder into dropdown trigger in `Web/wwwroot/index.html`.
-- [ ] Add dropdown menu markup + styles with at least:
+- [x] **Manual Review Baseline:** capture pre-change behavior notes for settings button, modal interactions, and list refresh behavior.
+- [x] Convert `#btnTopSettings` from placeholder into dropdown trigger in `Web/wwwroot/index.html`. (dropdown with settings-dropdown-wrap, open/close on click)
+- [x] Add dropdown menu markup + styles with at least:
   - Import legacy invoices (PDF)
   - (optional) future placeholder items disabled
-- [ ] Add hidden `<input type="file" multiple accept=".pdf,application/pdf">`.
-- [ ] Implement import modal flow in existing script block:
+- [x] Add hidden `<input type="file" multiple accept=".pdf,application/pdf">`.
+- [x] Implement import modal flow in existing script block:
   - step 1: file selection
   - step 2: analyze (loading state)
   - step 3: unresolved company nickname mapping UI
   - step 4: commit import and show summary
-- [ ] Reuse existing modal/error/loading patterns where possible (`modalError`, `loadingOverlay`, `toast`).
-- [ ] Refresh invoice/client lists after successful import (`dataNeedsRefresh = true`, refresh active view).
-- [ ] Add UX safeguards:
+- [x] Reuse existing modal/error/loading patterns where possible (`modalError`, `loadingOverlay`, `toast`).
+- [x] Refresh invoice/client lists after successful import (`dataNeedsRefresh = true`, refresh active view).
+- [x] Add UX safeguards:
   - disable import actions while request in flight
   - show parse/import failures per file
   - keep modal keyboard/escape behavior consistent with current dialogs

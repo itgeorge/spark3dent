@@ -902,6 +902,112 @@
       background: var(--a2);
     }
 
+    /* Settings dropdown */
+    .settings-dropdown-wrap{
+      position: relative;
+    }
+    .settings-dropdown-menu{
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 6px;
+      min-width: 220px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      padding: 6px 0;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px);
+      transition: opacity .15s ease, transform .15s ease;
+      z-index: 50;
+    }
+    .settings-dropdown-wrap.open .settings-dropdown-menu{
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .settings-dropdown-item{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 14px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .settings-dropdown-item:hover:not(:disabled){
+      background: rgba(124,58,237,.08);
+    }
+    .settings-dropdown-item:disabled{
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .settings-dropdown-item .icon{ font-size: 16px; }
+
+    /* Import modal steps */
+    .import-step{ display: none; }
+    .import-step.active{ display: block; }
+    .import-file-list{
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: rgba(248,250,252,.5);
+    }
+    .import-file-row{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .import-file-row:last-child{ border-bottom: none; }
+    .import-file-row.error .file-name{ color: #dc2626; }
+    .import-file-row .file-status{ font-size: 11px; color: var(--muted2); }
+    .import-nickname-row{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .import-nickname-row:last-child{ border-bottom: none; }
+    .import-nickname-row label{ font-size: 12px; margin: 0; }
+    .import-summary-table{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .import-summary-table th, .import-summary-table td{
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .import-summary-table th{ font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .import-modal-error{
+      display: none;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      border-radius: var(--radius2);
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3);
+      color: #dc2626;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .import-modal-error.show{ display: block; }
+
     /* Responsive */
     @media (max-width: 1100px){
       .grid-2{ grid-template-columns: 1fr; }
@@ -923,7 +1029,16 @@
           </div>
         </div>
         <div class="actions">
-          <button class="btn" id="btnTopSettings" title="Placeholder">&#9881;</button>
+          <div class="settings-dropdown-wrap" id="settingsDropdownWrap">
+            <button class="btn icon" id="btnTopSettings" title="Настройки" aria-haspopup="true" aria-expanded="false">&#9881;</button>
+            <div class="settings-dropdown-menu" id="settingsDropdownMenu" role="menu">
+              <button type="button" class="settings-dropdown-item" id="btnImportLegacy" role="menuitem">
+                <span class="icon">&#128196;</span>
+                <span>Импорт на legacy фактури (PDF)</span>
+              </button>
+            </div>
+          </div>
+          <input type="file" id="importFileInput" multiple accept=".pdf,application/pdf" style="display:none;" />
         </div>
       </div>
     </div>
@@ -1199,6 +1314,51 @@
     <div class="loading-overlay" id="loadingOverlay" aria-hidden="true">
       <div class="spinner-large"></div>
       <span class="loading-text" id="loadingOverlayText">Запазване...</span>
+    </div>
+
+    <div class="modal-overlay" id="modalImport" aria-hidden="true">
+      <div class="modal" role="dialog" aria-labelledby="modalImportTitle" aria-modal="true" style="max-width:520px;">
+        <div class="modal-head">
+          <h3 id="modalImportTitle">Импорт на legacy фактури</h3>
+          <button class="btn small" type="button" id="modalImportClose" aria-label="Затвори">&#215;</button>
+        </div>
+        <div class="modal-body">
+          <div id="importModalError" class="import-modal-error" role="alert"></div>
+          <div id="importStep1" class="import-step active">
+            <p class="muted" style="margin:0 0 12px;">Изберете PDF файлове за импорт. Ще бъдат анализирани и импортирани като legacy фактури.</p>
+            <button class="btn primary" type="button" id="btnImportSelectFiles">&#128196; Избери PDF файлове</button>
+            <div id="importSelectedFiles" class="import-file-list" style="margin-top:12px; display:none;"></div>
+          </div>
+          <div id="importStep2" class="import-step">
+            <p class="muted" style="margin:0 0 12px;">Анализиране на файловете...</p>
+            <div class="loading-skeleton" style="min-height:80px;"></div>
+          </div>
+          <div id="importStep3" class="import-step">
+            <p class="muted" style="margin:0 0 12px;">Свържете неразпознатите фирми с псевдоним на клиент. Останалите вече са намерени в базата.</p>
+            <div id="importUnresolvedList"></div>
+            <div style="margin-top:12px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="importDryRun" />
+                <span>Сух ход (само преглед, без импорт)</span>
+              </label>
+            </div>
+          </div>
+          <div id="importStep4" class="import-step">
+            <p class="muted" style="margin:0 0 12px;">Резултат от импорта:</p>
+            <table class="import-summary-table" id="importSummaryTable">
+              <thead><tr><th>Файл</th><th>Статус</th><th>Съобщение</th></tr></thead>
+              <tbody id="importSummaryBody"></tbody>
+            </table>
+            <p id="importSummaryStats" style="margin:12px 0 0; font-weight:700;"></p>
+          </div>
+        </div>
+        <div class="modal-footer" id="modalImportFooter">
+          <button class="btn" type="button" id="btnImportCancel">Отказ</button>
+          <button class="btn primary" type="button" id="btnImportAnalyze" disabled>Анализирай</button>
+          <button class="btn primary" type="button" id="btnImportCommit" style="display:none;" disabled>Импортирай</button>
+          <button class="btn primary" type="button" id="btnImportDone" style="display:none;">Готово</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2286,6 +2446,262 @@
     $("#inputDate").addEventListener("change", scheduleDatePickerReenable);
     $("#dateDisplay").addEventListener("click", openDatePicker);
     $("#btnEditDate").addEventListener("click", openDatePicker);
+
+    // ---- Import modal state ----
+    let importAnalyzeResult = null;
+    let importSelectedFiles = [];
+
+    function toggleSettingsDropdown(){
+      const wrap = $("#settingsDropdownWrap");
+      const btn = $("#btnTopSettings");
+      wrap.classList.toggle("open");
+      btn.setAttribute("aria-expanded", wrap.classList.contains("open"));
+    }
+    function closeSettingsDropdown(){
+      $("#settingsDropdownWrap").classList.remove("open");
+      $("#btnTopSettings").setAttribute("aria-expanded", "false");
+    }
+    $("#btnTopSettings").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      toggleSettingsDropdown();
+    });
+    document.addEventListener("click", (e)=>{
+      if(!e.target.closest("#settingsDropdownWrap")) closeSettingsDropdown();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape") closeSettingsDropdown();
+    });
+
+    function showImportModalError(msg){
+      const el = $("#importModalError");
+      el.textContent = msg || "";
+      el.classList.toggle("show", !!msg);
+    }
+    function openImportModal(){
+      closeSettingsDropdown();
+      showImportModalError("");
+      importAnalyzeResult = null;
+      importSelectedFiles = [];
+      $("#importFileInput").value = "";
+      $("#importStep1").classList.add("active");
+      $("#importStep2").classList.remove("active");
+      $("#importStep3").classList.remove("active");
+      $("#importStep4").classList.remove("active");
+      $("#importSelectedFiles").style.display = "none";
+      $("#btnImportAnalyze").style.display = "";
+      $("#btnImportAnalyze").disabled = true;
+      $("#btnImportCommit").style.display = "none";
+      $("#btnImportDone").style.display = "none";
+      $("#btnImportCancel").style.display = "";
+      $("#modalImport").classList.add("show");
+      $("#modalImport").setAttribute("aria-hidden", "false");
+    }
+    function closeImportModal(){
+      $("#modalImport").classList.remove("show");
+      $("#modalImport").setAttribute("aria-hidden", "true");
+    }
+    $("#btnImportLegacy").addEventListener("click", openImportModal);
+    $("#modalImportClose").addEventListener("click", closeImportModal);
+    $("#modalImport").addEventListener("click", (e)=>{
+      if(e.target === $("#modalImport")) closeImportModal();
+    });
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape" && $("#modalImport").classList.contains("show")){ e.stopPropagation(); closeImportModal(); }
+    });
+
+    $("#btnImportSelectFiles").addEventListener("click", ()=> $("#importFileInput").click());
+    $("#importFileInput").addEventListener("change", (e)=>{
+      showImportModalError("");
+      const files = Array.from(e.target.files || []);
+      importSelectedFiles = files.filter(f=> (f.name||"").toLowerCase().endsWith(".pdf"));
+      const container = $("#importSelectedFiles");
+      if(importSelectedFiles.length === 0){
+        container.style.display = "none";
+        $("#btnImportAnalyze").disabled = true;
+        if(files.length > 0) toast("Само PDF файлове са позволени");
+        return;
+      }
+      container.style.display = "block";
+      container.innerHTML = importSelectedFiles.map(f=>`
+        <div class="import-file-row">
+          <span class="file-name">${escapeHtml(f.name)}</span>
+          <span class="file-status">${(f.size/1024).toFixed(1)} KB</span>
+        </div>
+      `).join("");
+      $("#btnImportAnalyze").disabled = false;
+    });
+
+    async function runImportAnalyze(){
+      if(importSelectedFiles.length === 0){ showErrorPopup("Изберете поне един PDF файл"); return; }
+      $("#btnImportAnalyze").disabled = true;
+      $("#importStep1").classList.remove("active");
+      $("#importStep2").classList.add("active");
+      $("#btnImportCancel").style.display = "none";
+      showLoadingOverlay("Анализиране на PDF файлове...");
+      try {
+        const form = new FormData();
+        importSelectedFiles.forEach(f=> form.append("files", f));
+        form.append("nicknameFromMol", "true");
+        const r = await fetch("/api/invoices/import/analyze", {
+          method: "POST",
+          body: form
+        });
+        const data = await r.json().catch(()=>({}));
+        if(!r.ok){
+          console.error("[Import analyze] HTTP failure:", {
+            status: r.status,
+            statusText: r.statusText,
+            error: data.error,
+            url: r.url,
+            body: data
+          });
+          const errMsg = r.status === 500
+            ? "Грешка при сървъра - записали сме грешката и ще я коригираме. Опитайте пак по-късно."
+            : (data.error || "Грешка при анализиране");
+          showImportModalError(errMsg);
+          $("#importStep2").classList.remove("active");
+          $("#importStep1").classList.add("active");
+          $("#btnImportCancel").style.display = "";
+          $("#btnImportAnalyze").disabled = false;
+          return;
+        }
+        showImportModalError("");
+        importAnalyzeResult = data;
+        $("#importStep2").classList.remove("active");
+        $("#importStep3").classList.add("active");
+        $("#btnImportCancel").style.display = "";
+        const unresolved = data.unresolvedCompanies || [];
+        const files = data.files || [];
+        const parsed = files.filter(f=> f.tempFileToken && !f.error);
+        const failed = files.filter(f=> f.error);
+        if(failed.length > 0){
+          console.info("[Import analyze] Parse failures per file:", failed.map(f=> ({ fileName: f.fileName, error: f.error })));
+        }
+        const listEl = $("#importUnresolvedList");
+        let html = "";
+        if(failed.length > 0){
+          html += `<p class="muted" style="margin:0 0 12px;">Файлове с грешка при парсване:</p><div class="import-file-list" style="margin-bottom:12px;">`;
+          html += failed.map(f=> `<div class="import-file-row error"><span class="file-name">${escapeHtml(f.fileName)}</span><span class="file-status">${escapeHtml(f.error||"")}</span></div>`).join("");
+          html += `</div>`;
+        }
+        html += `<p class="muted" style="margin:0 0 8px;">${parsed.length} файл(а) готови за импорт.</p>`;
+        if(unresolved.length === 0){
+          html += `<p class="muted" style="margin:0;">Всички фирми са намерени в базата.</p>`;
+        }else{
+          html += unresolved.map(cid=>`
+            <div class="import-nickname-row" data-company-id="${escapeHtmlAttr(cid)}">
+              <div>
+                <label>${escapeHtml(cid)}</label>
+                <input class="input" type="text" placeholder="псевдоним на клиент" data-nickname-for="${escapeHtmlAttr(cid)}" style="margin-top:4px;" />
+              </div>
+            </div>
+          `).join("");
+        }
+        listEl.innerHTML = html;
+        $("#btnImportCommit").style.display = "";
+        $("#btnImportCommit").disabled = parsed.length === 0 || unresolved.length > 0;
+        unresolved.forEach(cid=>{
+          const input = listEl.querySelector(`[data-nickname-for="${CSS.escape(cid)}"]`);
+          if(input) input.addEventListener("input", ()=>{
+            const allFilled = unresolved.every(id=>{
+              const inp = listEl.querySelector(`[data-nickname-for="${CSS.escape(id)}"]`);
+              return inp && inp.value.trim().length > 0;
+            });
+            $("#btnImportCommit").disabled = parsed.length === 0 || !allFilled;
+          });
+        });
+      }catch(err){
+        console.error("[Import analyze] Exception:", err);
+        showImportModalError(err?.message || "Грешка при анализиране");
+        $("#importStep2").classList.remove("active");
+        $("#importStep1").classList.add("active");
+        $("#btnImportCancel").style.display = "";
+        $("#btnImportAnalyze").disabled = false;
+      }finally{
+        hideLoadingOverlay();
+      }
+    }
+    $("#btnImportAnalyze").addEventListener("click", runImportAnalyze);
+
+    async function runImportCommit(){
+      const dryRun = $("#importDryRun").checked;
+      const items = (importAnalyzeResult?.files || []).filter(f=> f.tempFileToken && !f.error).map(f=> ({
+        fileName: f.fileName,
+        tempFileToken: f.tempFileToken,
+        invoiceNumber: f.invoiceNumber || null,
+        date: f.date || null,
+        totalCents: f.totalCents ?? null,
+        companyIdentifier: f.companyIdentifier || null,
+        name: f.name || null,
+        representativeName: f.representativeName || null,
+        address: f.address || null,
+        city: f.city || null,
+        postalCode: f.postalCode || null,
+        country: f.country || null
+      }));
+      if(items.length === 0){
+        showImportModalError("Няма успешно анализирани файлове за импорт");
+        return;
+      }
+      const nicknameMap = {};
+      $$("#importUnresolvedList .import-nickname-row").forEach(row=>{
+        const cid = row.dataset.companyId;
+        const inp = row.querySelector('input[data-nickname-for]');
+        if(cid && inp && inp.value.trim()) nicknameMap[cid] = inp.value.trim();
+      });
+      $("#btnImportCommit").disabled = true;
+      showLoadingOverlay(dryRun ? "Сух ход..." : "Импортиране...");
+      try {
+        const r = await fetch("/api/invoices/import/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items, nicknameMap, dryRun })
+        });
+        const data = await r.json().catch(()=>({}));
+        if(!r.ok){
+          const errMsg = r.status === 500
+            ? "Грешка при сървъра - записали сме грешката и ще я коригираме. Опитайте пак по-късно."
+            : (data.error || "Грешка при импорт");
+          showImportModalError(errMsg);
+          $("#btnImportCommit").disabled = false;
+          return;
+        }
+        showImportModalError("");
+        $("#importStep3").classList.remove("active");
+        $("#importStep4").classList.add("active");
+        const statuses = data.itemStatuses || [];
+        $("#importSummaryBody").innerHTML = statuses.map(s=>`
+          <tr>
+            <td>${escapeHtml(s.fileName)}</td>
+            <td><span class="chip ${s.status==='imported'?'ok':s.status==='failed'?'fix':''}">${s.status==='imported'?'Импорт':s.status==='skipped'?'Пропуснат':'Грешка'}</span></td>
+            <td>${escapeHtml(s.message || "—")}</td>
+          </tr>
+        `).join("");
+        const imp = data.imported ?? 0, sk = data.skipped ?? 0, fail = data.failed ?? 0;
+        $("#importSummaryStats").textContent = `Импортирани: ${imp} | Пропуснати: ${sk} | Грешки: ${fail}`;
+        $("#btnImportCommit").style.display = "none";
+        $("#btnImportCancel").style.display = "none";
+        $("#btnImportDone").style.display = "";
+        if(!dryRun && imp > 0){
+          dataNeedsRefresh = true;
+          toast(`Импортирани ${imp} фактури`);
+        }else if(dryRun){
+          toast("Сух ход завършен");
+        }
+      }catch(err){
+        showImportModalError(err?.message || "Грешка при импорт");
+        $("#btnImportCommit").disabled = false;
+      }finally{
+        hideLoadingOverlay();
+      }
+    }
+    $("#btnImportCommit").addEventListener("click", runImportCommit);
+
+    $("#btnImportDone").addEventListener("click", ()=>{
+      closeImportModal();
+      if(dataNeedsRefresh) setView("dashboard");
+    });
+    $("#btnImportCancel").addEventListener("click", closeImportModal);
 
     function parseAmountToCents(str){
       const s = (str || "").trim().replace(/\s+/g,'').replace(",", ".");
