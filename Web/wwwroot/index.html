@@ -1336,12 +1336,6 @@
           <div id="importStep3" class="import-step">
             <p class="muted" style="margin:0 0 12px;">Свържете неразпознатите фирми с псевдоним на клиент. Останалите вече са намерени в базата.</p>
             <div id="importUnresolvedList"></div>
-            <div style="margin-top:12px;">
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                <input type="checkbox" id="importDryRun" />
-                <span>Сух ход (само преглед, без импорт)</span>
-              </label>
-            </div>
           </div>
           <div id="importStep4" class="import-step">
             <p class="muted" style="margin:0 0 12px;">Резултат от импорта:</p>
@@ -2641,7 +2635,6 @@
     $("#btnImportAnalyze").addEventListener("click", runImportAnalyze);
 
     async function runImportCommit(){
-      const dryRun = $("#importDryRun").checked;
       const items = (importAnalyzeResult?.files || []).filter(f=> f.tempFileToken && !f.error).map(f=> ({
         fileName: f.fileName,
         tempFileToken: f.tempFileToken,
@@ -2668,12 +2661,12 @@
         if(cid && inp && inp.value.trim()) nicknameMap[cid] = inp.value.trim();
       });
       $("#btnImportCommit").disabled = true;
-      showLoadingOverlay(dryRun ? "Сух ход..." : "Импортиране...");
+      showLoadingOverlay("Импортиране...");
       try {
         const r = await fetch("/api/invoices/import/commit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items, nicknameMap, dryRun })
+          body: JSON.stringify({ items, nicknameMap, dryRun: false })
         });
         const data = await r.json().catch(()=>({}));
         if(!r.ok){
@@ -2700,11 +2693,9 @@
         $("#btnImportCommit").style.display = "none";
         $("#btnImportCancel").style.display = "none";
         $("#btnImportDone").style.display = "";
-        if(!dryRun && imp > 0){
+        if(imp > 0){
           dataNeedsRefresh = true;
           toast(`Импортирани ${imp} фактури`);
-        }else if(dryRun){
-          toast("Сух ход завършен");
         }
       }catch(err){
         showImportModalError(err?.message || "Грешка при импорт");
