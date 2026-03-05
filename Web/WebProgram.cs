@@ -77,6 +77,8 @@ app.Use(async (context, next) =>
     }
 });
 
+app.UseStaticFiles();
+
 var webAssembly = Assembly.GetExecutingAssembly();
 app.MapGet("/", async () =>
 {
