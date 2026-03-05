@@ -37,7 +37,7 @@ public class InvoicePdfExporter : IInvoiceExporter
 
         await using var browser = await Puppeteer.LaunchAsync(launchOptions);
         await using var page = await browser.NewPageAsync();
-
+        
         await page.SetContentAsync(html, new NavigationOptions
         {
             WaitUntil = new[] { WaitUntilNavigation.Networkidle0 }

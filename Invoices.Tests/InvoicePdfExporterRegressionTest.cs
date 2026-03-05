@@ -14,8 +14,11 @@ namespace Invoices.Tests;
 /// so you can review and update the references.
 /// </summary>
 /// <remarks>
-/// To regenerate references after an intentional change, set <c>REGENERATE_INVOICE_REFS=1</c> and run
-/// the tests. The export output will be written to ReferencePdfs/; review the PDFs and commit.
+/// To regenerate references after an intentional change (e.g. template update, PuppeteerSharp upgrade):
+/// 1. Set <c>REGENERATE_INVOICE_REFS=1</c> and run: <c>dotnet test Invoices.Tests --filter InvoicePdfExporterRegressionTest</c>
+/// 2. Clear the variable so the next run does not overwrite references
+/// 3. Review the updated PDFs and <c>generated.txt</c> in ReferencePdfs/
+/// 4. Commit the changes
 /// </remarks>
 [TestFixture]
 [TestOf(typeof(InvoicePdfExporter))]

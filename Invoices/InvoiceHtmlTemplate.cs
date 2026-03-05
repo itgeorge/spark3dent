@@ -23,12 +23,14 @@ public class InvoiceHtmlTemplate
     private readonly HtmlDocument _templateDoc;
     private readonly IAmountTranscriber _amountTranscriber;
     private readonly int _invoiceNumberPadding;
+    private readonly string _embeddedFontCss;
 
-    private InvoiceHtmlTemplate(HtmlDocument templateDoc, IAmountTranscriber amountTranscriber, int invoiceNumberPadding)
+    private InvoiceHtmlTemplate(HtmlDocument templateDoc, IAmountTranscriber amountTranscriber, int invoiceNumberPadding, string embeddedFontCss)
     {
         _templateDoc = templateDoc;
         _amountTranscriber = amountTranscriber;
         _invoiceNumberPadding = invoiceNumberPadding;
+        _embeddedFontCss = embeddedFontCss;
     }
 
     public static async Task<InvoiceHtmlTemplate> LoadAsync(IAmountTranscriber amountTranscriber, string? templateHtmlOverride = null, int invoiceNumberPadding = 10)
@@ -69,7 +71,32 @@ public class InvoiceHtmlTemplate
                     $"Template line item row must have a cell with data-field='{field}'. Expected attributes: idx, description, amount.");
         }
 
-        return new InvoiceHtmlTemplate(doc, amountTranscriber, invoiceNumberPadding);
+        var assembly = typeof(InvoiceHtmlTemplate).Assembly;
+        var interBytes = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("InterVariable.ttf", assembly);
+        var cascadiaBytes = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("CascadiaMono.ttf", assembly);
+        var embeddedFontCss = BuildEmbeddedFontCss(interBytes, cascadiaBytes);
+
+        return new InvoiceHtmlTemplate(doc, amountTranscriber, invoiceNumberPadding, embeddedFontCss);
+    }
+
+    private static string BuildEmbeddedFontCss(byte[] interBytes, byte[] cascadiaBytes)
+    {
+        var interBase64 = Convert.ToBase64String(interBytes);
+        var cascadiaBase64 = Convert.ToBase64String(cascadiaBytes);
+        return $$"""
+            @font-face {
+              font-family: 'Inter';
+              src: url(data:font/ttf;base64,{{interBase64}}) format('truetype');
+              font-weight: 100 900;
+              font-style: normal;
+            }
+            @font-face {
+              font-family: 'Cascadia Mono';
+              src: url(data:font/ttf;base64,{{cascadiaBase64}}) format('truetype');
+              font-weight: 400 700;
+              font-style: normal;
+            }
+            """;
     }
 
     public string Render(Invoice invoice)
@@ -139,6 +166,14 @@ public class InvoiceHtmlTemplate
             SetDataField(row, "description", li.Description);
             SetDataField(row, "amount", FormatAmount(li.Amount.Cents));
             itemsTbody.AppendChild(row);
+        }
+
+        var head = doc.DocumentNode.SelectSingleNode("//head");
+        if (head != null)
+        {
+            var fontStyle = doc.CreateElement("style");
+            fontStyle.InnerHtml = _embeddedFontCss;
+            head.PrependChild(fontStyle);
         }
 
         using var output = new StringWriter();

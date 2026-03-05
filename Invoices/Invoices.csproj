@@ -9,6 +9,8 @@
     <ItemGroup>
       <None Remove="design\template.html" />
       <EmbeddedResource Include="design\template.html" />
+      <EmbeddedResource Include="fonts\Inter\InterVariable.ttf" />
+      <EmbeddedResource Include="fonts\Cascadia\CascadiaMono.ttf" />
     </ItemGroup>
 
     <ItemGroup>
