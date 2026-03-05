@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.IO;
 using Invoices;
 using NUnit.Framework;
 
@@ -79,6 +81,27 @@ public class LegacyPdfParserTest
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Number, Is.EqualTo("42"));
         Assert.That(result.TotalCents, Is.EqualTo(32000));
+        Assert.That(result.Currency, Is.EqualTo(Currency.Eur));
+    }
+
+    /// <summary>
+    /// Some invoices use the EUR symbol (€) instead of "евро" text.
+    /// </summary>
+    [Test]
+    public void TryParseFromText_WhenAmountWithEurSymbol_ThenExtractsEur()
+    {
+        var text = """
+            Номер 250
+            Дата 26.02.2026г.
+            Получател Тест ЕООД : Адрес: ул.Тест 1 гр.София
+            ЕИК по Булстат: 205263288
+            Сума за плащане: 560.00 €
+            """;
+        var result = LegacyPdfParser.TryParseFromText(text);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Number, Is.EqualTo("250"));
+        Assert.That(result.TotalCents, Is.EqualTo(56000));
         Assert.That(result.Currency, Is.EqualTo(Currency.Eur));
     }
 
@@ -246,5 +269,40 @@ public class LegacyPdfParserTest
         Assert.That(result.Date, Is.EqualTo(new DateTime(2026, 2, 4)));
         Assert.That(result.TotalCents, Is.EqualTo(20000));
         Assert.That(result.Recipient.CompanyIdentifier, Is.EqualTo("987654321"));
+    }
+
+    /// <summary>
+    /// Uncomment to run a temporary test: parses a real PDF file and asserts expected values. Skip if file not found.
+    /// </summary>
+    [TestCase("D:/Dropbox/Quick Uploads/1772718915306178.pdf", 56000, Currency.Eur, "205263288", "250", "26.02.2026")]
+    public void TryParse_WhenRealPdfFile_ThenExtractsExpectedValues(
+        string filePathOrUri,
+        int expectedTotalCents,
+        Currency expectedCurrency,
+        string expectedCompanyNumber,
+        string expectedInvoiceNumber,
+        string expectedDateStr)
+    {
+        var path = filePathOrUri.StartsWith("file://", StringComparison.OrdinalIgnoreCase)
+            ? new Uri(filePathOrUri).LocalPath
+            : filePathOrUri;
+
+        if (!File.Exists(path))
+        {
+            Assert.Ignore($"File not found: {path}");
+            return;
+        }
+
+        var bytes = File.ReadAllBytes(path);
+        var result = LegacyPdfParser.TryParse(bytes);
+
+        Assert.That(result, Is.Not.Null, "PDF should parse successfully");
+        Assert.That(result!.TotalCents, Is.EqualTo(expectedTotalCents), "Total amount mismatch");
+        Assert.That(result.Currency, Is.EqualTo(expectedCurrency), "Currency mismatch");
+        Assert.That(result.Recipient.CompanyIdentifier, Is.EqualTo(expectedCompanyNumber), "Company number mismatch");
+        Assert.That(result.Number, Is.EqualTo(expectedInvoiceNumber), "Invoice number mismatch");
+
+        var expectedDate = DateTime.ParseExact(expectedDateStr, "dd.MM.yyyy", CultureInfo.InvariantCulture);
+        Assert.That(result.Date, Is.EqualTo(expectedDate), "Invoice date mismatch");
     }
 }

@@ -114,14 +114,15 @@ public static class LegacyPdfParser
 
     private static (int? Cents, Currency Currency) ExtractTotalAndCurrency(string text)
     {
-        // Сума за плащане: 270.00 лв. or Сума за плащане - 190.00 лв. - use last match (final total)
-        var matches = Regex.Matches(text, @"Сума\s+за\s+плащане\s*[:\s\-]*\s*([\d\s]+[.,]\d{2})\s*(лева|лв\.|евро)", RegexOptions.IgnoreCase);
+        // Сума за плащане: 270.00 лв. or Сума за плащане - 190.00 лв. or 560.00 € - use last match (final total)
+        var matches = Regex.Matches(text, @"Сума\s+за\s+плащане\s*[:\s\-]*\s*([\d\s]+[.,]\d{2})\s*(лева|лв\.|евро|€)", RegexOptions.IgnoreCase);
         if (matches.Count == 0) return (null, Currency.Bgn);
         var m = matches[^1];
         var amountStr = m.Groups[1].Value.Replace(" ", "").Replace(",", ".");
         if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount) || amount < 0)
             return (null, Currency.Bgn);
-        var currency = m.Groups[2].Value.StartsWith("лв", StringComparison.OrdinalIgnoreCase) | m.Groups[2].Value.StartsWith("лева", StringComparison.OrdinalIgnoreCase)
+        var currencyStr = m.Groups[2].Value;
+        var currency = currencyStr.StartsWith("лв", StringComparison.OrdinalIgnoreCase) || currencyStr.StartsWith("лева", StringComparison.OrdinalIgnoreCase)
             ? Currency.Bgn 
             : Currency.Eur;
         return ((int)Math.Round(amount * 100), currency);
