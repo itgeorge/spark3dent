@@ -29,6 +29,41 @@ public sealed class GptLegacyInvoiceParser : ILegacyInvoiceParser
         GptLegacyPdfParser.TryParseAsync(pdfBytes, openAiKey, cancellationToken);
 }
 
+public sealed class LegacyOnlyInvoiceParser : ILegacyInvoiceParser
+{
+    public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default) =>
+        Task.FromResult(LegacyPdfParser.TryParse(pdfBytes));
+}
+
+public sealed class TwoPhaseLegacyInvoiceParser : ILegacyInvoiceParser
+{
+    private readonly IClientRepo _clientRepo;
+
+    public TwoPhaseLegacyInvoiceParser(IClientRepo clientRepo) => _clientRepo = clientRepo;
+
+    public async Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default)
+    {
+        LegacyInvoiceData? fast = null;
+        try
+        {
+            fast = LegacyPdfParser.TryParse(pdfBytes);
+        }
+        catch
+        {
+            // Fast parser threw (e.g. malformed PDF) — fall back to GPT
+        }
+
+        if (fast != null)
+        {
+            var existing = await _clientRepo.FindByCompanyIdentifierAsync(fast.Recipient.CompanyIdentifier);
+            if (existing != null)
+                return fast with { Recipient = existing.Address };
+            // Company not in DB: use GPT for better address extraction on new companies
+        }
+        return await GptLegacyPdfParser.TryParseAsync(pdfBytes, openAiKey, cancellationToken);
+    }
+}
+
 public sealed class InvoiceImporter : IInvoiceImporter
 {
     private const string AnalyzeArtifactPrefix = "analyze";

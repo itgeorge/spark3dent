@@ -1,15 +1,16 @@
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
-using NUnit.Framework;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.AspNetCore.TestHost;
+using NUnit.Framework;
 using Utilities;
+using Web;
 
 namespace Web.Tests;
 
@@ -79,6 +80,9 @@ public class ApiTestFixture : WebApplicationFactory<Program>
                 services.RemoveAll<IInvoiceImporter>();
                 services.AddSingleton(_invoiceImporterOverride);
             }
+            // Use LegacyOnlyInvoiceParser so API tests don't need OpenAI key
+            services.RemoveAll<ILegacyInvoiceParser>();
+            services.AddSingleton<ILegacyInvoiceParser, LegacyOnlyInvoiceParser>();
         });
     }
 
