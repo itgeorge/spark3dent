@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
+using Database;
 using Invoices;
+using Microsoft.EntityFrameworkCore;
 using PuppeteerSharp;
 using UglyToad.PdfPig;
 using Utilities;
@@ -89,6 +91,12 @@ internal static class CliToolsProgram
             return;
         }
 
+        if (cmd == "list-invoices")
+        {
+            RunListInvoices(args.Skip(1).ToList());
+            return;
+        }
+
         Console.WriteLine($"Unknown command: {cmd}. Type 'help' for available commands.");
     }
 
@@ -114,6 +122,89 @@ internal static class CliToolsProgram
         Console.WriteLine("      --line-items  Comma-separated description:cents (e.g. \"Item1:12000,Item2:8000\")");
         Console.WriteLine("  prompt -m <message> -k <openaikey> [-f <filepath>] - Send a prompt to OpenAI (optionally with file attachment)");
         Console.WriteLine("  extract-invoice -f <filepath> [-k <openaikey>] - Extract BillingAddress from legacy PDF using GPT (key from -k or OPENAI_API_KEY)");
+        Console.WriteLine("  list-invoices <dbpath> - List all invoices in SQLite DB and report any gaps in sequential numbers");
+    }
+
+    static void RunListInvoices(List<string> args)
+    {
+        if (args.Count == 0)
+        {
+            Console.WriteLine("Usage: list-invoices <dbpath>");
+            Console.WriteLine("  dbpath  Path to SQLite database file (e.g. spark3dent.db)");
+            return;
+        }
+
+        var dbPath = args[0];
+        if (!File.Exists(dbPath))
+        {
+            Console.WriteLine($"Error: Database file not found: {dbPath}");
+            return;
+        }
+
+        try
+        {
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite($"Data Source={dbPath}")
+                .Options;
+
+            using var ctx = new AppDbContext(options);
+
+            var entities = ctx.Invoices
+                .Include(i => i.LineItems)
+                .OrderBy(i => i.NumberNumeric)
+                .ToList();
+
+            if (entities.Count == 0)
+            {
+                Console.WriteLine("No invoices found in database.");
+                return;
+            }
+
+            Console.WriteLine($"Found {entities.Count} invoice(s):");
+            Console.WriteLine();
+
+            foreach (var e in entities)
+            {
+                var totalCents = e.LineItems.Sum(li => li.AmountCents);
+                var totalStr = $"{totalCents / 100}.{totalCents % 100:D2}";
+                var flags = new List<string>();
+                if (e.IsCorrected) flags.Add("corrected");
+                if (e.IsLegacy) flags.Add("legacy");
+                var flagStr = flags.Count > 0 ? $" [{string.Join(", ", flags)}]" : "";
+                Console.WriteLine($"  {e.Number,10}  {e.Date:yyyy-MM-dd}  {e.BuyerName,-30}  {totalStr,8} EUR{flagStr}");
+            }
+
+            var gaps = new List<(long From, long To)>();
+            for (var i = 0; i < entities.Count - 1; i++)
+            {
+                var curr = entities[i].NumberNumeric;
+                var next = entities[i + 1].NumberNumeric;
+                if (next != curr + 1)
+                    gaps.Add((curr + 1, next - 1));
+            }
+
+            if (gaps.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Missing invoice numbers (gaps):");
+                foreach (var (from, to) in gaps)
+                {
+                    if (from == to)
+                        Console.WriteLine($"  {from}");
+                    else
+                        Console.WriteLine($"  {from} - {to}");
+                }
+            }
+            else
+            {
+                Console.WriteLine();
+                Console.WriteLine("No gaps in sequential invoice numbers.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
     }
 
     static async Task RunExtractInvoiceAsync(List<string> args)
