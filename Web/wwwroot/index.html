@@ -2599,7 +2599,7 @@
           html += unresolved.map(cid=>{
             const suggested = suggestions[cid] ?? cid;
             const name = (companyNames[(cid||"").toLowerCase()] || "").trim();
-            const labelText = name ? `${name} (${cid})` : cid;
+            const labelText = name ? `Въведи псевдоним за "${name}" (${cid})` : `Въведи псевдоним за ${cid}`;
             return `
             <div class="import-nickname-row" data-company-id="${escapeHtmlAttr(cid)}">
               <div>
