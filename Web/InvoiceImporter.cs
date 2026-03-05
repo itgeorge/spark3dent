@@ -18,20 +18,41 @@ public interface IInvoiceImporter
     Task<ImportCommitResponse> CommitAsync(ImportCommitRequest request, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// In-memory cache for company addresses by CompanyIdentifier.
+/// Used within a single analyze batch so repeated parses for the same company avoid GPT.
+/// </summary>
+public interface ICompanyAddressCache
+{
+    void Add(string companyIdentifier, BillingAddress address);
+    BillingAddress? Get(string companyIdentifier);
+}
+
+public sealed class CompanyAddressCache : ICompanyAddressCache
+{
+    private readonly Dictionary<string, BillingAddress> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+    public void Add(string companyIdentifier, BillingAddress address) =>
+        _cache.TryAdd(companyIdentifier, address);
+
+    public BillingAddress? Get(string companyIdentifier) =>
+        _cache.TryGetValue(companyIdentifier, out var a) ? a : null;
+}
+
 public interface ILegacyInvoiceParser
 {
-    Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default);
+    Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default, ICompanyAddressCache? cache = null);
 }
 
 public sealed class GptLegacyInvoiceParser : ILegacyInvoiceParser
 {
-    public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default) =>
+    public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default, ICompanyAddressCache? cache = null) =>
         GptLegacyPdfParser.TryParseAsync(pdfBytes, openAiKey, cancellationToken);
 }
 
 public sealed class LegacyOnlyInvoiceParser : ILegacyInvoiceParser
 {
-    public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default) =>
+    public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default, ICompanyAddressCache? cache = null) =>
         Task.FromResult(LegacyPdfParser.TryParse(pdfBytes));
 }
 
@@ -41,7 +62,7 @@ public sealed class TwoPhaseLegacyInvoiceParser : ILegacyInvoiceParser
 
     public TwoPhaseLegacyInvoiceParser(IClientRepo clientRepo) => _clientRepo = clientRepo;
 
-    public async Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default)
+    public async Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default, ICompanyAddressCache? cache = null)
     {
         LegacyInvoiceData? fast = null;
         try
@@ -58,9 +79,15 @@ public sealed class TwoPhaseLegacyInvoiceParser : ILegacyInvoiceParser
             var existing = await _clientRepo.FindByCompanyIdentifierAsync(fast.Recipient.CompanyIdentifier);
             if (existing != null)
                 return fast with { Recipient = existing.Address };
-            // Company not in DB: use GPT for better address extraction on new companies
+            var cached = cache?.Get(fast.Recipient.CompanyIdentifier);
+            if (cached != null)
+                return fast with { Recipient = cached };
+            // Company not in DB and not in cache: use GPT for better address extraction on new companies
         }
-        return await GptLegacyPdfParser.TryParseAsync(pdfBytes, openAiKey, cancellationToken);
+        var gptResult = await GptLegacyPdfParser.TryParseAsync(pdfBytes, openAiKey, cancellationToken);
+        if (gptResult != null && cache != null)
+            cache.Add(gptResult.Recipient.CompanyIdentifier, gptResult.Recipient);
+        return gptResult;
     }
 }
 
@@ -99,12 +126,13 @@ public sealed class InvoiceImporter : IInvoiceImporter
 
         var results = new List<ImportAnalyzeFileResult>();
         var unresolved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cache = new CompanyAddressCache();
 
         foreach (var file in files)
         {
             var pdfBytes = await ReadAllBytesAsync(file, cancellationToken);
 
-            var parsed = await _parser.TryParseAsync(pdfBytes, request.OpenAiKey, cancellationToken);
+            var parsed = await _parser.TryParseAsync(pdfBytes, request.OpenAiKey, cancellationToken, cache);
             if (parsed == null)
             {
                 results.Add(ImportAnalyzeFileResult.ForError(file.FileName, "Parse failed"));

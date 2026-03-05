@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using NUnit.Framework;
 using Storage;
 using Utilities;
+using Web;
 
 namespace Web.Tests;
 
@@ -128,7 +129,7 @@ public abstract class InvoiceImporterContractTest
             foreach (var r in results) _results.Enqueue(r);
         }
 
-        public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default)
+        public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default, ICompanyAddressCache? cache = null)
             => Task.FromResult(_results.Count == 0 ? null : _results.Dequeue());
     }
 

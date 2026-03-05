@@ -98,6 +98,35 @@ public class TwoPhaseLegacyInvoiceParserTests
     }
 
     [Test]
+    public async Task TryParseAsync_WhenSameCompanyParsedTwiceWithCache_SecondCallUsesCachedAddressWithoutGpt()
+    {
+        var pdfBytes = CreateParseablePdf();
+        var fastResult = LegacyPdfParser.TryParse(pdfBytes);
+        Assert.That(fastResult, Is.Not.Null, "Precondition: PDF must be parseable by LegacyPdfParser");
+
+        var companyId = fastResult!.Recipient.CompanyIdentifier;
+        var cachedAddress = new BillingAddress(
+            "Cached Name", "Cached Rep", companyId, null,
+            "Cached Street 1", "Cached City", "1000", "България");
+
+        var cache = new CompanyAddressCache();
+        cache.Add(companyId, cachedAddress);
+
+        var clientRepo = new FakeClientRepo(); // empty - company not in DB
+        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo);
+
+        var result1 = await parser.TryParseAsync(pdfBytes, "sk-dummy", CancellationToken.None, cache);
+        var result2 = await parser.TryParseAsync(pdfBytes, "sk-dummy", CancellationToken.None, cache);
+
+        Assert.That(result1, Is.Not.Null);
+        Assert.That(result2, Is.Not.Null);
+        Assert.That(result1!.Recipient.Address, Is.EqualTo("Cached Street 1"));
+        Assert.That(result2!.Recipient.Address, Is.EqualTo("Cached Street 1"));
+        Assert.That(result1.Recipient.Name, Is.EqualTo("Cached Name"));
+        Assert.That(result2.Recipient.Name, Is.EqualTo("Cached Name"));
+    }
+
+    [Test]
     public async Task TryParseAsync_WhenGivenInvalidInput_DoesNotThrow()
     {
         // Defensive: verify parser handles edge cases (null, empty) without throwing.
