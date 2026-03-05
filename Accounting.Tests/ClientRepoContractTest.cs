@@ -41,6 +41,28 @@ public abstract class ClientRepoContractTest
     }
 
     [Test]
+    public async Task Add_GivenClientWithEmptyRepresentativeNameAndPostalCode_WhenAdding_ThenRoundTripsCorrectly()
+    {
+        var fixture = await SetUpAsync();
+        var address = new BillingAddress(
+            Name: "Empty Rep Corp",
+            RepresentativeName: "",
+            CompanyIdentifier: "999888777",
+            VatIdentifier: null,
+            Address: "123 St",
+            City: "Sofia",
+            PostalCode: "",
+            Country: "BG");
+        var client = new Client("empty-rep", address);
+
+        await fixture.Repo.AddAsync(client);
+
+        var retrieved = await fixture.GetClientAsync("empty-rep");
+        Assert.That(retrieved.Address.RepresentativeName, Is.EqualTo(""));
+        Assert.That(retrieved.Address.PostalCode, Is.EqualTo(""));
+    }
+
+    [Test]
     public async Task Add_WhenAddingDuplicateNickname_ThenThrows()
     {
         var fixture = await SetUpAsync();

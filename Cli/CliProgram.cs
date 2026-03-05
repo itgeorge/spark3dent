@@ -172,8 +172,7 @@ class CliProgram
         var name = ReadRequired("Company name");
         if (name == null) return;
 
-        var representativeName = ReadRequired("Representative name");
-        if (representativeName == null) return;
+        var representativeName = ReadOptional("Representative name (optional)") ?? "";
 
         var companyIdentifier = ReadRequired("Company identifier (EIK/Bulstat)");
         if (companyIdentifier == null) return;
@@ -185,8 +184,7 @@ class CliProgram
         var city = ReadRequired("City");
         if (city == null) return;
 
-        var postalCode = ReadRequired("Postal code");
-        if (postalCode == null) return;
+        var postalCode = ReadOptional("Postal code (optional)") ?? "";
 
         var country = ReadOptional("Country (optional, default: България)") ?? "България";
 

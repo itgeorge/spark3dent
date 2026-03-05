@@ -115,6 +115,23 @@ public abstract class InvoiceImporterContractTest
     }
 
     [Test]
+    public async Task Commit_WhenItemHasNullRepresentativeNameAndPostalCode_ImportsWithEmptyStrings()
+    {
+        var fixture = await SetUpAsync();
+        var req = new ImportCommitRequest(
+            [new ImportCommitItem("a.pdf", null, "201", "2026-01-01", 12345, "Eur", "BG201", "Acme Ltd", null, "addr", "Sofia", null, "Bulgaria")],
+            new Dictionary<string, string>(),
+            false);
+
+        var res = await fixture.Importer.CommitAsync(req);
+
+        Assert.That(res.Imported, Is.EqualTo(1));
+        Assert.That(res.Failed, Is.EqualTo(0));
+        Assert.That(fixture.ImportedInvoiceNumbers, Does.Contain("201"));
+        Assert.That(fixture.AddedClientNicknames, Does.Contain("acme-ltd"));
+    }
+
+    [Test]
     public async Task Commit_WhenInvoiceAlreadyExists_Skips()
     {
         var fixture = await SetUpAsync();

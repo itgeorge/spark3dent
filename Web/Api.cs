@@ -72,12 +72,12 @@ public static class Api
                 body.Nickname!.Trim(),
                 new BillingAddress(
                     body.Name!.Trim(),
-                    body.RepresentativeName!.Trim(),
+                    body.RepresentativeName?.Trim() ?? "",
                     body.CompanyIdentifier!.Trim(),
                     body.VatIdentifier?.Trim(),
                     body.Address!.Trim(),
                     body.City!.Trim(),
-                    body.PostalCode!.Trim(),
+                    body.PostalCode?.Trim() ?? "",
                     body.Country?.Trim() ?? ""));
 
             try
@@ -114,7 +114,7 @@ public static class Api
             var newCity = body.City?.Trim() ?? existing.Address.City;
             var newPostal = body.PostalCode?.Trim() ?? existing.Address.PostalCode;
 
-            var err = ValidateClientUpdate(newName, newRep, newCompanyId, newAddress, newCity, newPostal);
+            var err = ValidateClientUpdate(newName, newCompanyId, newAddress, newCity);
             if (err != null)
                 return Results.Json(new { error = err }, statusCode: 400);
 
@@ -499,22 +499,18 @@ public static class Api
     {
         if (string.IsNullOrWhiteSpace(r.Nickname)) return "nickname is required.";
         if (string.IsNullOrWhiteSpace(r.Name)) return "name is required.";
-        if (string.IsNullOrWhiteSpace(r.RepresentativeName)) return "representativeName is required.";
         if (string.IsNullOrWhiteSpace(r.CompanyIdentifier)) return "companyIdentifier is required.";
         if (string.IsNullOrWhiteSpace(r.Address)) return "address is required.";
         if (string.IsNullOrWhiteSpace(r.City)) return "city is required.";
-        if (string.IsNullOrWhiteSpace(r.PostalCode)) return "postalCode is required.";
         return null;
     }
 
-    private static string? ValidateClientUpdate(string name, string representativeName, string companyIdentifier, string address, string city, string postalCode)
+    private static string? ValidateClientUpdate(string name, string companyIdentifier, string address, string city)
     {
         if (string.IsNullOrWhiteSpace(name)) return "name is required.";
-        if (string.IsNullOrWhiteSpace(representativeName)) return "representativeName is required.";
         if (string.IsNullOrWhiteSpace(companyIdentifier)) return "companyIdentifier is required.";
         if (string.IsNullOrWhiteSpace(address)) return "address is required.";
         if (string.IsNullOrWhiteSpace(city)) return "city is required.";
-        if (string.IsNullOrWhiteSpace(postalCode)) return "postalCode is required.";
         return null;
     }
 

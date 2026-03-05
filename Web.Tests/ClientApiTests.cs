@@ -103,6 +103,62 @@ public class ClientApiTests
     }
 
     [Test]
+    public async Task PostClients_WithMissingRepresentativeNameAndPostalCode_Returns201AndStoresEmptyStrings()
+    {
+        var body = new
+        {
+            nickname = "acme",
+            name = "ACME EOOD",
+            representativeName = (string?)null,
+            companyIdentifier = "BG123456789",
+            vatIdentifier = (string?)null,
+            address = "1 Main St",
+            city = "Sofia",
+            postalCode = (string?)null,
+            country = "Bulgaria"
+        };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/api/clients", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var json = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("representativeName").GetString(), Is.EqualTo(""));
+        Assert.That(doc.RootElement.GetProperty("postalCode").GetString(), Is.EqualTo(""));
+
+        var getResponse = await _client.GetAsync("/api/clients/acme");
+        Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var getDoc = JsonDocument.Parse(await getResponse.Content.ReadAsStringAsync());
+        Assert.That(getDoc.RootElement.GetProperty("representativeName").GetString(), Is.EqualTo(""));
+        Assert.That(getDoc.RootElement.GetProperty("postalCode").GetString(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public async Task PostClients_WithBlankRepresentativeNameAndPostalCode_Returns201AndStoresEmptyStrings()
+    {
+        var body = new
+        {
+            nickname = "beta",
+            name = "Beta EOOD",
+            representativeName = "   ",
+            companyIdentifier = "BG987654321",
+            vatIdentifier = (string?)null,
+            address = "2 Other St",
+            city = "Plovdiv",
+            postalCode = "",
+            country = "Bulgaria"
+        };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync("/api/clients", content);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var json = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("representativeName").GetString(), Is.EqualTo(""));
+        Assert.That(doc.RootElement.GetProperty("postalCode").GetString(), Is.EqualTo(""));
+    }
+
+    [Test]
     public async Task PostClients_WithMissingNickname_Returns400()
     {
         var body = new
@@ -183,6 +239,35 @@ public class ClientApiTests
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
         Assert.That(doc.RootElement.GetProperty("name").GetString(), Is.EqualTo("ACME Updated"));
+    }
+
+    [Test]
+    public async Task PutClient_WhenClearingRepresentativeNameAndPostalCode_StoresEmptyStrings()
+    {
+        var body = new
+        {
+            nickname = "acme",
+            name = "ACME EOOD",
+            representativeName = "John Doe",
+            companyIdentifier = "BG123456789",
+            vatIdentifier = (string?)null,
+            address = "1 Main St",
+            city = "Sofia",
+            postalCode = "1000",
+            country = "Bulgaria"
+        };
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        await _client.PostAsync("/api/clients", content);
+
+        var updateBody = new { representativeName = "", postalCode = "" };
+        var updateContent = new StringContent(JsonSerializer.Serialize(updateBody), Encoding.UTF8, "application/json");
+        var response = await _client.PutAsync("/api/clients/acme", updateContent);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var json = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("representativeName").GetString(), Is.EqualTo(""));
+        Assert.That(doc.RootElement.GetProperty("postalCode").GetString(), Is.EqualTo(""));
     }
 
     [Test]
