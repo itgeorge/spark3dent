@@ -58,8 +58,8 @@ public class TwoPhaseLegacyInvoiceParserTests
         var clientRepo = new FakeClientRepo();
         await clientRepo.AddAsync(client);
 
-        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo);
-        var result = await parser.TryParseAsync(pdfBytes, "dummy-key");
+        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo, "dummy-key", new CompanyAddressCache());
+        var result = await parser.TryParseAsync(pdfBytes);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Recipient.Address, Is.EqualTo("DB Street 1"));
@@ -75,8 +75,8 @@ public class TwoPhaseLegacyInvoiceParserTests
         var pdfBytes = CreateParseablePdf();
         var clientRepo = new FakeClientRepo(); // empty, no clients
 
-        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo);
-        var result = await parser.TryParseAsync(pdfBytes, "sk-dummy");
+        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo, "sk-dummy", new CompanyAddressCache());
+        var result = await parser.TryParseAsync(pdfBytes);
 
         // With dummy key, GPT will fail and return null. We verify we got here without throwing
         // and that we did NOT use the fast parser result (which would have returned data).
@@ -90,8 +90,8 @@ public class TwoPhaseLegacyInvoiceParserTests
         var pdfBytes = CreateUnparseablePdf();
         var clientRepo = new FakeClientRepo();
 
-        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo);
-        var result = await parser.TryParseAsync(pdfBytes, "sk-dummy");
+        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo, "sk-dummy", new CompanyAddressCache());
+        var result = await parser.TryParseAsync(pdfBytes);
 
         // With invalid PDF and dummy key, GPT returns null. Proves we fell back to GPT.
         Assert.That(result, Is.Null);
@@ -113,10 +113,10 @@ public class TwoPhaseLegacyInvoiceParserTests
         cache.Add(companyId, cachedAddress);
 
         var clientRepo = new FakeClientRepo(); // empty - company not in DB
-        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo);
+        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo, "sk-dummy", cache);
 
-        var result1 = await parser.TryParseAsync(pdfBytes, "sk-dummy", CancellationToken.None, cache);
-        var result2 = await parser.TryParseAsync(pdfBytes, "sk-dummy", CancellationToken.None, cache);
+        var result1 = await parser.TryParseAsync(pdfBytes, CancellationToken.None);
+        var result2 = await parser.TryParseAsync(pdfBytes, CancellationToken.None);
 
         Assert.That(result1, Is.Not.Null);
         Assert.That(result2, Is.Not.Null);
@@ -132,10 +132,10 @@ public class TwoPhaseLegacyInvoiceParserTests
         // Defensive: verify parser handles edge cases (null, empty) without throwing.
         // LegacyPdfParser returns null for these; TwoPhaseLegacyInvoiceParser then delegates to GPT.
         var clientRepo = new FakeClientRepo();
-        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo);
+        var parser = new TwoPhaseLegacyInvoiceParser(clientRepo, "sk-dummy", new CompanyAddressCache());
 
-        var resultNull = await parser.TryParseAsync(null!, "sk-dummy");
-        var resultEmpty = await parser.TryParseAsync([], "sk-dummy");
+        var resultNull = await parser.TryParseAsync(null!);
+        var resultEmpty = await parser.TryParseAsync([]);
 
         Assert.That(resultNull, Is.Null);
         Assert.That(resultEmpty, Is.Null);

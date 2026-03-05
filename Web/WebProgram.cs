@@ -33,9 +33,13 @@ builder.Services.AddSingleton<Utilities.ILogger>(logger);
 builder.Services.AddSingleton<IInvoiceOperations>(new InvoiceManagementAdapter(setup.InvoiceManagement));
 builder.Services.AddSingleton<IPdfInvoiceExporter>(new PdfInvoiceExporterAdapter(setup.PdfExporter));
 builder.Services.AddSingleton<IImageInvoiceExporter>(new ImageInvoiceExporterAdapter(setup.ImageExporter));
-builder.Services.AddSingleton<ILegacyInvoiceParser>(sp =>
-    new TwoPhaseLegacyInvoiceParser(sp.GetRequiredService<IClientRepo>()));
-builder.Services.AddSingleton<IInvoiceImporter>(sp =>
+builder.Services.AddScoped<ICompanyAddressCache>(_ => new CompanyAddressCache());
+builder.Services.AddScoped<ILegacyInvoiceParser>(sp =>
+    new TwoPhaseLegacyInvoiceParser(
+        sp.GetRequiredService<IClientRepo>(),
+        sp.GetRequiredService<Config>().App.OpenAiKey ?? "",
+        sp.GetRequiredService<ICompanyAddressCache>()));
+builder.Services.AddScoped<IInvoiceImporter>(sp =>
     new InvoiceImporter(
         sp.GetRequiredService<IClientRepo>(),
         sp.GetRequiredService<IInvoiceOperations>(),

@@ -26,7 +26,6 @@ public static class Api
         var pdfExporter = app.Services.GetRequiredService<IPdfInvoiceExporter>().Exporter;
         var imageExporter = app.Services.GetRequiredService<IImageInvoiceExporter>().Exporter;
         var config = app.Services.GetRequiredService<Config>();
-        var importer = app.Services.GetRequiredService<IInvoiceImporter>();
         var logger = app.Services.GetRequiredService<Utilities.ILogger>();
 
         // --- Clients API ---
@@ -381,7 +380,7 @@ public static class Api
         });
 
         // --- Invoice Import API (legacy PDF) ---
-        app.MapPost("/api/invoices/import/analyze", async (HttpContext ctx) =>
+        app.MapPost("/api/invoices/import/analyze", async (HttpContext ctx, IInvoiceImporter importer) =>
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -412,12 +411,12 @@ public static class Api
             int? limit = int.TryParse(limitStr, out var n) && n > 0 ? n : null;
 
             var options = new ImportAnalyzeOptions(nicknameFromMol, limit);
-            var request = new ImportAnalyzeRequest(fileList, options, apiKey!);
+            var request = new ImportAnalyzeRequest(fileList, options);
             var response = await importer.AnalyzeAsync(request, ctx.RequestAborted);
             return Results.Json(response, JsonOptions);
         });
 
-        app.MapPost("/api/invoices/import/commit", async (HttpContext ctx) =>
+        app.MapPost("/api/invoices/import/commit", async (HttpContext ctx, IInvoiceImporter importer) =>
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))

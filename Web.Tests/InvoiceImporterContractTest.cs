@@ -30,7 +30,7 @@ public abstract class InvoiceImporterContractTest
         var fixture = await SetUpAsync();
         fixture.SetParserResults((LegacyInvoiceData?)null);
 
-        var req = new ImportAnalyzeRequest([CreatePdfFile("a.pdf")], new ImportAnalyzeOptions(), "key");
+        var req = new ImportAnalyzeRequest([CreatePdfFile("a.pdf")], new ImportAnalyzeOptions());
         var res = await fixture.Importer.AnalyzeAsync(req);
 
         Assert.That(res.Files, Has.Length.EqualTo(1));
@@ -44,7 +44,7 @@ public abstract class InvoiceImporterContractTest
         var fixture = await SetUpAsync();
         fixture.SetParserResults(TestData(number: "100", eik: "BG123"));
 
-        var req = new ImportAnalyzeRequest([CreatePdfFile("a.pdf")], new ImportAnalyzeOptions(), "key");
+        var req = new ImportAnalyzeRequest([CreatePdfFile("a.pdf")], new ImportAnalyzeOptions());
         var res = await fixture.Importer.AnalyzeAsync(req);
 
         Assert.That(res.UnresolvedCompanies, Is.EquivalentTo(new[] { "BG123" }));
@@ -129,7 +129,7 @@ public abstract class InvoiceImporterContractTest
             foreach (var r in results) _results.Enqueue(r);
         }
 
-        public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, string openAiKey, CancellationToken cancellationToken = default, ICompanyAddressCache? cache = null)
+        public Task<LegacyInvoiceData?> TryParseAsync(byte[] pdfBytes, CancellationToken cancellationToken = default)
             => Task.FromResult(_results.Count == 0 ? null : _results.Dequeue());
     }
 
