@@ -2586,15 +2586,24 @@
         }
         html += `<p class="muted" style="margin:0 0 8px;">${parsed.length} файл(а) готови за импорт.</p>`;
         const suggestions = data.unresolvedNicknameSuggestions || {};
+        const companyNames = {};
+        for(const f of parsed){
+          if(f.companyIdentifier){
+            const key = (f.companyIdentifier || "").toLowerCase();
+            if(!(key in companyNames)) companyNames[key] = f.name || "";
+          }
+        }
         if(unresolved.length === 0){
           html += `<p class="muted" style="margin:0;">Всички фирми са намерени в базата.</p>`;
         }else{
           html += unresolved.map(cid=>{
             const suggested = suggestions[cid] ?? cid;
+            const name = (companyNames[(cid||"").toLowerCase()] || "").trim();
+            const labelText = name ? `${name} (${cid})` : cid;
             return `
             <div class="import-nickname-row" data-company-id="${escapeHtmlAttr(cid)}">
               <div>
-                <label>${escapeHtml(cid)}</label>
+                <label>${escapeHtml(labelText)}</label>
                 <input class="input" type="text" placeholder="псевдоним на клиент" data-nickname-for="${escapeHtmlAttr(cid)}" value="${escapeHtmlAttr(suggested)}" style="margin-top:4px;" />
               </div>
             </div>
