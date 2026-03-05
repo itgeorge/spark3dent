@@ -65,3 +65,6 @@ Invoices/test-data/legacy-invoices/
 
 # Local Docker runtime data and deployment artifacts
 .docker/
+
+# Database dumps (sensitive, downloaded from production)
+db_dumps/
