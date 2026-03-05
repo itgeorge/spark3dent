@@ -10,6 +10,7 @@ public record ImportAnalyzeFileResult(
     string? InvoiceNumber,
     string? Date,
     int? TotalCents,
+    string? Currency,
     string? CompanyIdentifier,
     string? Name,
     string? RepresentativeName,
@@ -21,7 +22,7 @@ public record ImportAnalyzeFileResult(
 {
     /// <summary>Creates an error result for a file that failed to parse.</summary>
     public static ImportAnalyzeFileResult ForError(string fileName, string message) =>
-        new(fileName, null, null, null, null, null, null, null, null, null, null, null, message);
+        new(fileName, null, null, null, null, null, null, null, null, null, null, null, null, message);
 }
 
 /// <summary>Response from POST /api/invoices/import/analyze.</summary>
@@ -43,6 +44,7 @@ public record ImportCommitItem(
     string? InvoiceNumber,
     string? Date,
     int? TotalCents,
+    string? Currency,
     string? CompanyIdentifier,
     string? Name,
     string? RepresentativeName,

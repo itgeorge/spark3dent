@@ -160,6 +160,7 @@ public sealed class InvoiceImporter : IInvoiceImporter
                 parsed.Number,
                 parsed.Date.ToString("yyyy-MM-dd"),
                 parsed.TotalCents,
+                parsed.Currency.ToString(),
                 parsed.Recipient.CompanyIdentifier,
                 parsed.Recipient.Name,
                 parsed.Recipient.RepresentativeName,
@@ -248,7 +249,8 @@ public sealed class InvoiceImporter : IInvoiceImporter
                     await _clientRepo.AddAsync(new Client(nickname, recipient));
                 }
 
-                var data = new LegacyInvoiceData(item.InvoiceNumber, date, item.TotalCents.Value, Currency.Eur, BuildRecipient(item));
+                var currency = ParseCurrency(item.Currency);
+                var data = new LegacyInvoiceData(item.InvoiceNumber, date, item.TotalCents.Value, currency, BuildRecipient(item));
                 var sourcePdfBytes = await ResolveAndConsumePdfBytesAsync(item.TempFileToken, cancellationToken);
                 await _invoiceOps.ImportLegacyInvoiceAsync(data, sourcePdfBytes);
                 imported++;
@@ -354,4 +356,11 @@ public sealed class InvoiceImporter : IInvoiceImporter
     }
 
     private static string BuildAnalyzeObjectKey(string token) => $"{AnalyzeArtifactPrefix}/{token}";
+
+    private static Currency ParseCurrency(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Currency.Eur;
+        return Enum.TryParse<Currency>(value, ignoreCase: true, out var c) ? c : Currency.Eur;
+    }
 }

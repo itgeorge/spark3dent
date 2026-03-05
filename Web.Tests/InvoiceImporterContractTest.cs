@@ -22,6 +22,7 @@ public abstract class InvoiceImporterContractTest
         public abstract void SetDuplicateInvoices(params string[] numbers);
         public abstract IReadOnlyCollection<string> AddedClientNicknames { get; }
         public abstract IReadOnlyCollection<string> ImportedInvoiceNumbers { get; }
+        public abstract IReadOnlyCollection<Currency> ImportedCurrencies { get; }
     }
 
     [Test]
@@ -52,11 +53,55 @@ public abstract class InvoiceImporterContractTest
     }
 
     [Test]
+    public async Task Analyze_WhenParserReturnsBgn_ReturnsCurrencyInFileResult()
+    {
+        var fixture = await SetUpAsync();
+        fixture.SetParserResults(TestDataWithCurrency(number: "101", eik: "BG101", currency: Currency.Bgn));
+
+        var req = new ImportAnalyzeRequest([CreatePdfFile("bgn.pdf")], new ImportAnalyzeOptions());
+        var res = await fixture.Importer.AnalyzeAsync(req);
+
+        Assert.That(res.Files, Has.Length.EqualTo(1));
+        Assert.That(res.Files[0].Error, Is.Null);
+        Assert.That(res.Files[0].Currency, Is.EqualTo("Bgn"));
+    }
+
+    [Test]
+    public async Task Analyze_WhenParserReturnsEur_ReturnsCurrencyInFileResult()
+    {
+        var fixture = await SetUpAsync();
+        fixture.SetParserResults(TestDataWithCurrency(number: "102", eik: "BG102", currency: Currency.Eur));
+
+        var req = new ImportAnalyzeRequest([CreatePdfFile("eur.pdf")], new ImportAnalyzeOptions());
+        var res = await fixture.Importer.AnalyzeAsync(req);
+
+        Assert.That(res.Files, Has.Length.EqualTo(1));
+        Assert.That(res.Files[0].Error, Is.Null);
+        Assert.That(res.Files[0].Currency, Is.EqualTo("Eur"));
+    }
+
+    [Test]
+    public async Task Commit_WhenItemHasBgnCurrency_ImportsWithBgnCurrency()
+    {
+        var fixture = await SetUpAsync();
+        var req = new ImportCommitRequest(
+            [new ImportCommitItem("bgn.pdf", null, "200", "2026-01-01", 50000, "Bgn", "BG200", "Acme Ltd", "Ivan Petrov", "addr", "Sofia", "1000", "Bulgaria")],
+            new Dictionary<string, string>(),
+            false);
+
+        var res = await fixture.Importer.CommitAsync(req);
+
+        Assert.That(res.Imported, Is.EqualTo(1));
+        Assert.That(fixture.ImportedInvoiceNumbers, Does.Contain("200"));
+        Assert.That(fixture.ImportedCurrencies, Does.Contain(Currency.Bgn));
+    }
+
+    [Test]
     public async Task Commit_WhenMissingClient_CreatesClientAndImports()
     {
         var fixture = await SetUpAsync();
         var req = new ImportCommitRequest(
-            [new ImportCommitItem("a.pdf", null, "200", "2026-01-01", 12345, "BG200", "Acme Ltd", "Ivan Petrov", "addr", "Sofia", "1000", "Bulgaria")],
+            [new ImportCommitItem("a.pdf", null, "200", "2026-01-01", 12345, "Eur", "BG200", "Acme Ltd", "Ivan Petrov", "addr", "Sofia", "1000", "Bulgaria")],
             new Dictionary<string, string>(),
             false);
 
@@ -75,7 +120,7 @@ public abstract class InvoiceImporterContractTest
         var fixture = await SetUpAsync();
         fixture.SetDuplicateInvoices("300");
         var req = new ImportCommitRequest(
-            [new ImportCommitItem("a.pdf", null, "300", "2026-01-01", 12345, "BG300", "Acme Ltd", "Ivan", "addr", "Sofia", "1000", "Bulgaria")],
+            [new ImportCommitItem("a.pdf", null, "300", "2026-01-01", 12345, "Eur", "BG300", "Acme Ltd", "Ivan", "addr", "Sofia", "1000", "Bulgaria")],
             new Dictionary<string, string>(),
             false);
 
@@ -93,9 +138,9 @@ public abstract class InvoiceImporterContractTest
         fixture.SetDuplicateInvoices("401");
         var req = new ImportCommitRequest(
         [
-            new ImportCommitItem("ok.pdf", null, "400", "2026-01-01", 100, "BG400", "A", "Rep A", "addr", "Sofia", "1000", "Bulgaria"),
-            new ImportCommitItem("dup.pdf", null, "401", "2026-01-01", 100, "BG401", "B", "Rep B", "addr", "Sofia", "1000", "Bulgaria"),
-            new ImportCommitItem("bad.pdf", null, null, "2026-01-01", 100, "BG402", "C", "Rep C", "addr", "Sofia", "1000", "Bulgaria")
+            new ImportCommitItem("ok.pdf", null, "400", "2026-01-01", 100, "Eur", "BG400", "A", "Rep A", "addr", "Sofia", "1000", "Bulgaria"),
+            new ImportCommitItem("dup.pdf", null, "401", "2026-01-01", 100, "Eur", "BG401", "B", "Rep B", "addr", "Sofia", "1000", "Bulgaria"),
+            new ImportCommitItem("bad.pdf", null, null, "2026-01-01", 100, "Eur", "BG402", "C", "Rep C", "addr", "Sofia", "1000", "Bulgaria")
         ],
             new Dictionary<string, string>(),
             false);
@@ -117,6 +162,9 @@ public abstract class InvoiceImporterContractTest
 
     protected static LegacyInvoiceData TestData(string number, string eik) =>
         new(number, new DateTime(2026, 1, 1), 12345, Currency.Eur, new BillingAddress("Acme", "Ivan Petrov", eik, null, "addr", "Sofia", "1000", "Bulgaria"));
+
+    protected static LegacyInvoiceData TestDataWithCurrency(string number, string eik, Currency currency) =>
+        new(number, new DateTime(2026, 1, 1), 12345, currency, new BillingAddress("Acme", "Ivan Petrov", eik, null, "addr", "Sofia", "1000", "Bulgaria"));
 
     protected sealed class SequentialParser : ILegacyInvoiceParser
     {
@@ -173,11 +221,13 @@ public abstract class InvoiceImporterContractTest
             foreach (var n in numbers) _duplicateNumbers.Add(n);
         }
 
+        public readonly List<Currency> ImportedCurrencies = new();
         public Task<Invoice> ImportLegacyInvoiceAsync(LegacyInvoiceData data, byte[]? sourcePdfBytes = null)
         {
             if (_duplicateNumbers.Contains(data.Number))
                 throw new InvalidOperationException("already exists");
             ImportedNumbers.Add(data.Number);
+            ImportedCurrencies.Add(data.Currency);
             return Task.FromResult(new Invoice(data.Number, new Invoice.InvoiceContent(
                 data.Date,
                 data.Recipient,

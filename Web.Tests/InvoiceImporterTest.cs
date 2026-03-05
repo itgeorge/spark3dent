@@ -1,4 +1,5 @@
 using Accounting;
+using Invoices;
 using NUnit.Framework;
 
 namespace Web.Tests;
@@ -37,5 +38,6 @@ public class InvoiceImporterTest : InvoiceImporterContractTest
         public override void SetDuplicateInvoices(params string[] numbers) => _invoiceOps.SetDuplicates(numbers);
         public override IReadOnlyCollection<string> AddedClientNicknames => _clientRepo.AddedNicknames;
         public override IReadOnlyCollection<string> ImportedInvoiceNumbers => _invoiceOps.ImportedNumbers;
+        public override IReadOnlyCollection<Currency> ImportedCurrencies => _invoiceOps.ImportedCurrencies;
     }
 }
