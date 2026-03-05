@@ -1,3 +1,4 @@
+using System.Reflection;
 using HtmlAgilityPack;
 using Utilities;
 
@@ -72,30 +73,49 @@ public class InvoiceHtmlTemplate
         }
 
         var assembly = typeof(InvoiceHtmlTemplate).Assembly;
-        var interBytes = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("InterVariable.ttf", assembly);
-        var cascadiaBytes = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("CascadiaMono.ttf", assembly);
-        var embeddedFontCss = BuildEmbeddedFontCss(interBytes, cascadiaBytes);
+        var embeddedFontCss = await BuildEmbeddedFontCssAsync(assembly);
 
         return new InvoiceHtmlTemplate(doc, amountTranscriber, invoiceNumberPadding, embeddedFontCss);
     }
 
-    private static string BuildEmbeddedFontCss(byte[] interBytes, byte[] cascadiaBytes)
+    private static async Task<string> BuildEmbeddedFontCssAsync(Assembly assembly)
     {
-        var interBase64 = Convert.ToBase64String(interBytes);
-        var cascadiaBase64 = Convert.ToBase64String(cascadiaBytes);
+        var interRegular = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("Inter-Regular.woff2", assembly);
+        var interSemiBold = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("Inter-SemiBold.woff2", assembly);
+        var interBold = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("Inter-Bold.woff2", assembly);
+        var interExtraBold = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("Inter-ExtraBold.woff2", assembly);
+        var interBlack = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("Inter-Black.woff2", assembly);
+        var cascadiaRegular = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("CascadiaMono-Regular.woff2", assembly);
+        var cascadiaSemiBold = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("CascadiaMono-SemiBold.woff2", assembly);
+        var cascadiaBold = await EmbeddedResourceLoader.LoadEmbeddedResourceBytesAsync("CascadiaMono-Bold.woff2", assembly);
+
+        return BuildFontFaceCss(
+            interRegular, interSemiBold, interBold, interExtraBold, interBlack,
+            cascadiaRegular, cascadiaSemiBold, cascadiaBold);
+    }
+
+    private static string BuildFontFaceCss(
+        byte[] interRegular, byte[] interSemiBold, byte[] interBold, byte[] interExtraBold, byte[] interBlack,
+        byte[] cascadiaRegular, byte[] cascadiaSemiBold, byte[] cascadiaBold)
+    {
+        var r = Convert.ToBase64String(interRegular);
+        var sb = Convert.ToBase64String(interSemiBold);
+        var b = Convert.ToBase64String(interBold);
+        var eb = Convert.ToBase64String(interExtraBold);
+        var bl = Convert.ToBase64String(interBlack);
+        var cr = Convert.ToBase64String(cascadiaRegular);
+        var csb = Convert.ToBase64String(cascadiaSemiBold);
+        var cb = Convert.ToBase64String(cascadiaBold);
+
         return $$"""
-            @font-face {
-              font-family: 'Inter';
-              src: url(data:font/ttf;base64,{{interBase64}}) format('truetype');
-              font-weight: 100 900;
-              font-style: normal;
-            }
-            @font-face {
-              font-family: 'Cascadia Mono';
-              src: url(data:font/ttf;base64,{{cascadiaBase64}}) format('truetype');
-              font-weight: 400 700;
-              font-style: normal;
-            }
+            @font-face{font-family:'Inter';src:url(data:font/woff2;base64,{{r}}) format('woff2');font-weight:400;font-style:normal}
+            @font-face{font-family:'Inter';src:url(data:font/woff2;base64,{{sb}}) format('woff2');font-weight:600;font-style:normal}
+            @font-face{font-family:'Inter';src:url(data:font/woff2;base64,{{b}}) format('woff2');font-weight:700;font-style:normal}
+            @font-face{font-family:'Inter';src:url(data:font/woff2;base64,{{eb}}) format('woff2');font-weight:800;font-style:normal}
+            @font-face{font-family:'Inter';src:url(data:font/woff2;base64,{{bl}}) format('woff2');font-weight:900;font-style:normal}
+            @font-face{font-family:'Cascadia Mono';src:url(data:font/woff2;base64,{{cr}}) format('woff2');font-weight:400;font-style:normal}
+            @font-face{font-family:'Cascadia Mono';src:url(data:font/woff2;base64,{{csb}}) format('woff2');font-weight:600;font-style:normal}
+            @font-face{font-family:'Cascadia Mono';src:url(data:font/woff2;base64,{{cb}}) format('woff2');font-weight:700;font-style:normal}
             """;
     }
 

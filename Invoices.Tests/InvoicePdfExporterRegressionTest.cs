@@ -233,7 +233,7 @@ public class InvoicePdfExporterRegressionTest
             "set REGENERATE_INVOICE_REFS=1, run tests, review the new PDFs, and commit.");
     }
 
-    /// <summary>Replaces PDF D:YYYYMMDDHHmmSS timestamps with fixed value so outputs can be compared.</summary>
+    /// <summary>Replaces variable PDF content (D: timestamps, node IDs) with fixed values so outputs can be compared.</summary>
     private static byte[] NormalizePdfTimestamps(byte[] pdf)
     {
         var result = (byte[])pdf.Clone();
@@ -248,9 +248,19 @@ public class InvoicePdfExporterRegressionTest
                     result[i + 4 + j] = j < placeholder.Length ? placeholder[j] : (byte)'0';
                 }
             }
+            // Normalize node IDs (e.g. node00000080) which vary between Chromium runs
+            if (i + 12 <= result.Length &&
+                result[i] == 'n' && result[i + 1] == 'o' && result[i + 2] == 'd' && result[i + 3] == 'e')
+            {
+                for (var j = 0; j < 8 && IsHexDigit(result[i + 4 + j]); j++)
+                {
+                    result[i + 4 + j] = (byte)'0';
+                }
+            }
         }
         return result;
     }
 
     private static bool IsDigit(byte b) => b >= (byte)'0' && b <= (byte)'9';
+    private static bool IsHexDigit(byte b) => IsDigit(b) || (b >= (byte)'a' && b <= (byte)'f') || (b >= (byte)'A' && b <= (byte)'F');
 }
