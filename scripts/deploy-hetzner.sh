@@ -127,7 +127,34 @@ echo "Preparing remote directory ${REMOTE_DIR} on ${SSH_HOST}..."
 ssh "${SSH_OPTS[@]}" "${SSH_HOST}" bash -s -- "${REMOTE_DIR}" <<'EOF'
 set -euo pipefail
 remote_dir="$1"
-mkdir -p "${remote_dir}/chunks" "${remote_dir}/Caddy"
+oauth2_dir="${remote_dir}/oauth2-proxy"
+oauth2_config_dir="${oauth2_dir}/config"
+oauth2_env_file="${oauth2_dir}/.env"
+allowed_emails_file="${oauth2_config_dir}/allowed_emails.txt"
+
+mkdir -p "${remote_dir}/chunks" "${remote_dir}/Caddy" "${oauth2_config_dir}"
+
+if [[ ! -f "${allowed_emails_file}" ]]; then
+  cat > "${allowed_emails_file}" <<'ALLOWED_EMAILS_EOF'
+# One Google account per line. Only listed emails can access the app.
+# owner@example.com
+ALLOWED_EMAILS_EOF
+fi
+
+if [[ ! -f "${oauth2_env_file}" ]]; then
+  cat > "${oauth2_env_file}" <<'OAUTH_ENV_EOF'
+# Google OAuth client credentials
+OAUTH2_PROXY_CLIENT_ID=
+OAUTH2_PROXY_CLIENT_SECRET=
+
+# Generate with: openssl rand -base64 32
+OAUTH2_PROXY_COOKIE_SECRET=
+
+# Must match your deployed domain callback path
+OAUTH2_PROXY_REDIRECT_URL=https://spark3dent.com/oauth2/callback
+OAUTH2_PROXY_ALLOWED_EMAILS_FILE=/config/allowed_emails.txt
+OAUTH_ENV_EOF
+fi
 EOF
 
 if [[ "${SKIP_UPLOAD}" == "true" ]]; then
