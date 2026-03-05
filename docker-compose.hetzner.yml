@@ -5,6 +5,7 @@ services:
     # For legacy PDF import, add App__OpenAiKey via .env or environment (never commit real keys)
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      App__OpenAiKey: ${App__OpenAiKey:-}
       Runtime__HostingMode: HetznerDocker
       Runtime__Port: ${SPARK3DENT_PORT:-8080}
       Runtime__BindAddress: 0.0.0.0
