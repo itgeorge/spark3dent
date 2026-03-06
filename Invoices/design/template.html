@@ -10,6 +10,11 @@
             --muted: #6b7280;
             --line: #e5e7eb;
 
+            /* Logo palette: teal-to-blue gradient (darkened for readability) */
+            --logo-teal: #00E2D0;
+            --logo-blue: #0369A1;
+            --accent: var(--logo-teal);
+
             --a1: #22c1c3;
             --a2: #7c3aed;
             --a3: #f97316;
@@ -132,7 +137,7 @@
             right: 16mm;
             top: 34mm;
             height: 0;
-            border-top: 1px solid #3161b7;
+            border-top: 1px solid var(--accent);
         }
 
         .mono {
@@ -242,6 +247,7 @@
             font-weight: 900;
             font-size: 22px;
             line-height: 1.05;
+            color: var(--accent);
             transform: translateY(0.5px); /* tiny optical alignment */
         }
 
@@ -424,16 +430,8 @@
             letter-spacing: 0.02em;
             font-family: var(--mono);
             font-variant-numeric: slashed-zero;
-            color: #3161b7;
-        }
-
-        .due-accent {
-            height: 3px;
-            border-radius: 999px;
-            background: #3161b7;
-            margin-top: 8px;
-            width: 100%;
-            opacity: 0.9;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 8px;
         }
 
         .basis-note {
