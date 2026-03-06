@@ -67,7 +67,7 @@ public static class AppBootstrap
     }
 
     /// <summary>Creates DB context, runs migrations, creates repos/exporters/blob storage/InvoiceManagement with logging wrappers.</summary>
-    public static async Task<SetupResult?> SetupDependenciesAsync(Config config, ILogger logger)
+    public static async Task<SetupResult?> SetupDependenciesAsync(Config config, ILogger logger, string? logoBase64 = null)
     {
         if (config.App.SellerAddress == null || config.App.SellerBankTransferInfo == null)
             return null;
@@ -94,7 +94,7 @@ public static class AppBootstrap
         var clientRepo = new SqliteClientRepo(ContextFactory);
 
         var transcriber = new BgAmountTranscriber();
-        var template = await InvoiceHtmlTemplate.LoadAsync(transcriber, invoiceNumberPadding: InvoiceNumberPadding);
+        var template = await InvoiceHtmlTemplate.LoadAsync(transcriber, invoiceNumberPadding: InvoiceNumberPadding, logoBase64: logoBase64);
 
         var chromiumPath = await ResolveChromiumExecutablePathAsync();
         var pdfExporter = new InvoicePdfExporter(chromiumPath);

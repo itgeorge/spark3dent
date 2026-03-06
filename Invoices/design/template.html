@@ -153,9 +153,21 @@
 
         .header-grid {
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: auto 1fr auto;
             gap: 14px;
             align-items: start;
+        }
+
+        .logo-container {
+            display: none;
+            height: 52px;
+            align-items: center;
+        }
+
+        .logo-container img {
+            height: 100%;
+            width: auto;
+            object-fit: contain;
         }
 
         .doc-title {
@@ -537,6 +549,9 @@
 
         <header class="header">
             <div class="header-grid">
+                <div id="logoContainer" class="logo-container">
+                    <img id="logoImg" src="" alt="">
+                </div>
                 <div>
                     <h1 class="doc-title" id="docTitle">ФАКТУРА</h1>
                     <div class="meta-row date" style="margin-top: 6px;"><span class="k">Оригинал</span></div>

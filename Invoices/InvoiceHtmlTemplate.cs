@@ -34,7 +34,7 @@ public class InvoiceHtmlTemplate
         _embeddedFontCss = embeddedFontCss;
     }
 
-    public static async Task<InvoiceHtmlTemplate> LoadAsync(IAmountTranscriber amountTranscriber, string? templateHtmlOverride = null, int invoiceNumberPadding = 10)
+    public static async Task<InvoiceHtmlTemplate> LoadAsync(IAmountTranscriber amountTranscriber, string? templateHtmlOverride = null, int invoiceNumberPadding = 10, string? logoBase64 = null)
     {
         var html = templateHtmlOverride ?? await EmbeddedResourceLoader.LoadEmbeddedResourceAsync(
             TemplateResourceName, typeof(InvoiceHtmlTemplate).Assembly);
@@ -74,6 +74,17 @@ public class InvoiceHtmlTemplate
 
         var assembly = typeof(InvoiceHtmlTemplate).Assembly;
         var embeddedFontCss = await BuildEmbeddedFontCssAsync(assembly);
+
+        if (!string.IsNullOrWhiteSpace(logoBase64))
+        {
+            var logoContainer = doc.GetElementbyId("logoContainer");
+            var logoImg = doc.GetElementbyId("logoImg");
+            if (logoContainer != null && logoImg != null)
+            {
+                logoImg.SetAttributeValue("src", $"data:image/png;base64,{logoBase64.Trim()}");
+                logoContainer.SetAttributeValue("style", "display: flex;");
+            }
+        }
 
         return new InvoiceHtmlTemplate(doc, amountTranscriber, invoiceNumberPadding, embeddedFontCss);
     }

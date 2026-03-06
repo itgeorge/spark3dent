@@ -18,7 +18,8 @@ var logPath = Path.Combine(logDir, "spark3dent-web.log");
 using var fileLogger = new FileLogger(logPath);
 using var logger = new BufferedLogger(fileLogger, 20);
 
-var setup = await AppBootstrap.SetupDependenciesAsync(config, logger);
+var logoBase64 = await LoadLogoBase64Async(builder.Environment.ContentRootPath);
+var setup = await AppBootstrap.SetupDependenciesAsync(config, logger, logoBase64);
 if (setup == null)
 {
     logger.LogError("Failed to initialize dependencies. Check config: SellerAddress and SellerBankTransferInfo are required.", new InvalidOperationException("Missing config"));
@@ -159,6 +160,15 @@ static Task<Config> LoadConfigAsync(IConfiguration configuration)
     config.SingleBox ??= new SingleBoxConfig();
     AppBootstrap.ResolveSingleBoxDefaults(config);
     return Task.FromResult(config);
+}
+
+static async Task<string?> LoadLogoBase64Async(string contentRootPath)
+{
+    var logoPath = Path.Combine(contentRootPath, "wwwroot", "images", "logo.png");
+    if (!File.Exists(logoPath))
+        return null;
+    var bytes = await File.ReadAllBytesAsync(logoPath);
+    return Convert.ToBase64String(bytes);
 }
 
 public partial class Program { }
