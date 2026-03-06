@@ -81,9 +81,14 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 
 var webAssembly = Assembly.GetExecutingAssembly();
-app.MapGet("/", async () =>
+app.MapGet("/", async (Config cfg) =>
 {
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("index.html", webAssembly);
+    if (cfg.Runtime.HostingMode != HostingMode.HetznerDocker)
+    {
+        const string banner = @"<div id=""dev-banner"" style=""background:#facc15;color:#0f172a;text-align:center;font-size:2.25rem;font-weight:700;padding:8px;border-bottom:2px solid #eab308;animation:dev-pulse 2s ease-in-out infinite;"">Development</div><style>@keyframes dev-pulse{0%,100%{opacity:1}50%{opacity:.75}}</style>";
+        html = html.Replace("<body>", "<body>" + banner);
+    }
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
