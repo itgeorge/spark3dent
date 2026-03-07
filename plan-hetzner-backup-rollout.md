@@ -139,12 +139,12 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ## Verification Checklist
 
-- [ ] Run the deployment flow in a safe environment and verify `.deploycommit.txt` is generated locally and copied to the server.
+- [x] Run the deployment flow in a safe environment and verify `.deploycommit.txt` is generated locally and copied to the server.
 - [ ] Verify the remote backup script can be run manually with no suffix.
-- [ ] Verify the remote backup script can be run manually with a suffix like `-before-db-update`.
-- [ ] Verify the produced archive contains both a SQLite backup copy and the blobs content.
-- [ ] Verify the database portion is created through SQLite `.backup`, not by raw file copy.
-- [ ] Verify the predeploy deployment path creates a backup with the expected `-predeploy-[git commit sha]` suffix.
+- [x] Verify the remote backup script can be run manually with a suffix like `-before-db-update`.
+- [x] Verify the produced archive contains both a SQLite backup copy and the blobs content.
+- [x] Verify the database portion is created through SQLite `.backup`, not by raw file copy.
+- [x] Verify the predeploy deployment path creates a backup with the expected `-predeploy-[git commit sha]` suffix.
 - [ ] Verify the daily scheduler is installed exactly once and shows the `04:15` local-time run configuration.
 - [ ] Verify rotation removes older archives and preserves the newest `100`.
 - [ ] Verify a failed backup causes deployment to stop before replacing the running stack.
@@ -154,7 +154,7 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 - [x] Implement the server backup script and rotation logic first.
 - [x] Wire dependency installation and script deployment into `scripts/deploy-hetzner-remote.sh`.
-- [ ] Add `.deploycommit.txt` creation/upload in `scripts/deploy-hetzner.sh`.
+- [x] Add `.deploycommit.txt` creation/upload in `scripts/deploy-hetzner.sh`.
 - [x] Add the predeploy backup invocation to the remote deployment flow.
 - [ ] Add the scheduled daily backup setup.
 - [ ] Update `deployments.md`.
