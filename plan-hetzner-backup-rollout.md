@@ -95,9 +95,10 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 4. Deployment-time dependency setup
 
-- [ ] Update `scripts/deploy-hetzner-remote.sh` to ensure required backup dependencies are installed on the server before backup setup runs.
-- [ ] Keep installation idempotent so repeated deployments do not fail or reinstall unnecessarily.
-- [ ] Decide where in the remote deployment flow dependency installation should happen so backup is available before the predeploy step is needed.
+- [x] Update `scripts/deploy-hetzner-remote.sh` to ensure required backup dependencies are installed on the server before backup setup runs.
+- [x] Keep installation idempotent so repeated deployments do not fail or reinstall unnecessarily.
+- [x] Decide where in the remote deployment flow dependency installation should happen so backup is available before the predeploy step is needed.
+  - Note: runs immediately after OAUTH2 setup, before image reassembly; ensures sqlite3 is ready before any predeploy backup.
 
 ### 5. Deploy commit SHA handoff
 

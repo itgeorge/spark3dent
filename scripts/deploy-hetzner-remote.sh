@@ -54,6 +54,15 @@ OAUTH2_PROXY_ALLOWED_EMAILS_FILE=/config/allowed_emails.txt
 OAUTH_ENV_EOF
 fi
 
+# Backup dependencies (sqlite3 for .backup; tar/gzip assumed present)
+if ! command -v sqlite3 >/dev/null 2>&1; then
+  echo "Installing sqlite3 for backup..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq && apt-get install -y sqlite3
+else
+  echo "sqlite3 already present; skipping backup dependency install."
+fi
+
 if [[ -n "${IMAGE_TAR_CHUNK_PREFIX}" ]]; then
   echo "Reassembling image archive from chunks in ${CHUNK_DIR}..."
   shopt -s nullglob
