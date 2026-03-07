@@ -77,21 +77,21 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 2. Server backup script
 
-- [ ] Add a dedicated executable backup script that will live on the server, ideally under `${REMOTE_DIR}` so deploy can manage it.
-- [ ] Implement argument handling so the script accepts an optional suffix argument and appends it before `.tar.gz`.
-- [ ] In the script, create a temporary working directory for assembling backup contents safely.
-- [ ] Use `sqlite3 "${REMOTE_DIR}/data/spark3dent.db" ".backup '<temp db path>'"` to create a consistent database copy.
-- [ ] Copy or archive the `blobs` directory contents together with the backed-up database copy.
-- [ ] Produce a compressed archive on the server with the timestamped filename.
-- [ ] Clean up temporary files on success and failure.
-- [ ] Print the final backup path so deploy logs clearly show what was created.
+- [x] Add a dedicated executable backup script that will live on the server, ideally under `${REMOTE_DIR}` so deploy can manage it.
+- [x] Implement argument handling so the script accepts an optional suffix argument and appends it before `.tar.gz`.
+- [x] In the script, create a temporary working directory for assembling backup contents safely.
+- [x] Use `sqlite3 "${REMOTE_DIR}/data/spark3dent.db" ".backup '<temp db path>'"` to create a consistent database copy.
+- [x] Copy or archive the `blobs` directory contents together with the backed-up database copy.
+- [x] Produce a compressed archive on the server with the timestamped filename.
+- [x] Clean up temporary files on success and failure.
+- [x] Print the final backup path so deploy logs clearly show what was created.
 
 ### 3. Rotation policy
 
-- [ ] Implement backup rotation in the server backup script or an immediately-following helper step.
-- [ ] Keep only the newest `100` backup archives in the backup directory.
-- [ ] Make rotation deterministic by sorting by modification time or filename timestamp and deleting only older matching backup files.
-- [ ] Ensure rotation does not delete unrelated files outside the backup naming pattern.
+- [x] Implement backup rotation in the server backup script or an immediately-following helper step.
+- [x] Keep only the newest `100` backup archives in the backup directory.
+- [x] Make rotation deterministic by sorting by modification time or filename timestamp and deleting only older matching backup files.
+- [x] Ensure rotation does not delete unrelated files outside the backup naming pattern.
 
 ### 4. Deployment-time dependency setup
 
@@ -150,7 +150,7 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ## Suggested Execution Order
 
-- [ ] Implement the server backup script and rotation logic first.
+- [x] Implement the server backup script and rotation logic first.
 - [ ] Wire dependency installation and script deployment into `scripts/deploy-hetzner-remote.sh`.
 - [ ] Add `.deploycommit.txt` creation/upload in `scripts/deploy-hetzner.sh`.
 - [ ] Add the predeploy backup invocation to the remote deployment flow.
