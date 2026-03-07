@@ -34,12 +34,46 @@ Add a server-side backup system for the Hetzner deployment that:
 
 ### 1. Backup artifact design
 
-- [ ] Choose and document the backup filename format, for example `spark3dent-backup-YYYYmmdd-HHMMSS[-suffix].tar.gz`.
-- [ ] Define sanitization rules for the optional suffix so it remains filename-safe while preserving leading dash usage in examples like `-before-db-update`.
-- [ ] Decide the internal archive layout, for example:
+- [x] Choose and document the backup filename format, for example `s3d-bak-YYYYmmdd-HHMMSS[-suffix].tar.gz`.
+- [x] Define sanitization rules for the optional suffix so it remains filename-safe while preserving leading dash usage in examples like `-before-db-update`.
+- [x] Decide the internal archive layout, for example:
   - `db/spark3dent.db`
   - `blobs/...`
   - optional metadata file such as creation timestamp and source paths
+
+**Design (phase 1):**
+
+**Filename format:** `s3d-bak-YYYYmmdd-HHMMSS[-suffix].tar.gz`
+- `YYYYmmdd` = date (e.g. `20250307`)
+- `HHMMSS` = time (e.g. `041500`)
+- `[-suffix]` = optional; if present, inserted before `.tar.gz` with a leading dash
+- Examples: `s3d-bak-20250307-041500.tar.gz`, `s3d-bak-20250307-041500-predeploy-abc1234.tar.gz`
+
+**Suffix sanitization rules:**
+- Caller passes suffix without leading dash; script adds it. E.g. `predeploy-abc1234` → `-predeploy-abc1234`.
+- Allow only: `a-z`, `A-Z`, `0-9`, `-`, `_`. Replace any other character with `_`.
+- Collapse consecutive invalid chars to a single `_`.
+- Strip leading/trailing `-` and `_` from the sanitized result.
+- If result is empty after sanitization, omit the suffix entirely.
+- Max length: 128 chars (to accommodate description plus commit SHA in `predeploy-` case; truncate with `_` suffix if needed).
+
+**Internal archive layout:**
+```
+db/
+  spark3dent.db          # SQLite backup via .backup (not raw copy)
+blobs/
+  <all blob files>       # Recursive copy of blobs directory
+backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_path, source_blobs_path
+```
+
+**backup.json structure:**
+```json
+{
+  "created_utc": "2025-03-07T04:15:00Z",
+  "source_db_path": "/root/spark3dent-deploy/data/spark3dent.db",
+  "source_blobs_path": "/root/spark3dent-deploy/blobs"
+}
+```
 
 ### 2. Server backup script
 
