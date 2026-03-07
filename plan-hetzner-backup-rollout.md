@@ -110,11 +110,11 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 6. Predeploy backup flow
 
-- [ ] Update the deployment strategy so an on-demand backup runs before the new container deployment is applied.
-- [ ] Read the copied commit SHA from `.deploycommit.txt` on the server.
-- [ ] Invoke the server backup script with suffix `-predeploy-[git commit sha]`.
-- [ ] Make the predeploy backup happen after dependency/setup work is ready but before `docker compose up -d --remove-orphans`.
-- [ ] Decide failure behavior explicitly: if the predeploy backup fails, the deployment should stop rather than continue.
+- [x] Update the deployment strategy so an on-demand backup runs before the new container deployment is applied.
+- [x] Read the copied commit SHA from `.deploycommit.txt` on the server.
+- [x] Invoke the server backup script with suffix `-predeploy-[git commit sha]`.
+- [x] Make the predeploy backup happen after dependency/setup work is ready but before `docker compose up -d --remove-orphans`.
+- [x] Decide failure behavior explicitly: if the predeploy backup fails, the deployment should stop rather than continue.
 
 ### 7. Scheduled daily backup
 
@@ -126,9 +126,9 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 8. Upload/install integration
 
-- [ ] Update `scripts/deploy-hetzner.sh` to upload any new backup-related files needed by the server.
-- [ ] Update the remote deploy setup phase so the backup script is normalized to LF on the server and marked executable.
-- [ ] Ensure remote directory creation includes the backup directory and any log directory needed for scheduled backups.
+- [x] Update `scripts/deploy-hetzner.sh` to upload any new backup-related files needed by the server.
+- [x] Update the remote deploy setup phase so the backup script is normalized to LF on the server and marked executable.
+- [x] Ensure remote directory creation includes the backup directory and any log directory needed for scheduled backups.
 
 ### 9. Documentation updates
 
@@ -153,9 +153,9 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 ## Suggested Execution Order
 
 - [x] Implement the server backup script and rotation logic first.
-- [ ] Wire dependency installation and script deployment into `scripts/deploy-hetzner-remote.sh`.
+- [x] Wire dependency installation and script deployment into `scripts/deploy-hetzner-remote.sh`.
 - [ ] Add `.deploycommit.txt` creation/upload in `scripts/deploy-hetzner.sh`.
-- [ ] Add the predeploy backup invocation to the remote deployment flow.
+- [x] Add the predeploy backup invocation to the remote deployment flow.
 - [ ] Add the scheduled daily backup setup.
 - [ ] Update `deployments.md`.
 - [ ] Run the verification checklist and mark off each item with concrete notes if anything needs follow-up.

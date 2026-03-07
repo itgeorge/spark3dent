@@ -137,7 +137,7 @@ oauth2_config_dir="${oauth2_dir}/config"
 oauth2_env_file="${oauth2_dir}/.env"
 allowed_emails_file="${oauth2_config_dir}/allowed_emails.txt"
 
-mkdir -p "${remote_dir}/chunks" "${remote_dir}/Caddy" "${oauth2_config_dir}"
+mkdir -p "${remote_dir}/chunks" "${remote_dir}/Caddy" "${remote_dir}/backups" "${oauth2_config_dir}"
 
 if [[ ! -f "${allowed_emails_file}" ]]; then
   cat > "${allowed_emails_file}" <<'ALLOWED_EMAILS_EOF'
@@ -184,6 +184,7 @@ fi
 scp_with_retry "${REPO_ROOT}/docker-compose.hetzner.yml" "${SSH_HOST}:${REMOTE_DIR}/"
 scp_with_retry "${REPO_ROOT}/Caddy/Caddyfile" "${SSH_HOST}:${REMOTE_DIR}/Caddy/"
 scp_with_retry "${REPO_ROOT}/scripts/deploy-hetzner-remote.sh" "${SSH_HOST}:${REMOTE_DIR}/"
+scp_with_retry "${REPO_ROOT}/scripts/backup-hetzner.sh" "${SSH_HOST}:${REMOTE_DIR}/"
 scp_with_retry "${DEPLOY_COMMIT_FILE}" "${SSH_HOST}:${REMOTE_DIR}/.deploycommit.txt"
 
 REMOTE_IMAGE_TAR="${REMOTE_DIR}/${IMAGE_FILE_NAME}"
@@ -203,7 +204,9 @@ image_tar_sha256="$7"
 image_tar_size_bytes="$8"
 
 sed -i 's/\r$//' "${remote_dir}/deploy-hetzner-remote.sh"
+sed -i 's/\r$//' "${remote_dir}/backup-hetzner.sh"
 chmod +x "${remote_dir}/deploy-hetzner-remote.sh"
+chmod +x "${remote_dir}/backup-hetzner.sh"
 
 IMAGE_NAME="${image_name}" IMAGE_TAG="${image_tag}" SPARK3DENT_PORT="${spark3dent_port}" \
 REMOTE_DIR="${remote_dir}" IMAGE_TAR="${remote_image_tar}" IMAGE_TAR_CHUNK_PREFIX="${chunk_prefix}" \

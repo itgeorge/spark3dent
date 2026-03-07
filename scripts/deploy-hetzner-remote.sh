@@ -30,7 +30,7 @@ OAUTH2_CONFIG_DIR="${OAUTH2_DIR}/config"
 OAUTH2_ENV_FILE="${OAUTH2_DIR}/.env"
 ALLOWED_EMAILS_FILE="${OAUTH2_CONFIG_DIR}/allowed_emails.txt"
 
-mkdir -p "${REMOTE_DIR}/data" "${REMOTE_DIR}/blobs" "${REMOTE_DIR}/logs" "${OAUTH2_CONFIG_DIR}"
+mkdir -p "${REMOTE_DIR}/data" "${REMOTE_DIR}/blobs" "${REMOTE_DIR}/logs" "${REMOTE_DIR}/backups" "${OAUTH2_CONFIG_DIR}"
 
 if [[ ! -f "${ALLOWED_EMAILS_FILE}" ]]; then
   cat > "${ALLOWED_EMAILS_FILE}" <<'ALLOWED_EMAILS_EOF'
@@ -145,6 +145,25 @@ if ! grep -Fxq "${PORT_LINE}" "${ENV_FILE}"; then
 fi
 if [[ "${APPENDED}" == "false" ]]; then
   echo "Deployment vars already present in ${ENV_FILE}; no append needed."
+fi
+
+# Predeploy backup: run only if app container already exists (not first deploy)
+if docker ps -a -q --filter "name=${IMAGE_NAME}" 2>/dev/null | grep -q .; then
+  DEPLOY_COMMIT_FILE="${REMOTE_DIR}/.deploycommit.txt"
+  BACKUP_SCRIPT="${REMOTE_DIR}/backup-hetzner.sh"
+  if [[ ! -f "${DEPLOY_COMMIT_FILE}" ]]; then
+    echo "Predeploy backup: .deploycommit.txt not found." >&2
+    exit 1
+  fi
+  if [[ ! -x "${BACKUP_SCRIPT}" ]]; then
+    echo "Predeploy backup: backup script not found or not executable." >&2
+    exit 1
+  fi
+  DEPLOY_SHA="$(tr -d '[:space:]' < "${DEPLOY_COMMIT_FILE}" | head -c 128)"
+  echo "Running predeploy backup (suffix: predeploy-${DEPLOY_SHA})..."
+  "${BACKUP_SCRIPT}" "predeploy-${DEPLOY_SHA}"
+else
+  echo "First deployment detected (no ${IMAGE_NAME} container); skipping predeploy backup."
 fi
 
 echo "Starting/updating stack..."
