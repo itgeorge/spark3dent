@@ -19,7 +19,8 @@ spark3dent.com {
             # If NOT authenticated, redirect into oauth2-proxy's login flow
             @unauthenticated status 401
             handle_response @unauthenticated {
-                redir * /oauth2/start?rd={uri}
+                header Cache-Control "no-store"
+                redir * /oauth2/start?rd={http.request.uri}
             }
         }
 
@@ -31,5 +32,5 @@ spark3dent.com {
 }
 
 www.spark3dent.com {
-    redir https://spark3dent.com{uri} permanent
+    redir https://spark3dent.com{http.request.uri} permanent
 }

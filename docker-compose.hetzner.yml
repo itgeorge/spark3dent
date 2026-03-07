@@ -21,6 +21,8 @@ services:
     restart: unless-stopped
 
   oauth2-proxy:
+    expose:
+      - "4180"
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     container_name: spark3dent-oauth2-proxy
     env_file:
@@ -33,6 +35,8 @@ services:
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_EMAIL_DOMAINS: "*"
       OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: ${OAUTH2_PROXY_ALLOWED_EMAILS_FILE:-/config/allowed_emails.txt}
+      OAUTH2_PROXY_COOKIE_SECURE: true
+      OAUTH2_PROXY_COOKIE_DOMAIN: spark3dent.com
     restart: unless-stopped
 
   caddy:
