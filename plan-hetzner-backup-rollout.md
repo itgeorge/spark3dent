@@ -22,11 +22,13 @@ Add a server-side backup system for the Hetzner deployment that:
 
 ## Assumptions To Confirm During Implementation
 
-- [ ] Confirm the deployed SQLite database path is `${REMOTE_DIR}/data/spark3dent.db`.
-- [ ] Confirm the deployed blobs path is `${REMOTE_DIR}/blobs`.
-- [ ] Confirm the backup archives should live in a dedicated directory under the deploy root, such as `${REMOTE_DIR}/backups`.
-- [ ] Confirm the target server already has or can install the needed tools non-interactively (`sqlite3`, `tar`, `gzip`, `cron`/`crontab` support).
-- [ ] Confirm the backup should run outside Docker against the host-mounted database and blobs paths.
+- [x] Confirm the deployed SQLite database path is `${REMOTE_DIR}/data/spark3dent.db`.
+- [x] Confirm the deployed blobs path is `${REMOTE_DIR}/blobs`.
+- [x] Confirm the backup archives should live in a dedicated directory under the deploy root, such as `${REMOTE_DIR}/backups`.
+- [x] Note: use `/root/spark3dent-deploy/backups`; directory does not exist yet and will be created by rollout.
+- [x] Confirm the target server already has or can install the needed tools non-interactively (`sqlite3`, `tar`, `gzip`, `cron`/`crontab` support).
+- [x] Note: server already has `tar`, `gzip`, `crontab`, `cron`, and Docker Compose; deployment may install missing `sqlite3` non-interactively.
+- [x] Confirm the backup should run outside Docker against the host-mounted database and blobs paths.
 
 ## Implementation Plan
 
