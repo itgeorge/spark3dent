@@ -95,6 +95,11 @@ scp_with_retry() {
 
 mkdir -p "${ARTIFACTS_DIR}"
 
+# Deploy commit SHA for predeploy backup suffix (short SHA, 7 chars)
+DEPLOY_COMMIT_SHA="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+DEPLOY_COMMIT_FILE="${ARTIFACTS_DIR}/.deploycommit.txt"
+echo "${DEPLOY_COMMIT_SHA}" > "${DEPLOY_COMMIT_FILE}"
+
 if [[ "${SKIP_BUILD}" == "true" ]]; then
   # Retry mode: skip build/save and reuse an existing archive.
   if [[ ! -f "${IMAGE_TAR}" ]]; then
@@ -179,6 +184,7 @@ fi
 scp_with_retry "${REPO_ROOT}/docker-compose.hetzner.yml" "${SSH_HOST}:${REMOTE_DIR}/"
 scp_with_retry "${REPO_ROOT}/Caddy/Caddyfile" "${SSH_HOST}:${REMOTE_DIR}/Caddy/"
 scp_with_retry "${REPO_ROOT}/scripts/deploy-hetzner-remote.sh" "${SSH_HOST}:${REMOTE_DIR}/"
+scp_with_retry "${DEPLOY_COMMIT_FILE}" "${SSH_HOST}:${REMOTE_DIR}/.deploycommit.txt"
 
 REMOTE_IMAGE_TAR="${REMOTE_DIR}/${IMAGE_FILE_NAME}"
 echo "Running remote deployment..."

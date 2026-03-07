@@ -102,10 +102,11 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 5. Deploy commit SHA handoff
 
-- [ ] Update `scripts/deploy-hetzner.sh` to compute the deployment commit SHA from the current repo state.
-- [ ] Write that SHA into a local `.deploycommit.txt` artifact during deployment preparation.
-- [ ] SCP `.deploycommit.txt` to the remote deploy directory as a separate file.
-- [ ] Decide whether the file should contain the full SHA or short SHA and keep the choice consistent with the backup suffix format.
+- [x] Update `scripts/deploy-hetzner.sh` to compute the deployment commit SHA from the current repo state.
+- [x] Write that SHA into a local `.deploycommit.txt` artifact during deployment preparation.
+- [x] SCP `.deploycommit.txt` to the remote deploy directory as a separate file.
+- [x] Decide whether the file should contain the full SHA or short SHA and keep the choice consistent with the backup suffix format.
+  - Note: short SHA (7 chars) via `git rev-parse --short HEAD`; stored in `.docker/deploy-artifacts/.deploycommit.txt`, uploaded to `${REMOTE_DIR}/.deploycommit.txt`.
 
 ### 6. Predeploy backup flow
 
