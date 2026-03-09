@@ -28,7 +28,8 @@ spark3dent/
     ├── deploy-local.sh        # Local Docker: up/down/restart/logs/ps
     ├── deploy-local.ps1        # Same, for PowerShell on Windows
     ├── deploy-hetzner.sh       # Build, upload, deploy to Hetzner
-    └── deploy-hetzner-remote.sh # Server-side deploy (load image, compose up)
+    ├── deploy-hetzner-remote.sh # Server-side deploy (load image, compose up)
+    └── backup-hetzner.sh       # Server-side backup (db + blobs; used by deploy and cron)
 ```
 
 ### Hosting Modes
@@ -118,10 +119,12 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 **Deploy flow:**
 1. Build Docker image from `Web/Dockerfile`
 2. Save image as compressed tar, split into chunks
-3. Upload chunks, `docker-compose.hetzner.yml`, `Caddy/Caddyfile`, and remote script via SCP (`scp` tends to fail sometimes on large files, so we split into chunks with retries)
-4. SSH into server: reassemble image, validate SHA-256, `docker load`
+3. Write deployment commit SHA to `.deploycommit.txt`, upload chunks, `docker-compose.hetzner.yml`, `Caddy/Caddyfile`, `backup-hetzner.sh`, `.deploycommit.txt`, and remote script via SCP (`scp` tends to fail sometimes on large files, so we split into chunks with retries)
+4. SSH into server: install backup deps (sqlite3 if missing), reassemble image, validate SHA-256, `docker load`
 5. Append `SPARK3DENT_IMAGE` and `SPARK3DENT_PORT` to `.env`
-6. Run `docker compose up -d --remove-orphans`
+6. Run predeploy backup (suffix `-predeploy-[commit sha]`) if app container exists; on failure, deployment stops
+7. Run `docker compose up -d --remove-orphans`
+8. Install or update cron for daily backup at 04:15
 
 **Stack:**
 - **web**: `spark3dent-web:latest`, listens on 8080 inside Docker network only (no host port)
@@ -134,8 +137,21 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 
 **Remote paths (default `~/spark3dent-deploy`):**
 - `data/`, `blobs/`, `logs/` — app persistence
+- `backups/` — backup archives (see Backups below)
 - `Caddy/Caddyfile` — Caddy config
 - `.env` — `SPARK3DENT_IMAGE`, `SPARK3DENT_PORT`, `App__OpenAiKey` (for legacy PDF import; never commit real keys)
+- `backup-hetzner.sh` — server-side backup script (uploaded and made executable by deploy)
+- `.deploycommit.txt` — deployment commit SHA for predeploy backup suffix (uploaded each deploy)
+
+**Backups:**
+- **Location:** `${REMOTE_DIR}/backups` (e.g. `/root/spark3dent-deploy/backups`)
+- **Filename format:** `s3d-bak-YYYYmmdd-HHMMSS[-suffix].tar.gz` (e.g. `s3d-bak-20250307-041500.tar.gz`)
+- **Optional suffix:** Passed without leading dash; sanitized to `a-z`, `A-Z`, `0-9`, `-`, `_`; max 128 chars. Example: `predeploy-abc1234` → `-predeploy-abc1234`
+- **Daily schedule:** Cron runs the backup script every day at **04:15** local server time; output to `${REMOTE_DIR}/logs/backup.log`
+- **Retention:** Only the newest **100** archives are kept; older `s3d-bak-*.tar.gz` files are rotated out
+- **Predeploy backup:** Each deployment creates a backup with suffix `-predeploy-[git commit sha]` (short SHA, 7 chars) before applying the new release. If the predeploy backup fails, deployment stops. First-time deploys (no existing container) skip the predeploy backup.
+- **Archive contents:** `db/spark3dent.db` (SQLite `.backup`), `blobs/`, and `backup.json` (metadata)
+- **Server prerequisites:** The deployment script installs `sqlite3` non-interactively if missing (`apt-get install -y sqlite3`). `tar`, `gzip`, `cron`/`crontab` are assumed present.
 
 ---
 

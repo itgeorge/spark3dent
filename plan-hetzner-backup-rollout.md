@@ -118,11 +118,12 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 7. Scheduled daily backup
 
-- [ ] Choose the scheduling mechanism for the server, most likely a cron entry managed by the remote deploy script.
-- [ ] Install or update an idempotent cron entry to run the backup script every day at `04:15` local time.
-- [ ] Ensure the scheduled command runs with paths/env that do not depend on an interactive shell.
-- [ ] Decide where scheduled job output should go, for example a dedicated backup log file under `${REMOTE_DIR}/logs`.
-- [ ] Verify the cron setup avoids duplicate entries across repeated deployments.
+- [x] Choose the scheduling mechanism for the server, most likely a cron entry managed by the remote deploy script.
+- [x] Install or update an idempotent cron entry to run the backup script every day at `04:15` local time.
+- [x] Ensure the scheduled command runs with paths/env that do not depend on an interactive shell.
+- [x] Decide where scheduled job output should go, for example a dedicated backup log file under `${REMOTE_DIR}/logs`.
+- [x] Verify the cron setup avoids duplicate entries across repeated deployments.
+  - Note: deploy removes any existing lines matching backup script path before appending; output to `${REMOTE_DIR}/logs/backup.log`.
 
 ### 8. Upload/install integration
 
@@ -132,23 +133,23 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 
 ### 9. Documentation updates
 
-- [ ] Update `deployments.md` with the new backup behavior for Hetzner deployments.
-- [ ] Document the backup location, naming format, daily schedule, retention policy, and optional suffix behavior.
-- [ ] Document that each deployment creates a `predeploy-[git commit sha]` backup before applying the new release.
-- [ ] Document any server package prerequisites that the deployment script now installs automatically.
+- [x] Update `deployments.md` with the new backup behavior for Hetzner deployments.
+- [x] Document the backup location, naming format, daily schedule, retention policy, and optional suffix behavior.
+- [x] Document that each deployment creates a `predeploy-[git commit sha]` backup before applying the new release.
+- [x] Document any server package prerequisites that the deployment script now installs automatically.
 
 ## Verification Checklist
 
 - [x] Run the deployment flow in a safe environment and verify `.deploycommit.txt` is generated locally and copied to the server.
-- [ ] Verify the remote backup script can be run manually with no suffix.
+- [x] Verify the remote backup script can be run manually with no suffix.
 - [x] Verify the remote backup script can be run manually with a suffix like `-before-db-update`.
 - [x] Verify the produced archive contains both a SQLite backup copy and the blobs content.
 - [x] Verify the database portion is created through SQLite `.backup`, not by raw file copy.
 - [x] Verify the predeploy deployment path creates a backup with the expected `-predeploy-[git commit sha]` suffix.
-- [ ] Verify the daily scheduler is installed exactly once and shows the `04:15` local-time run configuration.
+- [x] Verify the daily scheduler is installed exactly once and shows the `04:15` local-time run configuration.
 - [ ] Verify rotation removes older archives and preserves the newest `100`.
 - [ ] Verify a failed backup causes deployment to stop before replacing the running stack.
-- [ ] Verify `deployments.md` matches the implemented behavior.
+- [x] Verify `deployments.md` matches the implemented behavior.
 
 ## Suggested Execution Order
 
@@ -156,6 +157,6 @@ backup.json              # Metadata (JSON): created_utc (ISO8601), source_db_pat
 - [x] Wire dependency installation and script deployment into `scripts/deploy-hetzner-remote.sh`.
 - [x] Add `.deploycommit.txt` creation/upload in `scripts/deploy-hetzner.sh`.
 - [x] Add the predeploy backup invocation to the remote deployment flow.
-- [ ] Add the scheduled daily backup setup.
-- [ ] Update `deployments.md`.
+- [x] Add the scheduled daily backup setup.
+- [x] Update `deployments.md`.
 - [ ] Run the verification checklist and mark off each item with concrete notes if anything needs follow-up.

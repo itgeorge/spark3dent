@@ -172,3 +172,18 @@ docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" up -d --remove-orph
 
 echo "Deployment status:"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" ps
+
+# Idempotent cron entry: daily backup at 04:15 local time
+BACKUP_LOG="${REMOTE_DIR}/logs/backup.log"
+CRON_MARKER="# Spark3Dent daily backup (managed by deploy-hetzner-remote.sh)"
+BACKUP_CRON_ENTRY="15 4 * * * REMOTE_DIR=${REMOTE_DIR} ${REMOTE_DIR}/backup-hetzner.sh >> ${BACKUP_LOG} 2>&1"
+CURRENT_CRONTAB="$(crontab -l 2>/dev/null || echo "")"
+if echo "${CURRENT_CRONTAB}" | grep -qF "${CRON_MARKER}"; then
+  echo "Cron already configured (marker present); skipping."
+else
+  NEW_CRONTAB="$(echo "${CURRENT_CRONTAB}" | grep -vF "${REMOTE_DIR}/backup-hetzner.sh" | grep -vF "${CRON_MARKER}" | sed '/^$/d')
+${CRON_MARKER}
+${BACKUP_CRON_ENTRY}"
+  echo "${NEW_CRONTAB}" | crontab -
+  echo "Cron: daily backup at 04:15 → ${BACKUP_LOG}"
+fi
