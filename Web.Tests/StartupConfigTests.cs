@@ -27,6 +27,20 @@ public class StartupConfigTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
+    [Test]
+    public async Task LicensesPage_ReturnsHtmlWithLicenseEntries()
+    {
+        using var fixture = new ApiTestFixture(runtimeHostingMode: "Desktop", runtimePort: null);
+        using var client = fixture.CreateClient();
+
+        var response = await client.GetAsync("/licenses");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.That(html, Does.Contain("Licenses"));
+        Assert.That(html, Does.Contain("<details>"));
+        Assert.That(html, Does.Contain("HtmlAgilityPack"));
+    }
+
     private static string GetFullExceptionMessage(Exception ex)
     {
         var messages = new List<string>();

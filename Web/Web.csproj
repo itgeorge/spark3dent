@@ -26,6 +26,9 @@
 
     <ItemGroup>
         <EmbeddedResource Include="wwwroot\index.html" />
+        <EmbeddedResource Include="..\licenses\*.txt">
+            <LogicalName>Web.licenses.%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>

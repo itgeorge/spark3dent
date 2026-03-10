@@ -92,6 +92,66 @@ app.MapGet("/", async (Config cfg) =>
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
+app.MapGet("/licenses", async () =>
+{
+    const string licensesMarker = ".licenses.";
+    var asmName = webAssembly.GetName().Name ?? "Web";
+    var resourceNames = webAssembly.GetManifestResourceNames()
+        .Where(n => n.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var licenseEntries = new List<(string PackageName, string LicenseText)>();
+    foreach (var resourceName in resourceNames)
+    {
+        var filename = resourceName.Contains(licensesMarker, StringComparison.Ordinal)
+            ? resourceName.Split(licensesMarker, StringSplitOptions.None).LastOrDefault()
+            : resourceName.StartsWith(asmName + ".", StringComparison.Ordinal)
+                ? resourceName[(asmName.Length + 1)..]
+                : null;
+        if (string.IsNullOrEmpty(filename) || !filename.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) continue;
+        var packageName = Path.GetFileNameWithoutExtension(filename);
+        var licenseText = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync(filename, webAssembly);
+        licenseEntries.Add((packageName, licenseText));
+    }
+    licenseEntries = licenseEntries.OrderBy(e => e.PackageName, StringComparer.OrdinalIgnoreCase).ToList();
+
+    var detailsHtml = string.Join("\n", licenseEntries.Select(e =>
+    {
+        var escaped = System.Net.WebUtility.HtmlEncode(e.LicenseText);
+        return $@"    <details>
+      <summary>{System.Net.WebUtility.HtmlEncode(e.PackageName)}</summary>
+      <pre>{escaped}</pre>
+    </details>";
+    }));
+
+    var html = $@"<!doctype html>
+<html lang=""bg"">
+<head>
+  <meta charset=""utf-8"" />
+  <meta name=""viewport"" content=""width=device-width,initial-scale=1"" />
+  <link rel=""icon"" type=""image/png"" href=""/images/logo.png"" />
+  <title>Licenses</title>
+  <style>
+    :root{{ --a2:#7c3aed; --bg:#f8fafc; --text:#0f172a; --muted:#475569; --border:#e2e8f0; --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,""Liberation Mono"",""Courier New"",monospace; }}
+    *{{ box-sizing:border-box; }}
+    body{{ margin:0; font-family:ui-sans-serif,system-ui,sans-serif; color:var(--text); background:var(--bg); padding:24px; }}
+    a{{ color:var(--a2); text-decoration:none; }}
+    a:hover{{ text-decoration:underline; }}
+    h1{{ margin:0 0 20px; font-size:1.5rem; }}
+    details{{ margin:8px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }}
+    summary{{ padding:12px 16px; cursor:pointer; background:#fff; font-weight:500; }}
+    summary:hover{{ background:rgba(124,58,237,.06); }}
+    pre{{ margin:0; padding:16px; background:#fff; font-family:var(--mono); font-size:13px; line-height:1.5; overflow-x:auto; white-space:pre-wrap; word-wrap:break-word; border-top:1px solid var(--border); }}
+  </style>
+</head>
+<body>
+  <a href=""/"">&larr; Back</a>
+  <h1>Licenses</h1>
+{detailsHtml}
+</body>
+</html>";
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
 Web.Api.MapRoutes(app);
 
 Console.WriteLine($"Running on {url}");

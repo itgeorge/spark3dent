@@ -11,6 +11,14 @@
 4. **Check NOTICE/attribution requirements** – Some packages (especially Apache 2.0) require including their NOTICE or attribution. Ensure we comply.
 5. **Update this file** – After each review run, add a dated entry below recording what was done.
 
+### Embedded resources and Licenses page
+
+License files in `<repo root>/licenses/` are embedded in the Web project via `..\licenses\*.txt` in [Web/Web.csproj](../Web/Web.csproj). The Licenses page at `/licenses` displays them.
+
+- **When adding a dependency:** Create `licenses/<PackageId>.txt` with the full license text. It will be embedded and shown on the Licenses page automatically.
+- **When removing a dependency:** Delete the corresponding `licenses/<PackageId>.txt` file. It will no longer be embedded or shown.
+- Then run tests, especially [Web.Tests/StartupConfigTests.cs](../Web.Tests/StartupConfigTests.cs) to ensure the licenses are embedded correctly and the Licenses page displays them.
+
 ---
 
 **Review log:**
