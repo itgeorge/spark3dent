@@ -187,3 +187,22 @@ ${BACKUP_CRON_ENTRY}"
   echo "${NEW_CRONTAB}" | crontab -
   echo "Cron: daily backup at 04:15 → ${BACKUP_LOG}"
 fi
+
+# Idempotent cron entry: weekly update and restart on Sunday at 04:45 local time if required
+UPDATE_LOG="${REMOTE_DIR}/logs/update.log"
+UPDATE_CRON_MARKER="# Spark3Dent weekly update (managed by deploy-hetzner-remote.sh)"
+UPDATE_CRON_ENTRY="45 4 * * 0 bash -lc 'export DEBIAN_FRONTEND=noninteractive; /usr/bin/apt-get update -qq && /usr/bin/apt-get upgrade -y -qq; if [ -f /run/reboot-required ]; then /usr/sbin/reboot; fi' >> ${UPDATE_LOG} 2>&1"
+
+CURRENT_CRONTAB="$(crontab -l 2>/dev/null || true)"
+
+NEW_CRONTAB="$(printf '%s\n' "${CURRENT_CRONTAB}" \
+  | grep -vF "${UPDATE_CRON_MARKER}" \
+  | grep -vF "${UPDATE_LOG}" \
+  | sed '/^$/d')"
+
+NEW_CRONTAB="${NEW_CRONTAB}
+${UPDATE_CRON_MARKER}
+${UPDATE_CRON_ENTRY}"
+
+printf '%s\n' "${NEW_CRONTAB}" | crontab -
+echo "Cron: weekly update Sunday 04:45; reboot only if required → ${UPDATE_LOG}"
