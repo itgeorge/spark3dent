@@ -80,6 +80,8 @@ app.Use(async (context, next) =>
 
 app.UseStaticFiles();
 
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+
 var webAssembly = Assembly.GetExecutingAssembly();
 app.MapGet("/", async (Config cfg) =>
 {

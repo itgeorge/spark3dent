@@ -18,6 +18,12 @@ services:
       - ${SPARK3DENT_DATA_DIR:-./data}:/var/opt/spark3dent/data
       - ${SPARK3DENT_BLOB_DIR:-./blobs}:/var/opt/spark3dent/blobs
       - ${SPARK3DENT_LOG_DIR:-./logs}:/var/log/spark3dent
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${SPARK3DENT_PORT:-8080}/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     restart: unless-stopped
 
   oauth2-proxy:

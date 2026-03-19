@@ -61,6 +61,8 @@ oauth2-proxy reads:
    - Creates the same placeholder files if missing (idempotent)
    - Loads the Docker image, appends deployment vars to `~/spark3dent-deploy/.env`
    - Runs `docker compose up -d --remove-orphans`
+   - Waits for the `web` container health check (`/healthz`) to report healthy
+   - Runs `docker image prune -a -f` so old unused image revisions do not accumulate under `/var/lib/containerd`
 
 ### Placeholder files (never overwritten)
 

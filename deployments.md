@@ -124,16 +124,23 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 5. Append `SPARK3DENT_IMAGE` and `SPARK3DENT_PORT` to `.env`
 6. Run predeploy backup (suffix `-predeploy-[commit sha]`) if app container exists; on failure, deployment stops
 7. Run `docker compose up -d --remove-orphans`
-8. Install or update cron for daily backup at 04:15
+8. Wait for the `web` container health check to report healthy (`/healthz`)
+9. Run `docker image prune -a -f` to remove old unused images only after the new stack is up and healthy
+10. Install or update cron for daily backup at 04:15
 
 **Stack:**
-- **web**: `spark3dent-web:latest`, listens on 8080 inside Docker network only (no host port)
+- **web**: `spark3dent-web:latest`, listens on 8080 inside Docker network only (no host port), exposes `/healthz` for Docker health checks
 - **caddy**: Listens on 80 and 443; terminates TLS; proxies to `web:8080`
 
 **Caddy:**
 - `spark3dent.com` → reverse proxy to app, auto HTTP→HTTPS, Let's Encrypt certs
 - `www.spark3dent.com` → redirect to `https://spark3dent.com`
 - Certificates stored in `caddy_data` volume; renewal is automatic
+
+**Image cleanup note:**
+- Disk growth on Hetzner was traced to stale Docker/containerd image storage under `/var/lib/containerd`, not app data or SQLite.
+- After adding post-deploy `docker image prune -a -f`, unused image revisions from repeated `spark3dent-web:latest` deploys are removed once the new container is healthy.
+- In practice this reduced `/var/lib/containerd` from roughly **18G** to about **1.6G**.
 
 **Remote paths (default `~/spark3dent-deploy`):**
 - `data/`, `blobs/`, `logs/` — app persistence

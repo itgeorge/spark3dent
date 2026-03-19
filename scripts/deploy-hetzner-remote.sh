@@ -170,6 +170,38 @@ echo "Starting/updating stack..."
 cd "${REMOTE_DIR}"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" up -d --remove-orphans
 
+echo "Waiting for ${IMAGE_NAME} to report healthy..."
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-180}"
+HEALTH_POLL_SECONDS="${HEALTH_POLL_SECONDS:-5}"
+HEALTH_DEADLINE="$((SECONDS + HEALTH_TIMEOUT_SECONDS))"
+while true; do
+  HEALTH_STATUS="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${IMAGE_NAME}")"
+  case "${HEALTH_STATUS}" in
+    healthy)
+      echo "${IMAGE_NAME} is healthy."
+      break
+      ;;
+    unhealthy|exited|dead)
+      echo "${IMAGE_NAME} entered bad state: ${HEALTH_STATUS}" >&2
+      docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" ps >&2
+      docker logs --tail 200 "${IMAGE_NAME}" >&2 || true
+      exit 1
+      ;;
+    *)
+      if (( SECONDS >= HEALTH_DEADLINE )); then
+        echo "Timed out waiting for ${IMAGE_NAME} to become healthy (last status: ${HEALTH_STATUS})." >&2
+        docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" ps >&2
+        docker logs --tail 200 "${IMAGE_NAME}" >&2 || true
+        exit 1
+      fi
+      sleep "${HEALTH_POLL_SECONDS}"
+      ;;
+  esac
+done
+
+echo "Pruning unused Docker images..."
+docker image prune -a -f
+
 echo "Deployment status:"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" ps
 
