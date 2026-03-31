@@ -31,6 +31,6 @@ spark3dent.com {
     respond 403
 }
 
-www.spark3dent.com {
-    redir https://spark3dent.com{http.request.uri} permanent
+www.spark3dent.com, spark3dent.bg, www.spark3dent.bg {
+    redir https://spark3dent.com{uri} permanent
 }

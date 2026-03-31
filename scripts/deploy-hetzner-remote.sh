@@ -10,6 +10,8 @@ IMAGE_TAR_SIZE_BYTES="${IMAGE_TAR_SIZE_BYTES:-}"
 SPARK3DENT_PORT="${SPARK3DENT_PORT:-8080}"
 SPARK3DENT_IMAGE="${SPARK3DENT_IMAGE:-${IMAGE_NAME}:${IMAGE_TAG}}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.hetzner.yml}"
+CADDY_CONTAINER_NAME="${CADDY_CONTAINER_NAME:-spark3dent-caddy}"
+CADDY_CONFIG_PATH="${CADDY_CONFIG_PATH:-/etc/caddy/Caddyfile}"
 
 # Resolve REMOTE_DIR to absolute first; all other paths derive from it.
 if [[ "${REMOTE_DIR}" == "~" ]]; then
@@ -198,6 +200,15 @@ while true; do
       ;;
   esac
 done
+
+echo "Validating and reloading Caddy config..."
+if ! docker ps --format '{{.Names}}' | grep -Fxq "${CADDY_CONTAINER_NAME}"; then
+  echo "Caddy container is not running: ${CADDY_CONTAINER_NAME}" >&2
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_PATH}" ps >&2
+  exit 1
+fi
+docker exec "${CADDY_CONTAINER_NAME}" caddy validate --config "${CADDY_CONFIG_PATH}" --adapter caddyfile
+docker exec "${CADDY_CONTAINER_NAME}" caddy reload --config "${CADDY_CONFIG_PATH}" --adapter caddyfile
 
 echo "Pruning unused Docker images..."
 docker image prune -a -f

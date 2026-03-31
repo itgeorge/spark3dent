@@ -29,6 +29,7 @@ The Caddyfile (`Caddy/Caddyfile`) defines:
 - `handle /oauth2/*` — proxy OAuth traffic to oauth2-proxy
 - `handle @protected` — for non-OAuth paths: run `forward_auth`, then proxy to the web app; on 401, redirect to `/oauth2/start?rd={uri}`
 - `respond 403` — default for unmatched paths
+- Redirect site blocks for `spark3dent.bg` and `www.spark3dent.bg` to `https://spark3dent.com`
 
 ## Docker Compose Stack
 
@@ -116,3 +117,7 @@ Optional overrides:
 
 - If oauth2-proxy is down, app traffic should not be publicly accessible (forward_auth fails; requests get 502 or similar).
 - Only emails in `allowed_emails.txt` can access the app after authenticating with Google.
+
+## Updating domains on GCP
+
+When adding a new domain, remember to add it to the authorized JavaScript origins in the Credentials section of the Google Clouud Console: https://console.cloud.google.com/auth/clients/1098391572597-pomqof9b8mvo0n3b6kdm20pdmmi4a1t0.apps.googleusercontent.com?project=spark3dent

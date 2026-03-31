@@ -102,7 +102,7 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 **Prerequisites:**
 - SSH access to Hetzner host (e.g. `~/.ssh/id_ed25519_hetzner`)
 - SSH config alias `spark3dent-hetzner` (or set `SSH_HOST`)
-- Domain `spark3dent.com` with A records pointing to the server
+- Domains `spark3dent.com` and `spark3dent.bg` with A records pointing to the server (`www` records as needed for redirects)
 - Firewall allows TCP 22, 80, 443 (8080 is internal only)
 
 **Run:**
@@ -125,8 +125,9 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 6. Run predeploy backup (suffix `-predeploy-[commit sha]`) if app container exists; on failure, deployment stops
 7. Run `docker compose up -d --remove-orphans`
 8. Wait for the `web` container health check to report healthy (`/healthz`)
-9. Run `docker image prune -a -f` to remove old unused images only after the new stack is up and healthy
-10. Install or update cron for daily backup at 04:15
+9. Validate and reload Caddy so uploaded `Caddy/Caddyfile` changes take effect during deployment
+10. Run `docker image prune -a -f` to remove old unused images only after the new stack is up and healthy
+11. Install or update cron for daily backup at 04:15
 
 **Stack:**
 - **web**: `spark3dent-web:latest`, listens on 8080 inside Docker network only (no host port), exposes `/healthz` for Docker health checks
@@ -135,7 +136,10 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 **Caddy:**
 - `spark3dent.com` → reverse proxy to app, auto HTTP→HTTPS, Let's Encrypt certs
 - `www.spark3dent.com` → redirect to `https://spark3dent.com`
+- `spark3dent.bg` → redirect to `https://spark3dent.com`
+- `www.spark3dent.bg` → redirect to `https://spark3dent.com`
 - Certificates stored in `caddy_data` volume; renewal is automatic
+- Deployments now validate and reload Caddy after the `web` container becomes healthy, so uploaded Caddyfile changes are applied automatically
 
 **Image cleanup note:**
 - Disk growth on Hetzner was traced to stale Docker/containerd image storage under `/var/lib/containerd`, not app data or SQLite.
