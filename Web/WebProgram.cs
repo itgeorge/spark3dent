@@ -63,7 +63,8 @@ builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper 
 builder.Services.AddSingleton<INonWorkingDayProvider, WeekendOnlyNonWorkingDayProvider>();
 builder.Services.AddSingleton<DateAvailabilityService>();
 builder.Services.AddSingleton<IOrderCodeGenerator, SafeOrderCodeGenerator>();
-builder.Services.AddScoped<ISchedulingRepository, SqliteSchedulingRepo>();
+builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
+builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
 builder.Services.AddScoped<SchedulingAuthService>();
 builder.Services.AddScoped<SchedulingOrderService>();
 

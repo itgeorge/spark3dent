@@ -63,7 +63,7 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.OrderCode).IsUnique();
             e.HasIndex(x => x.ClinicCode);
             e.HasIndex(x => x.RequestedDeliveryDate);
-            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
             e.HasIndex(x => x.Status);
             e.Property(x => x.OrderCode).IsRequired();
             e.Property(x => x.ClinicCode).IsRequired();
