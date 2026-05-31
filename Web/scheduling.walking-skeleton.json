@@ -1,0 +1,65 @@
+{
+  "sessionSlidingDays": 30,
+  "sessionAbsoluteDays": 180,
+  "defaultMinBusinessDays": 3,
+  "clinics": [
+    {
+      "code": "DEMO",
+      "displayName": "Demo Dental Clinic",
+      "linkedClientNickname": null,
+      "isActive": true,
+      "credentials": [
+        {
+          "id": "assistant-1",
+          "label": "Assistant 1",
+          "pinHash": "pbkdf2-sha256$210000$P/ZQ8M8GLP7OOanOiiEcxA==$Rs2HRFNeRpOJdIUnYPVWhh7EM83bQXV6asPSfkWRYtI=",
+          "isActive": true
+        }
+      ]
+    }
+  ],
+  "workRules": [
+    {
+      "productCategory": "permanent",
+      "workType": "crown",
+      "material": "fullContourZirconia",
+      "constructionType": "crown",
+      "minBusinessDays": 3
+    },
+    {
+      "productCategory": "permanent",
+      "workType": "crown",
+      "material": "glassCeramics",
+      "constructionType": "crown",
+      "minBusinessDays": 3
+    },
+    {
+      "productCategory": "permanent",
+      "workType": "bridge",
+      "material": "pfm",
+      "constructionType": "bridge",
+      "minBusinessDays": 5
+    },
+    {
+      "productCategory": "permanent",
+      "workType": "bridge",
+      "material": "pfzLayeredZrCrown",
+      "constructionType": "bridge",
+      "minBusinessDays": 5
+    },
+    {
+      "productCategory": "temporary",
+      "workType": "temporaryCrownBridge",
+      "material": "pmma",
+      "constructionType": "crown",
+      "minBusinessDays": 1
+    },
+    {
+      "productCategory": "temporary",
+      "workType": "temporaryCrownBridge",
+      "material": "pmma",
+      "constructionType": "bridge",
+      "minBusinessDays": 2
+    }
+  ]
+}

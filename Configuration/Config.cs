@@ -36,6 +36,10 @@ public record AppConfig
     public bool? ShouldOpenBrowserOnStart { get; init; }
     public SellerAddress? SellerAddress { get; init; }
     public SellerBankTransferInfo? SellerBankTransferInfo { get; init; }
+    /// <summary>Path to walking-skeleton scheduling JSON config (clinics, hashed PIN credentials, work rules).</summary>
+    public string? SchedulingConfigPath { get; init; }
+    /// <summary>Optional server-side pepper for scheduling PIN hashes. Prefer setting via App__SchedulingPinPepper env var.</summary>
+    public string? SchedulingPinPepper { get; init; }
 }
 
 public enum HostingMode

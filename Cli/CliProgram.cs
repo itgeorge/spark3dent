@@ -3,6 +3,7 @@ using System.Globalization;
 using Accounting;
 using AppSetup;
 using Invoices;
+using Orders;
 using Utilities;
 
 namespace Cli;
@@ -17,6 +18,9 @@ class CliProgram
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
         var config = await AppBootstrap.LoadAndResolveConfigAsync();
+
+        if (TryRunSchedulingHelper(args, config))
+            return;
 
         var logDir = config.SingleBox.LogDirectory;
         Directory.CreateDirectory(logDir);
@@ -34,6 +38,31 @@ class CliProgram
         }
 
         await RunCommandLoopAsync(args, setup.InvoiceManagement, setup.ClientRepo, setup.PdfExporter, setup.ImageExporter, logger);
+    }
+
+    static bool TryRunSchedulingHelper(string[] args, Configuration.Config config)
+    {
+        if (args.Length < 2 || !args[0].Equals("scheduling", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (args[1].Equals("hash-pin", StringComparison.OrdinalIgnoreCase))
+        {
+            var pin = args.Length >= 3 ? args[2] : ReadSecret("PIN (6 digits): ");
+            var hasher = new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER"));
+            var hash = hasher.Hash(pin);
+            Console.WriteLine(hash);
+            return true;
+        }
+
+        Console.WriteLine("Usage: scheduling hash-pin <6-digit-pin>");
+        return true;
+    }
+
+    static string ReadSecret(string prompt)
+    {
+        Console.Write(prompt);
+        var value = Console.ReadLine();
+        return value ?? string.Empty;
     }
 
     static async Task RunCommandLoopAsync(
@@ -131,6 +160,8 @@ class CliProgram
         Console.WriteLine("  invoices list           - List recent invoices (newest first)");
         Console.WriteLine("  invoices import <dir> [--dry-run] [-k <openaikey>] [--limit <n>] [--nickname-from-mol]");
         Console.WriteLine("                          - Import legacy PDF invoices recursively; prompt for client nicknames");
+        Console.WriteLine("  scheduling hash-pin <pin>");
+        Console.WriteLine("                          - Generate a hashed scheduling PIN for JSON config");
     }
 
     static async Task RunClientsCommandAsync(string[] args, IClientRepo clientRepo)

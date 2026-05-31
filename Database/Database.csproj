@@ -20,6 +20,7 @@
         <ProjectReference Include="..\Accounting\Accounting.csproj" />
         <ProjectReference Include="..\Configuration\Configuration.csproj" />
         <ProjectReference Include="..\Utilities\Utilities.csproj" />
+        <ProjectReference Include="..\Orders\Orders.csproj" />
     </ItemGroup>
 
 </Project>

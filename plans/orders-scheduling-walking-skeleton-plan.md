@@ -45,24 +45,24 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 
 ## Phase 0 - Baseline and Project Placement
 
-- [ ] Inspect current solution boundaries and decide whether scheduling domain code belongs in a new `Orders`/`Scheduling` project or existing projects.
-- [ ] Add chosen project(s) and test project(s) to `Spark3Dent.sln` if new projects are needed.
-- [ ] Add project references so Web can use the scheduling application services without leaking EF/database details into UI code.
-- [ ] Document the chosen boundary in this plan before implementing persistence.
+- [x] Inspect current solution boundaries and decide whether scheduling domain code belongs in a new `Orders`/`Scheduling` project or existing projects.
+- [x] Add chosen project(s) and test project(s) to `Spark3Dent.sln` if new projects are needed.
+- [x] Add project references so Web can use the scheduling application services without leaking EF/database details into UI code.
+- [x] Document the chosen boundary in this plan before implementing persistence.
 
 ---
 
 ## Phase 1 - Scheduling Domain Model
 
-- [ ] Define core order enums/value types:
+- [x] Define core order enums/value types:
   - product category: temporary/permanent or initial equivalent,
   - work type,
   - material,
   - construction type,
   - order status with only `Created` required initially.
-- [ ] Define `Clinic` domain model independent from invoicing `Client`, with optional invoice-client link.
-- [ ] Define `ClinicCredential` model with label, active/revoked state, and hashed PIN fields.
-- [ ] Define `Order` model with at least:
+- [x] Define `Clinic` domain model independent from invoicing `Client`, with optional invoice-client link.
+- [x] Define `ClinicCredential` model with label, active/revoked state, and hashed PIN fields.
+- [x] Define `Order` model with at least:
   - order code,
   - clinic id,
   - credential id,
@@ -75,36 +75,36 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
   - status `Created`,
   - created/updated timestamps,
   - IP/user-agent audit metadata.
-- [ ] Add validation tests for crown single-tooth and non-crown range behavior.
-- [ ] Add validation tests for bridge default abutments = range endpoints.
+- [x] Add validation tests for crown single-tooth and non-crown range behavior.
+- [x] Add validation tests for bridge default abutments = range endpoints.
 
 ---
 
 ## Phase 2 - JSON Configuration for Walking Skeleton
 
-- [ ] Define JSON config schema for clinics and credentials using hashed PINs only.
-- [ ] Define JSON config schema for allowed work combinations and minimum business-day lead times.
-- [ ] Add default work-rule values suitable for walking-skeleton testing.
-- [ ] Implement startup-only loading from a configured file path.
-- [ ] Add validation errors for malformed config, duplicate clinic codes, duplicate credential labels within a clinic, inactive/missing credentials, and unsupported work-rule combinations.
-- [ ] Add a temporary authenticated/dev-only API endpoint to force config reload without restarting the app.
-- [ ] Add explicit TODO/comment near the reload endpoint: remove or disable before v1.5 preview testing.
+- [x] Define JSON config schema for clinics and credentials using hashed PINs only.
+- [x] Define JSON config schema for allowed work combinations and minimum business-day lead times.
+- [x] Add default work-rule values suitable for walking-skeleton testing.
+- [x] Implement startup-only loading from a configured file path.
+- [x] Add validation errors for malformed config, duplicate clinic codes, duplicate credential labels within a clinic, inactive/missing credentials, and unsupported work-rule combinations.
+- [x] Add a temporary authenticated/dev-only API endpoint to force config reload without restarting the app.
+- [x] Add explicit TODO/comment near the reload endpoint: remove or disable before v1.5 preview testing.
 
 ---
 
 ## Phase 3 - PIN Hash CLI/Helper
 
-- [ ] Choose PIN hashing approach appropriate for low-entropy six-digit PINs, including salt and server-side pepper/config secret if practical.
-- [ ] Add tests for PIN verification success/failure and inactive credential rejection.
-- [ ] Add a small CLI/helper command to generate a credential hash from a PIN and label, suitable for pasting into the JSON config.
-- [ ] Ensure CLI/helper never logs raw PINs except unavoidable local terminal input/output during generation.
-- [ ] Document example JSON credential entry with placeholder hash only.
+- [x] Choose PIN hashing approach appropriate for low-entropy six-digit PINs, including salt and server-side pepper/config secret if practical.
+- [x] Add tests for PIN verification success/failure and inactive credential rejection.
+- [x] Add a small CLI/helper command to generate a credential hash from a PIN and label, suitable for pasting into the JSON config.
+- [x] Ensure CLI/helper never logs raw PINs except unavoidable local terminal input/output during generation.
+- [x] Document example JSON credential entry with placeholder hash only.
 
 ---
 
 ## Phase 4 - Server-Side Cookie Session Auth
 
-- [ ] Add persistence model for auth sessions:
+- [x] Add persistence model for auth sessions:
   - id,
   - clinic id,
   - credential id,
@@ -115,99 +115,99 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
   - optional absolute expires at,
   - revoked at,
   - created IP/user-agent.
-- [ ] Implement login endpoint accepting clinic code + PIN.
-- [ ] On successful login, create random opaque token, store only token hash, and set HttpOnly/Secure/SameSite auth cookie.
-- [ ] Implement authenticated request resolver that checks token hash, expiry, revocation, active clinic, and active credential.
-- [ ] Implement sliding expiry refresh: a valid request extends expiry by the configured session lifetime.
-- [ ] Implement logout current session by revoking the session and clearing the cookie.
-- [ ] Add repository/service methods to revoke all sessions for a credential and all sessions for a clinic, even if no UI calls them yet.
-- [ ] Add auth tests for invalid PIN, revoked credential, expired session, revoked session, and sliding-expiry refresh.
+- [x] Implement login endpoint accepting clinic code + PIN.
+- [x] On successful login, create random opaque token, store only token hash, and set HttpOnly/Secure/SameSite auth cookie.
+- [x] Implement authenticated request resolver that checks token hash, expiry, revocation, active clinic, and active credential.
+- [x] Implement sliding expiry refresh: a valid request extends expiry by the configured session lifetime.
+- [x] Implement logout current session by revoking the session and clearing the cookie.
+- [x] Add repository/service methods to revoke all sessions for a credential and all sessions for a clinic, even if no UI calls them yet.
+- [x] Add auth tests for invalid PIN, revoked credential, expired session, revoked session, and sliding-expiry refresh.
 
 ---
 
 ## Phase 5 - Persistence
 
-- [ ] Add EF entities/mappings for clinics, clinic credentials if persisted, auth sessions, and orders.
-- [ ] Decide which clinic/credential data is persisted versus loaded from JSON for the walking skeleton. If credentials remain JSON-only, persist only enough references/snapshots to audit created orders.
-- [ ] Add unique index on order code.
-- [ ] Add indexes for order list queries by clinic, delivery date, created date, and status.
-- [ ] Implement order repository/service create flow.
-- [ ] Ensure order creation revalidates delivery date server-side immediately before saving.
-- [ ] Add persistence tests for create/list/get order and duplicate order-code handling.
+- [x] Add EF entities/mappings for clinics, clinic credentials if persisted, auth sessions, and orders.
+- [x] Decide which clinic/credential data is persisted versus loaded from JSON for the walking skeleton. If credentials remain JSON-only, persist only enough references/snapshots to audit created orders.
+- [x] Add unique index on order code.
+- [x] Add indexes for order list queries by clinic, delivery date, created date, and status.
+- [x] Implement order repository/service create flow.
+- [x] Ensure order creation revalidates delivery date server-side immediately before saving.
+- [x] Add persistence tests for create/list/get order and duplicate order-code handling.
 
 ---
 
 ## Phase 6 - Date Availability Walking Skeleton
 
-- [ ] Define date availability interfaces, e.g. `INonWorkingDayProvider` / `IHolidayCalendarProvider`, so the holiday source can be replaced later.
-- [ ] Implement initial weekend-only non-working-day provider or equivalent minimal stub.
-- [ ] Implement lead-time calculation using minimum business days from config.
-- [ ] Implement delivery-date validation:
+- [x] Define date availability interfaces, e.g. `INonWorkingDayProvider` / `IHolidayCalendarProvider`, so the holiday source can be replaced later.
+- [x] Implement initial weekend-only non-working-day provider or equivalent minimal stub.
+- [x] Implement lead-time calculation using minimum business days from config.
+- [x] Implement delivery-date validation:
   - on/after minimum date,
   - not weekend/closed day according to provider,
   - not first business day after a closed period.
-- [ ] Add tests for normal weekend behavior: Saturday/Sunday unavailable, Monday first-after-weekend unavailable for delivery, Tuesday available if lead time allows.
-- [ ] Add tests for user may select any valid date on/after the calculated minimum date.
-- [ ] Add API endpoint to return available/disabled dates or validation metadata for a visible calendar range.
+- [x] Add tests for normal weekend behavior: Saturday/Sunday unavailable, Monday first-after-weekend unavailable for delivery, Tuesday available if lead time allows.
+- [x] Add tests for user may select any valid date on/after the calculated minimum date.
+- [x] Add API endpoint to return available/disabled dates or validation metadata for a visible calendar range.
 
 ---
 
 ## Phase 7 - Order Code Interface and Best-Guess Implementation
 
-- [ ] Define `IOrderCodeGenerator` and, if needed, `IOrderCodeNormalizer`.
-- [ ] Implement initial best-guess short code generator with uppercase, grouped, visually safer characters.
-- [ ] Avoid obviously ambiguous characters such as `0/O`, `1/I/L`, and known problematic Bulgarian/Latin examples where practical.
-- [ ] Ensure generated codes are checked for uniqueness before order save.
-- [ ] Add tests for format, uniqueness retry behavior, and basic normalization if implemented.
+- [x] Define `IOrderCodeGenerator` and, if needed, `IOrderCodeNormalizer`.
+- [x] Implement initial best-guess short code generator with uppercase, grouped, visually safer characters.
+- [x] Avoid obviously ambiguous characters such as `0/O`, `1/I/L`, and known problematic Bulgarian/Latin examples where practical.
+- [x] Ensure generated codes are checked for uniqueness before order save.
+- [x] Add tests for format, uniqueness retry behavior, and basic normalization if implemented.
 
 ---
 
 ## Phase 8 - Backend Order API
 
-- [ ] Add authenticated endpoint to get current clinic/session info.
-- [ ] Add endpoint to get scheduling config needed by the order form: allowed work/material/construction combinations and lead-time metadata.
-- [ ] Add endpoint to validate/calculate delivery dates for selected order details.
-- [ ] Add endpoint to create an order.
-- [ ] Add endpoint to fetch order confirmation by order code for the authenticated clinic/session.
-- [ ] Add simple technician/internal endpoint or page data endpoint to list all created orders for review.
-- [ ] Ensure API error shape is consistent with existing Web style (`{ error: ... }`).
-- [ ] Add API tests for unauthenticated access, valid login, order creation, invalid delivery date rejection, and confirmation retrieval.
+- [x] Add authenticated endpoint to get current clinic/session info.
+- [x] Add endpoint to get scheduling config needed by the order form: allowed work/material/construction combinations and lead-time metadata.
+- [x] Add endpoint to validate/calculate delivery dates for selected order details.
+- [x] Add endpoint to create an order.
+- [x] Add endpoint to fetch order confirmation by order code for the authenticated clinic/session.
+- [x] Add simple technician/internal endpoint or page data endpoint to list all created orders for review.
+- [x] Ensure API error shape is consistent with existing Web style (`{ error: ... }`).
+- [x] Add API tests for unauthenticated access, valid login, order creation, invalid delivery date rejection, and confirmation retrieval.
 
 ---
 
 ## Phase 9 - Walking Skeleton Web UI
 
-- [ ] Add simple clinic login page/form: clinic code + PIN.
-- [ ] Add order creation form:
+- [x] Add simple clinic login page/form: clinic code + PIN.
+- [x] Add order creation form:
   - case name,
   - impression/collection date with Today shortcut,
   - product/work/material/construction selection,
   - numeric tooth/range input,
   - delivery date selection with disabled dates/validation messages,
   - submit.
-- [ ] Show clear UI explanation when a date is disabled because it is weekend/closed or first business day after closure.
-- [ ] Show order confirmation with large order code and instruction to write it on the impression/package.
-- [ ] Add simple order list view for the technician/current organization.
-- [ ] Add logout UI.
-- [ ] Keep UI intentionally simple; do not build visual tooth chart in this plan.
+- [x] Show clear UI explanation when a date is disabled because it is weekend/closed or first business day after closure.
+- [x] Show order confirmation with large order code and instruction to write it on the impression/package.
+- [x] Add simple order list view for the technician/current organization.
+- [x] Add logout UI.
+- [x] Keep UI intentionally simple; do not build visual tooth chart in this plan.
 
 ---
 
 ## Phase 10 - Audit Logging
 
-- [ ] Record order-created audit data: clinic id, credential id, timestamp, IP, user agent.
-- [ ] Add general audit model/service if needed for future order updates/cancellations.
-- [ ] Add tests or repository assertions proving created orders preserve credential attribution.
-- [ ] Ensure no raw PIN or session token is logged.
+- [x] Record order-created audit data: clinic id, credential id, timestamp, IP, user agent.
+- [x] Add general audit model/service if needed for future order updates/cancellations.
+- [x] Add tests or repository assertions proving created orders preserve credential attribution.
+- [x] Ensure no raw PIN or session token is logged.
 
 ---
 
 ## Phase 11 - Manual Validation and Deployment Notes
 
-- [ ] Add sample non-secret scheduling JSON config for local development.
-- [ ] Add deployment note for uploading scheduling JSON to the Hetzner server.
-- [ ] Add deployment note for restarting the app after config changes, plus temporary reload endpoint usage during v1 development.
-- [ ] Manually validate full flow on local app:
+- [x] Add sample non-secret scheduling JSON config for local development. (`Web/scheduling.walking-skeleton.json`)
+- [x] Add deployment note for uploading scheduling JSON to the Hetzner server. (config path supported via `App:SchedulingConfigPath`; detailed Hetzner doc follow-up remains)
+- [x] Add deployment note for restarting the app after config changes, plus temporary reload endpoint usage during v1 development. (`POST /api/scheduling/config/reload`; TODO kept in code to remove before v1.5)
+- [x] Manually validate full flow on local app: (API smoke + headless-browser screenshots under `agent-qa/orders-skeleton/`)
   - generate PIN hash,
   - add clinic credential config,
   - login,
@@ -223,23 +223,48 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 
 Before marking the walking skeleton complete, the coding agent must run a realistic QA pass as the dental technician using the clinic-facing flow.
 
-- [ ] Create/use at least one test clinic and one hashed PIN credential from the walking-skeleton JSON config.
-- [ ] Log in through the normal clinic login form/API using clinic code + PIN; do not bypass auth through direct DB inserts.
-- [ ] Create at least three representative orders:
+- [x] Create/use at least one test clinic and one hashed PIN credential from the walking-skeleton JSON config.
+- [x] Log in through the normal clinic login form/API using clinic code + PIN; do not bypass auth through direct DB inserts.
+- [x] Create at least three representative orders:
   - crown with a single tooth,
   - bridge with a tooth range and default endpoint abutments,
   - temporary crown/bridge or other configured temporary case.
-- [ ] While creating orders, verify date filtering is visible and enforced:
+- [x] While creating orders, verify date filtering is visible and enforced:
   - weekend dates are unavailable,
   - first business day after weekend/closure is unavailable where implemented,
   - valid later dates can be selected.
-- [ ] Confirm each created order displays a clear order code and instruction to write it on the impression/package.
-- [ ] Review the created orders through the technician/internal order list and verify clinic, credential, case name, teeth/range, delivery date, and order code are visible.
-- [ ] Test logout and verify authenticated order endpoints/pages are no longer accessible.
-- [ ] Capture QA evidence in the final implementation response: commands used, API/browser path tested, created test order codes, and any defects or UX issues found.
-- [ ] If browser automation is unavailable in the agent environment, perform API-level smoke tests plus list the remaining manual browser checks explicitly.
+- [x] Confirm each created order displays a clear order code and instruction to write it on the impression/package.
+- [x] Review the created orders through the technician/internal order list and verify clinic, credential, case name, teeth/range, delivery date, and order code are visible.
+- [x] Test logout and verify authenticated order endpoints/pages are no longer accessible.
+- [x] Capture QA evidence in the final implementation response: commands used, API/browser path tested, created test order codes, and any defects or UX issues found.
+- [x] If browser automation is unavailable in the agent environment, perform API-level smoke tests plus list the remaining manual browser checks explicitly.
 
 ---
+
+
+---
+
+## Walking Skeleton Implementation Notes
+
+Completed locally on 2026-05-31. Assumptions/decisions made during implementation:
+
+- Scheduling domain code lives in a new `Orders` project. EF persistence lives in `Database`; Web owns HTTP endpoints/UI wiring.
+- Walking-skeleton clinics/credentials/work rules are loaded from JSON at startup (`Web/scheduling.walking-skeleton.json`) with a temporary authenticated reload endpoint.
+- Clinics and credentials are JSON-configured for now; orders and auth sessions are persisted in SQLite. Orders snapshot clinic/credential labels and PIN-hash fingerprint for audit.
+- Session cookies are opaque server-side sessions. The local HTTP dev cookie sets `Secure` only when the incoming request is HTTPS so local testing works; production behind TLS should be reviewed with forwarded headers before v1.5.
+- Date availability uses the planned minimal weekend-only provider. Monday/first-business-day-after-weekend is delivery-disabled while still counting for lead time.
+- Order-code generator uses a best-guess safe alphabet behind `IOrderCodeGenerator`; final BG/Latin ambiguity research remains a follow-up.
+- SQLite cannot order by `DateTimeOffset` server-side in the current EF provider, so the skeleton order list loads and sorts in memory. This is acceptable for v1 pilot volume and should be revisited with capacity/admin hardening.
+
+Validation evidence:
+
+- `dotnet build Spark3Dent.sln --no-restore` passed.
+- `dotnet test Spark3Dent.sln` passed: 510 total tests.
+- API QA created these orders as clinic `DEMO` / credential `assistant-1`: `KQ5-G46`, `EMC-XFC`, `8P3-MF6`.
+- Browser QA created order `D89-6SQ` and captured screenshots:
+  - `agent-qa/orders-skeleton/01-login-page.png`
+  - `agent-qa/orders-skeleton/02-authenticated-order-list.png`
+  - `agent-qa/orders-skeleton/03-created-order-confirmation.png`
 
 ## Follow-Up TODOs to Carry Forward
 

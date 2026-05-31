@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
     public DbSet<Entities.InvoiceLineItemEntity> InvoiceLineItems { get; set; }
     public DbSet<Entities.ClientEntity> Clients { get; set; }
     public DbSet<Entities.InvoiceSequenceEntity> InvoiceSequence { get; set; }
+    public DbSet<Entities.SchedulingAuthSessionEntity> SchedulingAuthSessions { get; set; }
+    public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +45,29 @@ public class AppDbContext : DbContext
             e.Property(x => x.Id).ValueGeneratedNever();
             e.ToTable("InvoiceSequence", t =>
                 t.HasCheckConstraint("CK_InvoiceSequence_Id", "Id = 1"));
+        });
+
+        modelBuilder.Entity<Entities.SchedulingAuthSessionEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => new { x.ClinicCode, x.CredentialId });
+            e.Property(x => x.TokenHash).IsRequired();
+            e.Property(x => x.ClinicCode).IsRequired();
+            e.Property(x => x.CredentialId).IsRequired();
+        });
+
+        modelBuilder.Entity<Entities.SchedulingOrderEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.OrderCode).IsUnique();
+            e.HasIndex(x => x.ClinicCode);
+            e.HasIndex(x => x.RequestedDeliveryDate);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.ClinicCode).IsRequired();
+            e.Property(x => x.CredentialId).IsRequired();
         });
     }
 }

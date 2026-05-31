@@ -5,6 +5,9 @@ using System.Reflection;
 using Accounting;
 using AppSetup;
 using Configuration;
+using Database;
+using Microsoft.EntityFrameworkCore;
+using Orders;
 using Utilities;
 using Web;
 
@@ -49,6 +52,26 @@ builder.Services.AddScoped<IInvoiceImporter>(sp =>
         setup.ImportTempBucket,
         sp.GetRequiredService<Utilities.ILogger>()));
 
+var schedulingConfigPath = ResolveSchedulingConfigPath(config, builder.Environment.ContentRootPath);
+var dbOptions = new DbContextOptionsBuilder<AppDbContext>()
+    .UseSqlite($"Data Source={config.SingleBox.DatabasePath}")
+    .Options;
+builder.Services.AddSingleton<Func<AppDbContext>>(_ => () => new AppDbContext(dbOptions));
+builder.Services.AddSingleton<ISchedulingConfigProvider>(_ => new JsonSchedulingConfigProvider(schedulingConfigPath));
+builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER")));
+builder.Services.AddSingleton<INonWorkingDayProvider, WeekendOnlyNonWorkingDayProvider>();
+builder.Services.AddSingleton<DateAvailabilityService>();
+builder.Services.AddSingleton<IOrderCodeGenerator, SafeOrderCodeGenerator>();
+builder.Services.AddScoped<ISchedulingRepository, SqliteSchedulingRepo>();
+builder.Services.AddScoped<SchedulingAuthService>();
+builder.Services.AddScoped<SchedulingOrderService>();
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
+});
+
 var (bindAddress, port) = ResolveEndpoint(config, builder.Configuration);
 var url = $"http://{bindAddress}:{port}";
 builder.WebHost.UseUrls(url);
@@ -91,6 +114,12 @@ app.MapGet("/", async (Config cfg) =>
         const string banner = @"<div id=""dev-banner"" style=""background:#facc15;color:#0f172a;text-align:center;font-size:2.25rem;font-weight:700;padding:8px;border-bottom:2px solid #eab308;animation:dev-pulse 2s ease-in-out infinite;"">Development</div><style>@keyframes dev-pulse{0%,100%{opacity:1}50%{opacity:.75}}</style>";
         html = html.Replace("<body>", "<body>" + banner);
     }
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
+app.MapGet("/orders", async () =>
+{
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("orders.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
@@ -155,6 +184,7 @@ app.MapGet("/licenses", async () =>
 });
 
 Web.Api.MapRoutes(app);
+Web.SchedulingApi.MapRoutes(app);
 
 Console.WriteLine($"Running on {url}");
 await app.StartAsync();
@@ -183,6 +213,15 @@ else
 
 if (shouldWaitForShutdown)
     await app.WaitForShutdownAsync();
+
+static string ResolveSchedulingConfigPath(Config config, string contentRootPath)
+{
+    if (!string.IsNullOrWhiteSpace(config.App.SchedulingConfigPath))
+        return Path.IsPathRooted(config.App.SchedulingConfigPath)
+            ? config.App.SchedulingConfigPath
+            : Path.Combine(contentRootPath, config.App.SchedulingConfigPath);
+    return Path.Combine(contentRootPath, "scheduling.walking-skeleton.json");
+}
 
 static (string BindAddress, int Port) ResolveEndpoint(Config config, IConfiguration configuration)
 {
