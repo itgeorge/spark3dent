@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
@@ -47,6 +48,48 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_GivenConcurrentDuplicateOrderCodes_CreatesOneAndFailsOthersWithDuplicateOrderCodeException()
+    {
+        const int racingOrderCount = 20;
+        const string sharedOrderCode = "RCE-234";
+        using var startBarrier = new Barrier(racingOrderCount);
+        var repo = new SqliteOrderRepo(_contextFactory);
+
+        var tasks = Enumerable.Range(1, racingOrderCount)
+            .Select(i => Task.Factory.StartNew(
+                async () =>
+                {
+                    if (!startBarrier.SignalAndWait(TimeSpan.FromSeconds(10)))
+                        throw new InvalidOperationException("Timed out waiting for racing order repository requests.");
+
+                    try
+                    {
+                        var order = await repo.CreateOrderAsync(BuildOrder(
+                            sharedOrderCode,
+                            $"race-{i}",
+                            DateTimeOffset.Parse("2026-05-31T10:00:00Z").AddSeconds(i)));
+                        return CreateOutcome.Success(order);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CreateOutcome.Failure(ex);
+                    }
+                },
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default).Unwrap())
+            .ToArray();
+
+        var outcomes = await Task.WhenAll(tasks);
+
+        Assert.That(outcomes.Count(o => o.CreatedOrder != null), Is.EqualTo(1));
+        var failures = outcomes.Where(o => o.Exception != null).ToList();
+        Assert.That(failures, Has.Count.EqualTo(racingOrderCount - 1));
+        Assert.That(failures.Select(f => f.Exception), Is.All.TypeOf<DuplicateOrderCodeException>());
+        Assert.That(failures.Select(f => ((DuplicateOrderCodeException)f.Exception!).OrderCode), Is.All.EqualTo(sharedOrderCode));
+    }
+
+    [Test]
     public async Task ListOrdersAsync_OrdersByCreatedAtDescendingInDatabase()
     {
         var repo = new SqliteOrderRepo(_contextFactory);
@@ -56,6 +99,12 @@ public class SqliteOrderRepoTest
         var orders = await repo.ListOrdersAsync();
 
         Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "BBB-234", "AAA-234" }));
+    }
+
+    private sealed record CreateOutcome(OrderRecord? CreatedOrder, Exception? Exception)
+    {
+        public static CreateOutcome Success(OrderRecord order) => new(order, null);
+        public static CreateOutcome Failure(Exception exception) => new(null, exception);
     }
 
     private static OrderRecord BuildOrder(string code, string caseName, DateTimeOffset createdAt) => new(
