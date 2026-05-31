@@ -219,6 +219,28 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 
 ---
 
+## Phase 12 - Agent QA: Technician Pilot Simulation
+
+Before marking the walking skeleton complete, the coding agent must run a realistic QA pass as the dental technician using the clinic-facing flow.
+
+- [ ] Create/use at least one test clinic and one hashed PIN credential from the walking-skeleton JSON config.
+- [ ] Log in through the normal clinic login form/API using clinic code + PIN; do not bypass auth through direct DB inserts.
+- [ ] Create at least three representative orders:
+  - crown with a single tooth,
+  - bridge with a tooth range and default endpoint abutments,
+  - temporary crown/bridge or other configured temporary case.
+- [ ] While creating orders, verify date filtering is visible and enforced:
+  - weekend dates are unavailable,
+  - first business day after weekend/closure is unavailable where implemented,
+  - valid later dates can be selected.
+- [ ] Confirm each created order displays a clear order code and instruction to write it on the impression/package.
+- [ ] Review the created orders through the technician/internal order list and verify clinic, credential, case name, teeth/range, delivery date, and order code are visible.
+- [ ] Test logout and verify authenticated order endpoints/pages are no longer accessible.
+- [ ] Capture QA evidence in the final implementation response: commands used, API/browser path tested, created test order codes, and any defects or UX issues found.
+- [ ] If browser automation is unavailable in the agent environment, perform API-level smoke tests plus list the remaining manual browser checks explicitly.
+
+---
+
 ## Follow-Up TODOs to Carry Forward
 
 These are intentionally not detailed here. When the next detailed plan is created, copy these items forward, refine them based on what was learned during the walking skeleton, and keep any still-deferred items as follow-up TODOs in that next plan.
