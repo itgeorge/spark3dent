@@ -20,17 +20,6 @@ public class SchedulingOrderServiceTest
                     .Concat(Enumerable.Range(1, racingOrderCount).Select(i => $"R{i:00}-XYZ"))
                     .ToArray()),
             new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero)));
-        var draft = new OrderDraft(
-            "Race case",
-            new DateOnly(2026, 6, 2),
-            ProductCategory.Permanent,
-            WorkType.Crown,
-            Material.FullContourZirconia,
-            ConstructionType.Crown,
-            new ToothRange(11, 11),
-            new DateOnly(2026, 6, 5),
-            null);
-
         var tasks = Enumerable.Range(1, racingOrderCount)
             .Select(i => Task.Factory.StartNew(
                 async () =>
@@ -40,7 +29,7 @@ public class SchedulingOrderServiceTest
 
                     return await service.CreateOrderAsync(
                         TestActors.Demo,
-                        draft with { CaseName = $"Race case {i}" },
+                        CreateOrderDraft($"Race case {i}"),
                         "127.0.0.1",
                         $"test-{i}");
                 },
@@ -55,6 +44,18 @@ public class SchedulingOrderServiceTest
         Assert.That(results.Select(r => r.OrderCode), Is.Unique);
         Assert.That(results.Select(r => r.OrderCode), Does.Contain(sharedFirstCode));
     }
+
+    private static OrderDraft CreateOrderDraft(string caseName) =>
+        new(
+            caseName,
+            new DateOnly(2026, 6, 2),
+            ProductCategory.Permanent,
+            WorkType.Crown,
+            Material.FullContourZirconia,
+            ConstructionType.Crown,
+            new ToothRange(11, 11),
+            new DateOnly(2026, 6, 5),
+            null);
 
     private sealed class SequenceOrderCodeGenerator : IOrderCodeGenerator
     {

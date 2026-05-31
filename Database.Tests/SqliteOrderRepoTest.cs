@@ -52,9 +52,51 @@ public class SqliteOrderRepoTest
     {
         const int racingOrderCount = 20;
         const string sharedOrderCode = "RCE-234";
-        using var startBarrier = new Barrier(racingOrderCount);
         var repo = new SqliteOrderRepo(_contextFactory);
 
+        var outcomes = await RaceCreateSameOrderCodeAsync(repo, racingOrderCount, sharedOrderCode);
+
+        Assert.That(outcomes.Count(o => o.CreatedOrder != null), Is.EqualTo(1));
+        var failures = outcomes.Where(o => o.Exception != null).ToList();
+        Assert.That(failures, Has.Count.EqualTo(racingOrderCount - 1));
+        Assert.That(failures.Select(f => f.Exception), Is.All.TypeOf<DuplicateOrderCodeException>());
+        Assert.That(failures.Select(f => ((DuplicateOrderCodeException)f.Exception!).OrderCode), Is.All.EqualTo(sharedOrderCode));
+    }
+
+    [Test]
+    public async Task CreateOrderAsync_GivenExistingOrdersAndConcurrentDuplicateOrderCodes_PersistsOnlyOneRacingOrder()
+    {
+        const int racingOrderCount = 20;
+        const string sharedOrderCode = "RCE-345";
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("EXA-234", "existing-a", DateTimeOffset.Parse("2026-05-31T09:00:00Z")));
+        await repo.CreateOrderAsync(BuildOrder("EXB-234", "existing-b", DateTimeOffset.Parse("2026-05-31T09:01:00Z")));
+
+        var outcomes = await RaceCreateSameOrderCodeAsync(repo, racingOrderCount, sharedOrderCode);
+        var orders = await repo.ListOrdersAsync(limit: 100);
+
+        Assert.That(outcomes.Count(o => o.CreatedOrder != null), Is.EqualTo(1));
+        Assert.That(orders, Has.Count.EqualTo(3));
+        Assert.That(orders.Select(o => o.OrderCode), Does.Contain("EXA-234"));
+        Assert.That(orders.Select(o => o.OrderCode), Does.Contain("EXB-234"));
+        Assert.That(orders.Select(o => o.OrderCode), Does.Contain(sharedOrderCode));
+    }
+
+    [Test]
+    public async Task ListOrdersAsync_OrdersByCreatedAtDescendingInDatabase()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("AAA-234", "old", DateTimeOffset.Parse("2026-05-31T10:00:00Z")));
+        await repo.CreateOrderAsync(BuildOrder("BBB-234", "new", DateTimeOffset.Parse("2026-05-31T11:00:00Z")));
+
+        var orders = await repo.ListOrdersAsync();
+
+        Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "BBB-234", "AAA-234" }));
+    }
+
+    private static async Task<CreateOutcome[]> RaceCreateSameOrderCodeAsync(SqliteOrderRepo repo, int racingOrderCount, string sharedOrderCode)
+    {
+        using var startBarrier = new Barrier(racingOrderCount);
         var tasks = Enumerable.Range(1, racingOrderCount)
             .Select(i => Task.Factory.StartNew(
                 async () =>
@@ -80,25 +122,7 @@ public class SqliteOrderRepoTest
                 TaskScheduler.Default).Unwrap())
             .ToArray();
 
-        var outcomes = await Task.WhenAll(tasks);
-
-        Assert.That(outcomes.Count(o => o.CreatedOrder != null), Is.EqualTo(1));
-        var failures = outcomes.Where(o => o.Exception != null).ToList();
-        Assert.That(failures, Has.Count.EqualTo(racingOrderCount - 1));
-        Assert.That(failures.Select(f => f.Exception), Is.All.TypeOf<DuplicateOrderCodeException>());
-        Assert.That(failures.Select(f => ((DuplicateOrderCodeException)f.Exception!).OrderCode), Is.All.EqualTo(sharedOrderCode));
-    }
-
-    [Test]
-    public async Task ListOrdersAsync_OrdersByCreatedAtDescendingInDatabase()
-    {
-        var repo = new SqliteOrderRepo(_contextFactory);
-        await repo.CreateOrderAsync(BuildOrder("AAA-234", "old", DateTimeOffset.Parse("2026-05-31T10:00:00Z")));
-        await repo.CreateOrderAsync(BuildOrder("BBB-234", "new", DateTimeOffset.Parse("2026-05-31T11:00:00Z")));
-
-        var orders = await repo.ListOrdersAsync();
-
-        Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "BBB-234", "AAA-234" }));
+        return await Task.WhenAll(tasks);
     }
 
     private sealed record CreateOutcome(OrderRecord? CreatedOrder, Exception? Exception)
