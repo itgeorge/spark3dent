@@ -4,26 +4,27 @@ namespace Orders;
 
 public sealed class SchedulingOrderService
 {
-    private const int MaxOrderCodeAttempts = 20;
-
     private readonly ISchedulingConfigProvider _configProvider;
     private readonly IOrderRepository _orders;
     private readonly DateAvailabilityService _availability;
     private readonly IOrderCodeGenerator _codeGenerator;
     private readonly IClock _clock;
+    private readonly int _maxOrderCodeAttempts;
 
     public SchedulingOrderService(
         ISchedulingConfigProvider configProvider,
         IOrderRepository orders,
         DateAvailabilityService availability,
         IOrderCodeGenerator codeGenerator,
-        IClock clock)
+        IClock clock,
+        int maxOrderCodeAttempts = 20)
     {
         _configProvider = configProvider;
         _orders = orders;
         _availability = availability;
         _codeGenerator = codeGenerator;
         _clock = clock;
+        _maxOrderCodeAttempts = maxOrderCodeAttempts;
     }
 
     public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default)
@@ -89,14 +90,14 @@ public sealed class SchedulingOrderService
 
     private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, CancellationToken ct)
     {
-        for (var attempt = 1; attempt <= MaxOrderCodeAttempts; attempt++)
+        for (var attempt = 1; attempt <= _maxOrderCodeAttempts; attempt++)
         {
             var code = _codeGenerator.Generate();
             try
             {
                 return await _orders.CreateOrderAsync(orderWithoutCode with { OrderCode = code }, ct);
             }
-            catch (DuplicateOrderCodeException) when (attempt < MaxOrderCodeAttempts)
+            catch (DuplicateOrderCodeException) when (attempt < _maxOrderCodeAttempts)
             {
                 // Another request won this generated code. Generate a new one and retry.
             }
