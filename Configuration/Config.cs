@@ -32,7 +32,7 @@ public record AppConfig
     public int StartInvoiceNumber { get; init; } = 1;
     /// <summary>OpenAI API key for legacy PDF parsing. Set via App__OpenAiKey or OPENAI_API_KEY env var. Never commit real keys.</summary>
     public string? OpenAiKey { get; init; }
-    /// <summary>When set, overrides the environment-based check for opening the browser on web app start. Null = use ASPNETCORE_ENVIRONMENT (Development/Mvp = open).</summary>
+    /// <summary>When set, overrides the environment-based check for opening the browser on web app start. Null = use ASPNETCORE_ENVIRONMENT (LanDev/Mvp = open).</summary>
     public bool? ShouldOpenBrowserOnStart { get; init; }
     public SellerAddress? SellerAddress { get; init; }
     public SellerBankTransferInfo? SellerBankTransferInfo { get; init; }

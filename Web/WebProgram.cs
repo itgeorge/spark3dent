@@ -75,6 +75,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var (bindAddress, port) = ResolveEndpoint(config, builder.Configuration);
 var url = $"http://{bindAddress}:{port}";
+var browserUrl = ToBrowserUrl(bindAddress, port);
 builder.WebHost.UseUrls(url);
 
 var app = builder.Build();
@@ -190,26 +191,28 @@ Web.SchedulingApi.MapRoutes(app);
 Console.WriteLine($"Running on {url}");
 await app.StartAsync();
 
-// Development/Mvp: open browser. Test: exit immediately. Production: run until Cloud Run scales down.
+// LanDev/Mvp: open browser. Test: exit immediately. Production: run until Cloud Run scales down.
 var env = builder.Environment.EnvironmentName;
-const string DevelopmentEnvName = "Development";
+const string LanDevEnvName = "LanDev";
 const string MvpEnvName = "Mvp";
 const string TestEnvName = "Test";
 var shouldOpenBrowser = config.Runtime.HostingMode == HostingMode.Desktop &&
     (config.App.ShouldOpenBrowserOnStart
-     ?? (string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
+     ?? (string.Equals(env, LanDevEnvName, StringComparison.OrdinalIgnoreCase) ||
          string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase)));
 var shouldWaitForShutdown = !string.Equals(env, TestEnvName, StringComparison.OrdinalIgnoreCase);
 
 if (shouldOpenBrowser)
 {
-    Console.WriteLine($"Spark3Dent Web running at {url}");
+    Console.WriteLine($"Spark3Dent Web running at {browserUrl}");
+    if (!string.Equals(browserUrl, url, StringComparison.OrdinalIgnoreCase))
+        Console.WriteLine($"Listening on all interfaces at {url}");
     Console.WriteLine("Press Ctrl+C to stop.");
-    Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+    Process.Start(new ProcessStartInfo { FileName = browserUrl, UseShellExecute = true });
 }
 else
 {
-    Console.WriteLine("NOT auto-starting browser. To open the browser automatically, set `App.ShouldOpenBrowserOnStart: true` in appsettings.json, or set `ASPNETCORE_ENVIRONMENT=Mvp` (or Development).");
+    Console.WriteLine("NOT auto-starting browser. To open the browser automatically, set `App.ShouldOpenBrowserOnStart: true` in appsettings.json, or set `ASPNETCORE_ENVIRONMENT=LanDev` (or Mvp).");
 }
 
 if (shouldWaitForShutdown)
@@ -222,6 +225,12 @@ static string ResolveSchedulingConfigPath(Config config, string contentRootPath)
             ? config.App.SchedulingConfigPath
             : Path.Combine(contentRootPath, config.App.SchedulingConfigPath);
     return Path.Combine(contentRootPath, "scheduling.walking-skeleton.json");
+}
+
+static string ToBrowserUrl(string bindAddress, int port)
+{
+    var host = bindAddress is "0.0.0.0" or "*" or "+" ? "localhost" : bindAddress;
+    return $"http://{host}:{port}";
 }
 
 static (string BindAddress, int Port) ResolveEndpoint(Config config, IConfiguration configuration)
