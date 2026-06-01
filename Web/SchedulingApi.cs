@@ -159,6 +159,7 @@ public static class SchedulingApi
         body.ConstructionType,
         new ToothRange(body.ToothStart, body.ToothEnd),
         deliveryDate,
+        body.Shade,
         body.Notes);
 
     private static object ToDto(OrderRecord o) => new
@@ -180,6 +181,7 @@ public static class SchedulingApi
         o.AbutmentTeeth,
         o.RequestedDeliveryDate,
         o.Status,
+        o.Shade,
         o.Notes,
         o.CreatedAt
     };
@@ -199,6 +201,7 @@ public static class SchedulingApi
         public ConstructionType ConstructionType { get; init; }
         public int ToothStart { get; init; }
         public int ToothEnd { get; init; }
+        public string? Shade { get; init; }
         public string? Notes { get; init; }
     }
 

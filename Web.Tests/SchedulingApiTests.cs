@@ -46,13 +46,16 @@ public class SchedulingApiTests
           "constructionType":"crown",
           "toothStart":11,
           "toothEnd":11,
+          "shade":"A3.5",
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
         Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var code = createDoc.RootElement.GetProperty("order").GetProperty("orderCode").GetString();
+        var orderElement = createDoc.RootElement.GetProperty("order");
+        var code = orderElement.GetProperty("orderCode").GetString();
         Assert.That(code, Is.Not.Null.And.Contains("-"));
+        Assert.That(orderElement.GetProperty("shade").GetString(), Is.EqualTo("A3.5"));
 
         var list = await client.GetAsync("/api/scheduling/technician/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));

@@ -20,6 +20,7 @@ public class SchedulingOrderEntity
     public string AbutmentTeeth { get; set; } = string.Empty;
     public DateOnly RequestedDeliveryDate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string? Shade { get; set; }
     public string? Notes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public long CreatedAtUnixTimeMilliseconds { get; set; }

@@ -43,6 +43,7 @@
         <div><label>Tooth/range start</label><input id="toothStart" type="number" value="11" /></div>
         <div><label>Tooth/range end</label><input id="toothEnd" type="number" value="11" /></div>
       </div>
+      <label>Shade / color</label><input id="shade" value="A3" placeholder="A2, A3, A3.5..." />
       <label>Notes</label><textarea id="notes" placeholder="Optional"></textarea>
       <label>Delivery date</label><input id="deliveryDate" type="date" />
       <button id="refreshDates" class="btn" style="margin-top:10px">Refresh date availability</button>
@@ -60,7 +61,7 @@
 
   <section id="listCard" class="card hidden">
     <div class="head"><h2>Technician order review</h2><button id="reloadOrders" class="btn teal">Reload</button></div>
-    <div class="body"><table class="orders"><thead><tr><th>Code</th><th>Clinic</th><th>Credential</th><th>Case</th><th>Teeth</th><th>Delivery</th></tr></thead><tbody id="ordersBody"></tbody></table></div>
+    <div class="body"><table class="orders"><thead><tr><th>Code</th><th>Clinic</th><th>Credential</th><th>Case</th><th>Teeth</th><th>Shade</th><th>Delivery</th></tr></thead><tbody id="ordersBody"></tbody></table></div>
   </section>
 </main>
 <script>
@@ -68,7 +69,7 @@ const $=id=>document.getElementById(id); const api=(url,opt={})=>fetch(url,{head
 const todayStr=()=>new Date().toISOString().slice(0,10); let selectedDelivery='';
 function msg(el,text,kind=''){el.textContent=text;el.className='msg '+kind;el.classList.remove('hidden')}
 function hide(el){el.classList.add('hidden')}
-function draft(delivery){return {caseName:$('caseName').value, impressionDate:$('impressionDate').value, productCategory:$('productCategory').value, workType:$('workType').value, material:$('material').value, constructionType:$('constructionType').value, toothStart:+$('toothStart').value, toothEnd:+$('toothEnd').value, requestedDeliveryDate:delivery||$('deliveryDate').value, notes:$('notes').value}}
+function draft(delivery){return {caseName:$('caseName').value, impressionDate:$('impressionDate').value, productCategory:$('productCategory').value, workType:$('workType').value, material:$('material').value, constructionType:$('constructionType').value, toothStart:+$('toothStart').value, toothEnd:+$('toothEnd').value, requestedDeliveryDate:delivery||$('deliveryDate').value, shade:$('shade').value, notes:$('notes').value}}
 function syncTeeth(){ if($('constructionType').value==='crown') $('toothEnd').value=$('toothStart').value; }
 async function me(){ const r=await api('/api/scheduling/auth/me'); if(r.ok){ const j=await r.json(); $('loginCard').classList.add('hidden'); $('orderCard').classList.remove('hidden'); $('listCard').classList.remove('hidden'); $('logout').classList.remove('hidden'); $('who').classList.remove('hidden'); $('who').textContent=`${j.clinicName} / ${j.credentialLabel}`; await refreshDates(); await loadOrders(); } }
 $('login').onclick=async()=>{hide($('loginMsg')); const r=await api('/api/scheduling/auth/login',{method:'POST',body:JSON.stringify({clinicCode:$('clinicCode').value,pin:$('pin').value})}); const j=await r.json(); if(!r.ok) return msg($('loginMsg'),j.error,'err'); msg($('loginMsg'),'Logged in','ok'); await me();};
@@ -77,9 +78,9 @@ $('today').onclick=()=>{$('impressionDate').value=todayStr(); refreshDates();};
 ['impressionDate','productCategory','workType','material','constructionType','toothStart','toothEnd'].forEach(id=>$(id).addEventListener('change',()=>{syncTeeth(); refreshDates();}));
 $('refreshDates').onclick=()=>refreshDates();
 async function refreshDates(){ syncTeeth(); const start=new Date($('impressionDate').value||todayStr()); const end=new Date(start); end.setDate(end.getDate()+34); const body={...draft(todayStr()),start:start.toISOString().slice(0,10),end:end.toISOString().slice(0,10)}; const r=await api('/api/scheduling/dates',{method:'POST',body:JSON.stringify(body)}); const j=await r.json(); $('dateGrid').innerHTML=''; if(!r.ok) return msg($('dateHelp'),j.error,'err'); msg($('dateHelp'),`Minimum calculated date: ${j.minimumDate}. Disabled dates show the reason.`, ''); j.dates.forEach(d=>{const b=document.createElement('button'); b.className='datebtn'; b.type='button'; b.innerHTML=`${d.date.slice(5)}${d.reason?`<span class="r">${d.reason.split(' ')[0]}</span>`:''}`; b.title=d.reason||'Selectable'; b.disabled=!d.isSelectable; b.onclick=()=>{selectedDelivery=d.date; $('deliveryDate').value=d.date; document.querySelectorAll('.datebtn').forEach(x=>x.classList.remove('sel')); b.classList.add('sel')}; $('dateGrid').appendChild(b);});}
-$('createOrder').onclick=async()=>{hide($('orderMsg')); const delivery=$('deliveryDate').value||selectedDelivery; if(!delivery) return msg($('orderMsg'),'Select a delivery date.','err'); const r=await api('/api/scheduling/orders',{method:'POST',body:JSON.stringify(draft(delivery))}); const j=await r.json(); if(!r.ok) return msg($('orderMsg'),j.error,'err'); $('confirmCard').classList.remove('hidden'); $('orderCode').textContent=j.order.orderCode; $('orderSummary').textContent=`${j.order.caseName}: ${j.order.constructionType} ${j.order.material}, teeth ${j.order.toothStart}-${j.order.toothEnd}, delivery ${j.order.requestedDeliveryDate}`; msg($('orderMsg'),'Order created.','ok'); await loadOrders();};
+$('createOrder').onclick=async()=>{hide($('orderMsg')); const delivery=$('deliveryDate').value||selectedDelivery; if(!delivery) return msg($('orderMsg'),'Select a delivery date.','err'); const r=await api('/api/scheduling/orders',{method:'POST',body:JSON.stringify(draft(delivery))}); const j=await r.json(); if(!r.ok) return msg($('orderMsg'),j.error,'err'); $('confirmCard').classList.remove('hidden'); $('orderCode').textContent=j.order.orderCode; $('orderSummary').textContent=`${j.order.caseName}: ${j.order.constructionType} ${j.order.material}, teeth ${j.order.toothStart}-${j.order.toothEnd}, shade ${j.order.shade||'—'}, delivery ${j.order.requestedDeliveryDate}`; msg($('orderMsg'),'Order created.','ok'); await loadOrders();};
 $('reloadOrders').onclick=()=>loadOrders();
-async function loadOrders(){ const r=await api('/api/scheduling/technician/orders'); if(!r.ok)return; const j=await r.json(); $('ordersBody').innerHTML=''; j.items.forEach(o=>{const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${o.orderCode}</b></td><td>${o.clinicDisplayName}</td><td>${o.credentialLabel}</td><td>${o.caseName}</td><td>${o.toothStart}-${o.toothEnd}${o.abutmentTeeth?' / abut: '+o.abutmentTeeth:''}</td><td>${o.requestedDeliveryDate}</td>`; $('ordersBody').appendChild(tr);});}
+async function loadOrders(){ const r=await api('/api/scheduling/technician/orders'); if(!r.ok)return; const j=await r.json(); $('ordersBody').innerHTML=''; j.items.forEach(o=>{const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${o.orderCode}</b></td><td>${o.clinicDisplayName}</td><td>${o.credentialLabel}</td><td>${o.caseName}</td><td>${o.toothStart}-${o.toothEnd}${o.abutmentTeeth?' / abut: '+o.abutmentTeeth:''}</td><td>${o.shade||'—'}</td><td>${o.requestedDeliveryDate}</td>`; $('ordersBody').appendChild(tr);});}
 $('impressionDate').value=todayStr(); $('deliveryDate').value=todayStr(); me();
 </script>
 </body>

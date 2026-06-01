@@ -131,6 +131,7 @@ public class SchedulingOrderServiceTest
                 ConstructionType.Crown,
                 new ToothRange(11, 11),
                 new DateOnly(2026, 6, 5),
+                "A3",
                 null);
 
         private sealed class SequenceOrderCodeGenerator : IOrderCodeGenerator

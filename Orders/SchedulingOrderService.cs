@@ -81,6 +81,7 @@ public sealed class SchedulingOrderService
             string.Join(",", draft.TeethRange.DefaultAbutments(draft.ConstructionType)),
             draft.RequestedDeliveryDate,
             OrderStatus.Created,
+            string.IsNullOrWhiteSpace(draft.Shade) ? null : draft.Shade.Trim(),
             string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
             now,
             now,

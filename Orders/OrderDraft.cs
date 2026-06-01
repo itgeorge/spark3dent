@@ -9,4 +9,5 @@ public sealed record OrderDraft(
     ConstructionType ConstructionType,
     ToothRange TeethRange,
     DateOnly RequestedDeliveryDate,
+    string? Shade,
     string? Notes);
