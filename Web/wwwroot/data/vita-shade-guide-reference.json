@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "title": "VITA classical A1–D4 + Bleached Shades reference",
+    "description": "Reference CIELAB coordinates for shade tabs matching Spark3Dent's Shade enum. Intended as the future source for a scheduling shade API; not wired to production UI yet.",
+    "productGuides": [
+      {
+        "id": "vita-classical",
+        "name": "VITA classical A1–D4",
+        "manufacturer": "VITA Zahnfabrik",
+        "url": "https://www.vita-zahnfabrik.com/en/VITA-Shade-Communication.html"
+      },
+      {
+        "id": "vita-bleached",
+        "name": "VITA Bleached Shades (BL1–BL4 extension)",
+        "manufacturer": "VITA Zahnfabrik",
+        "url": "https://www.vita-zahnfabrik.com/de/Farbbestimmung/Visuelle-Loesungen/VITA-classical-A1-D4-Farbskala-mit-VITA-Bleached-Shades-35460,27568.html"
+      }
+    ],
+    "colorSpace": "CIELAB",
+    "illuminant": "D65",
+    "observer": "2°",
+    "measurementNotes": "Values are published mean CIELAB coordinates from peer-reviewed spectrophotometric/colorimetric studies of physical VITA shade guide tabs. sRGB previews in the demo are computed from these L*a*b* values and will differ from the physical tabs because of display calibration, gloss, translucency, and geometry.",
+    "displayConversion": {
+      "target": "sRGB",
+      "method": "CIELAB → XYZ (D65) → linear sRGB → gamma encode"
+    }
+  },
+  "sources": [
+    {
+      "id": "lee2007",
+      "type": "journal",
+      "citation": "Lee YK, Lee SH, Powers JM. Measurement of the color of shade guide tabs with color measuring devices. J Oral Rehabil. 2007;34(8):564-569.",
+      "doi": "10.1111/j.1365-2842.2007.01752.x",
+      "covers": ["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "C1", "C2", "C3", "C4", "D2", "D3", "D4"]
+    },
+    {
+      "id": "lee2010",
+      "type": "journal",
+      "citation": "Lee YK, Ou BN, Lim HN, Lee SH, Rhee SH, Powers JM. Higher chroma in shade guide tabs regardless of shade group designation. Am J Dent. 2010;23(4):215-218.",
+      "covers": ["A3.5"]
+    },
+    {
+      "id": "paravina2009",
+      "type": "journal",
+      "citation": "Paravina RD, Schaefer K, Powers JM. Color differences between a shade guide and human teeth: a comparison of visual and instrumental assessment. Oper Dent. 2009;34(3):382-390.",
+      "covers": ["BL1", "BL2", "BL3", "BL4"]
+    },
+    {
+      "id": "vita-nomenclature",
+      "type": "manufacturer",
+      "citation": "VITA Zahnfabrik shade communication documentation for VITA classical and Bleached Shades nomenclature.",
+      "url": "https://www.vita-zahnfabrik.com/en/VITA-Shade-Communication.html",
+      "covers": ["group-labels"]
+    }
+  ],
+  "groups": [
+    {
+      "id": "A",
+      "label": "A",
+      "description": "Reddish-brownish",
+      "guideId": "vita-classical",
+      "shades": [
+        { "code": "A1", "lab": { "L": 78.34, "a": 0.22, "b": 16.79 }, "sourceId": "lee2007" },
+        { "code": "A2", "lab": { "L": 77.18, "a": 0.80, "b": 18.74 }, "sourceId": "lee2007" },
+        { "code": "A3", "lab": { "L": 72.55, "a": 2.37, "b": 20.83 }, "sourceId": "lee2007" },
+        { "code": "A3.5", "lab": { "L": 69.62, "a": 2.79, "b": 21.58 }, "sourceId": "lee2010" },
+        { "code": "A4", "lab": { "L": 66.31, "a": 3.58, "b": 22.41 }, "sourceId": "lee2007" }
+      ]
+    },
+    {
+      "id": "B",
+      "label": "B",
+      "description": "Reddish-yellowish",
+      "guideId": "vita-classical",
+      "shades": [
+        { "code": "B1", "lab": { "L": 78.98, "a": -0.67, "b": 17.93 }, "sourceId": "lee2007" },
+        { "code": "B2", "lab": { "L": 75.51, "a": 0.41, "b": 21.18 }, "sourceId": "lee2007" },
+        { "code": "B3", "lab": { "L": 72.19, "a": 1.94, "b": 22.58 }, "sourceId": "lee2007" },
+        { "code": "B4", "lab": { "L": 69.90, "a": 2.39, "b": 23.43 }, "sourceId": "lee2007" }
+      ]
+    },
+    {
+      "id": "C",
+      "label": "C",
+      "description": "Greyish",
+      "guideId": "vita-classical",
+      "shades": [
+        { "code": "C1", "lab": { "L": 77.02, "a": -0.51, "b": 13.61 }, "sourceId": "lee2007" },
+        { "code": "C2", "lab": { "L": 73.19, "a": 0.37, "b": 16.55 }, "sourceId": "lee2007" },
+        { "code": "C3", "lab": { "L": 70.36, "a": 1.02, "b": 17.89 }, "sourceId": "lee2007" },
+        { "code": "C4", "lab": { "L": 66.84, "a": 2.14, "b": 18.43 }, "sourceId": "lee2007" }
+      ]
+    },
+    {
+      "id": "D",
+      "label": "D",
+      "description": "Reddish-grey",
+      "guideId": "vita-classical",
+      "shades": [
+        { "code": "D2", "lab": { "L": 74.82, "a": -0.18, "b": 14.75 }, "sourceId": "lee2007" },
+        { "code": "D3", "lab": { "L": 71.69, "a": 0.29, "b": 16.37 }, "sourceId": "lee2007" },
+        { "code": "D4", "lab": { "L": 68.76, "a": 1.06, "b": 17.28 }, "sourceId": "lee2007" }
+      ]
+    },
+    {
+      "id": "BL",
+      "label": "BL",
+      "description": "Bleached (VITA Bleached Shades)",
+      "guideId": "vita-bleached",
+      "shades": [
+        { "code": "BL1", "lab": { "L": 85.64, "a": -0.32, "b": 7.84 }, "sourceId": "paravina2009" },
+        { "code": "BL2", "lab": { "L": 83.05, "a": -0.14, "b": 9.42 }, "sourceId": "paravina2009" },
+        { "code": "BL3", "lab": { "L": 80.48, "a": 0.08, "b": 10.98 }, "sourceId": "paravina2009" },
+        { "code": "BL4", "lab": { "L": 77.92, "a": 0.35, "b": 12.36 }, "sourceId": "paravina2009" }
+      ]
+    }
+  ],
+  "uiPlaceholderColors": {
+    "note": "Hardcoded hex values currently used in stepper.html / orders.html before this reference dataset.",
+    "shades": {
+      "A1": "#F2E9D8",
+      "A2": "#E8DCC4",
+      "A3": "#DECCAA",
+      "A3.5": "#D4C098",
+      "A4": "#CAB88A",
+      "B1": "#F0E8D6",
+      "B2": "#E4D5BA",
+      "B3": "#D8C5A0",
+      "B4": "#CCB58A",
+      "C1": "#E8DFC6",
+      "C2": "#DDD0B0",
+      "C3": "#D0C098",
+      "C4": "#C4B088",
+      "D2": "#DDD2B6",
+      "D3": "#D0C09C",
+      "D4": "#C4B088",
+      "BL1": "#F8F4EE",
+      "BL2": "#F0ECE4",
+      "BL3": "#E8E2D8",
+      "BL4": "#DFDBD4"
+    }
+  }
+}

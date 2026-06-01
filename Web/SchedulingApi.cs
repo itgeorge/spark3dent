@@ -12,7 +12,7 @@ public static class SchedulingApi
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        Converters = { new ShadeJsonConverter(), new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
     public static void MapRoutes(WebApplication app)
@@ -201,7 +201,7 @@ public static class SchedulingApi
         public ConstructionType ConstructionType { get; init; }
         public int ToothStart { get; init; }
         public int ToothEnd { get; init; }
-        public string? Shade { get; init; }
+        public Shade Shade { get; init; }
         public string? Notes { get; init; }
     }
 

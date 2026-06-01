@@ -19,7 +19,7 @@ public sealed record OrderRecord(
     string AbutmentTeeth,
     DateOnly RequestedDeliveryDate,
     OrderStatus Status,
-    string? Shade,
+    Shade Shade,
     string? Notes,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
