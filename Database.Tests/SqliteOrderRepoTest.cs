@@ -83,6 +83,20 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_PersistsShade_WhenReadBackByCodeAndList()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("SHA-234", "shade case", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), shade: "A3.5"));
+
+        var byCode = await repo.GetOrderByCodeAsync("SHA-234");
+        var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "SHA-234");
+
+        Assert.That(byCode, Is.Not.Null);
+        Assert.That(byCode!.Shade, Is.EqualTo("A3.5"));
+        Assert.That(fromList.Shade, Is.EqualTo("A3.5"));
+    }
+
+    [Test]
     public async Task ListOrdersAsync_OrdersByCreatedAtDescendingInDatabase()
     {
         var repo = new SqliteOrderRepo(_contextFactory);
@@ -131,7 +145,7 @@ public class SqliteOrderRepoTest
         public static CreateOutcome Failure(Exception exception) => new(null, exception);
     }
 
-    private static OrderRecord BuildOrder(string code, string caseName, DateTimeOffset createdAt) => new(
+    private static OrderRecord BuildOrder(string code, string caseName, DateTimeOffset createdAt, string? shade = null) => new(
         0,
         code,
         "DEMO",
@@ -150,6 +164,7 @@ public class SqliteOrderRepoTest
         "",
         new DateOnly(2026, 6, 5),
         OrderStatus.Created,
+        shade,
         null,
         createdAt,
         createdAt,
