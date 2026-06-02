@@ -71,10 +71,11 @@
         <div class="overview">
           <div><div class="sub">Write this code on the impression/package:</div><div class="code" id="code">—</div></div>
           <h2 class="overview-title">Overview</h2>
+          <input id="finalCaseName" class="overview-text" type="text" readonly aria-label="Case name" value="">
           <input id="finalOverviewText" class="overview-text" type="text" readonly aria-label="Order overview" value="">
           <input id="finalOverviewDate" class="overview-text" type="text" readonly aria-label="Selected delivery date" value="">
           <div class="tooth-chart overview-teeth" id="finalOverviewTeeth"></div>
-          <div id="finalNoteWrap" class="hidden"><input id="finalExtraNote" value="" readonly aria-label="Extra lab note"></div>
+          <div id="finalNoteWrap" class="hidden"><input id="finalExtraNote" class="overview-text" type="text" readonly aria-label="Extra lab note" value=""></div>
         </div>
       </div>
       <div id="err" class="msg err hidden"></div>
@@ -142,7 +143,7 @@ function overviewMaterialLabel(){return material?({fullContourZirconia:'Zr',pfzL
 function overviewOrderText(){const mat=overviewMaterialLabel(),shadeText=shade.value?`, shade ${shade.value}`:'';if(construction==='crown'||ts.value===te.value)return `${mat} crown on ${ts.value||'—'}${shadeText}`;return `${mat} ${construction||'case'} ${ts.value||'—'}-${te.value||'—'}${shadeText}`}
 function renderOverviewInto(textEl,dateEl,teethEl){if(!teethEl)return;if(textEl)textEl.value=overviewOrderText();if(dateEl)dateEl.value=deadline.value||selectedDate?formatDateBulgarianWithWeekday(deadline.value||selectedDate):'';teethEl.innerHTML=`<div class="fdi-map" role="img" aria-label="Selected teeth"><div class="fdi-map-buttons">${toothMapButtons(upperTeeth,0)}${toothMapButtons(lowerTeeth,1)}</div></div>`;const start=+ts.value,end=+te.value,range=Number.isFinite(start)&&Number.isFinite(end)?fdiRangeTeeth(start,end):null,inRange=range?new Set(range):new Set();teethEl.querySelectorAll('.tooth').forEach(x=>{x.classList.toggle('active',inRange.has(+x.dataset.t));x.tabIndex=-1;x.setAttribute('aria-hidden','true')})}
 function renderOverview(){renderOverviewInto(overviewText,overviewDate,overviewTeeth)}
-function renderFinalOverview(){renderOverviewInto(finalOverviewText,finalOverviewDate,finalOverviewTeeth);const note=extraNote.value.trim();if(finalExtraNote)finalExtraNote.value=note;if(finalNoteWrap)finalNoteWrap.classList.toggle('hidden',!note)}
+function renderFinalOverview(){renderOverviewInto(finalOverviewText,finalOverviewDate,finalOverviewTeeth);if(finalCaseName)finalCaseName.value=caseName.value.trim();const note=extraNote.value.trim();if(finalExtraNote)finalExtraNote.value=note;if(finalNoteWrap)finalNoteWrap.classList.toggle('hidden',!note)}
 function resetForwardProgress(changedStage){const resetFrom=changedStage<3?3:changedStage;if(changedStage<3){const currentDelivery=deadline.value||selectedDate;if(currentDelivery)calendarMonth=monthForIso(currentDelivery)}let didReset=false;for(const s of [...completedSteps]){if(s>=resetFrom){completedSteps.delete(s);didReset=true}}if(orderCreated){orderCreated=false;didReset=true;code.textContent='—'}if(step===5&&!orderCreated)step=resetFrom;if(didReset)render()}
 function draft(delivery=deadline.value||selectedDate||'',start=impression.value,end='2026-07-05'){return{caseName:caseName.value,impressionDate:impression.value,productCategory:productCategory(),workType:workType(),material,constructionType:backendConstruction(),toothStart:+ts.value,toothEnd:+te.value,requestedDeliveryDate:delivery,shade:shade.value,notes:extraNote.value,start,end}}
 function showErr(t){err.textContent=t;err.classList.remove('hidden')}function clearErr(){err.classList.add('hidden')}
