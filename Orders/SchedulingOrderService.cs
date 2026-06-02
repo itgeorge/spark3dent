@@ -29,6 +29,7 @@ public sealed class SchedulingOrderService
 
     public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default)
     {
+        ValidateTeethRange(draft);
         var rule = _configProvider.Current.FindWorkRule(draft.ProductCategory, draft.WorkType, draft.Material, draft.ConstructionType);
         return await _availability.CalculateMinimumDateAsync(draft.ImpressionDate, rule.MinBusinessDays, ct);
     }
@@ -56,6 +57,11 @@ public sealed class SchedulingOrderService
     {
         if (string.IsNullOrWhiteSpace(draft.CaseName))
             throw new InvalidOperationException("Case name is required.");
+        ValidateTeethRange(draft);
+    }
+
+    private static void ValidateTeethRange(OrderDraft draft)
+    {
         draft.TeethRange.Validate(draft.ConstructionType);
     }
 
