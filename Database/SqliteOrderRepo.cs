@@ -40,13 +40,25 @@ public sealed class SqliteOrderRepo : IOrderRepository
     public async Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
-        var items = await ctx.SchedulingOrders.AsNoTracking()
-            .OrderByDescending(o => o.CreatedAtUnixTimeMilliseconds)
-            .ThenByDescending(o => o.Id)
-            .Take(Math.Clamp(limit, 1, 500))
+        var items = await OrderedLimited(ctx.SchedulingOrders.AsNoTracking(), limit).ToListAsync(ct);
+        return items.Select(ToDomain).ToList();
+    }
+
+    public async Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var items = await OrderedLimited(
+                ctx.SchedulingOrders.AsNoTracking().Where(o => o.ClinicCode == clinicCode),
+                limit)
             .ToListAsync(ct);
         return items.Select(ToDomain).ToList();
     }
+
+    private static IQueryable<SchedulingOrderEntity> OrderedLimited(IQueryable<SchedulingOrderEntity> query, int limit) =>
+        query
+            .OrderByDescending(o => o.CreatedAtUnixTimeMilliseconds)
+            .ThenByDescending(o => o.Id)
+            .Take(Math.Clamp(limit, 1, 500));
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteEx &&

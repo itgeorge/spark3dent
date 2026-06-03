@@ -115,7 +115,7 @@ public sealed class SchedulingAuthService
         _configProvider.Current.Options.SessionAbsoluteDays is { } days ? now.AddDays(days) : null;
 
     private static AuthenticatedActor ToActor(ClinicConfig clinic, ClinicCredentialConfig credential, string sessionId) =>
-        new(clinic.Code, clinic.DisplayName, credential.Id, credential.Label, PinHasher.Fingerprint(credential.PinHash), sessionId);
+        new(clinic.Code, clinic.DisplayName, credential.Id, credential.Label, PinHasher.Fingerprint(credential.PinHash), sessionId, credential.Role);
 
     private static string GenerateToken() => Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 

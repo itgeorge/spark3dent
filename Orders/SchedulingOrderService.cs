@@ -52,6 +52,11 @@ public sealed class SchedulingOrderService
 
     public Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default) => _orders.GetOrderByCodeAsync(orderCode, ct);
     public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default) => _orders.ListOrdersAsync(limit, ct);
+    public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default) =>
+        _orders.ListOrdersForClinicAsync(clinicCode, limit, ct);
+
+    public Task<IReadOnlyList<OrderRecord>> ListOrdersForActorAsync(AuthenticatedActor actor, int limit = 100, CancellationToken ct = default) =>
+        actor.IsTechnician ? ListOrdersAsync(limit, ct) : ListOrdersForClinicAsync(actor.ClinicCode, limit, ct);
 
     private static void ValidateDraft(OrderDraft draft)
     {

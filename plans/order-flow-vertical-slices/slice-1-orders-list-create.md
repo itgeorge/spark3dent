@@ -176,24 +176,24 @@ If route-level tests are practical:
 
 ## Implementation Checklist
 
-- [ ] Add repository method for clinic-scoped order listing.
-- [ ] Add service method for clinic-scoped order listing.
-- [ ] Add `GET /api/scheduling/orders` route.
-- [ ] Add/update tests for clinic-scoped listing.
-- [ ] Create `/orders` UI with login/list/create flow and remove the temporary redirect.
-- [ ] Adapt stepper create flow into `/orders`.
-- [ ] Add simple status text in list.
-- [ ] Ensure create returns to or can navigate back to list.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify `/orders` end-to-end.
-- [ ] Update `master-plan.md` with status/discoveries.
+- [x] Add repository method for clinic-scoped order listing.
+- [x] Add service method for clinic-scoped order listing.
+- [x] Add `GET /api/scheduling/orders` route.
+- [x] Add/update tests for clinic-scoped listing.
+- [x] Create `/orders` UI with login/list/create flow and remove the temporary redirect.
+- [x] Adapt stepper create flow into `/orders`.
+- [x] Add simple status text in list.
+- [x] Ensure create returns to or can navigate back to list.
+- [x] Run relevant tests/build.
+- [x] Manually verify `/orders` end-to-end.
+- [x] Update `master-plan.md` with status/discoveries.
 
 ## Completion Notes
 
 Fill in after implementation.
 
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Discoveries affecting later slices:
+- Status: Complete
+- Files changed: `Orders/Repositories.cs`, `Orders/SchedulingOrderService.cs`, `Database/SqliteOrderRepo.cs`, `Web/SchedulingApi.cs`, `Web/WebProgram.cs`, `Web/Web.csproj`, `Web/wwwroot/orders.html`, `Database.Tests/SqliteOrderRepoTest.cs`, `Orders.Tests/SchedulingOrderServiceTest.cs`, `Web.Tests/SchedulingApiTests.cs`.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj`; `dotnet test Database.Tests/Database.Tests.csproj`; `dotnet test Web.Tests/Web.Tests.csproj`; `dotnet build Web/Web.csproj`; full `dotnet test`.
+- Manual checks: Headless Chromium browser evaluation passed for clinic `/orders`: unauthenticated login screen, clinic login, submitted-orders list, `+ New order`, stepper create, confirmation code, return to list, created order visible, logout back to login.
+- Discoveries affecting later slices: `/orders` now uses `GET /api/scheduling/orders`; Slice 2 made that endpoint role-aware and retired `/api/scheduling/technician/orders`.

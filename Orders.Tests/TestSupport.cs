@@ -24,7 +24,7 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
     public SchedulingConfigSnapshot Current { get; private set; }
     public Task<SchedulingConfigSnapshot> ReloadAsync(CancellationToken ct = default) => Task.FromResult(Current);
 
-    public static TestSchedulingConfigProvider Create(string? credentialHash = null) => new(new SchedulingConfigSnapshot(new SchedulingOptions
+    public static TestSchedulingConfigProvider Create(string? credentialHash = null, ActorRole credentialRole = ActorRole.Clinic) => new(new SchedulingConfigSnapshot(new SchedulingOptions
     {
         SessionSlidingDays = 30,
         SessionAbsoluteDays = 180,
@@ -41,7 +41,7 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
                 DisplayName = "Demo",
                 Credentials = credentialHash == null
                     ? []
-                    : [new ClinicCredentialConfig { Id = "cred-1", Label = "Cred 1", PinHash = credentialHash, IsActive = true }]
+                    : [new ClinicCredentialConfig { Id = "cred-1", Label = "Cred 1", PinHash = credentialHash, IsActive = true, Role = credentialRole }]
             }
         ]
     }, DateTimeOffset.UtcNow, "test"));

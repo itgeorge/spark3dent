@@ -25,13 +25,13 @@ public record ImportAnalyzeFileResult(
         new(fileName, null, null, null, null, null, null, null, null, null, null, null, null, message);
 }
 
-/// <summary>Response from POST /api/invoices/import/analyze.</summary>
+/// <summary>Response from POST /api/invoicing/invoices/import/analyze.</summary>
 public record ImportAnalyzeResponse(
     ImportAnalyzeFileResult[] Files,
     string[] UnresolvedCompanies,
     IReadOnlyDictionary<string, string>? UnresolvedNicknameSuggestions = null);
 
-/// <summary>Request for POST /api/invoices/import/commit.</summary>
+/// <summary>Request for POST /api/invoicing/invoices/import/commit.</summary>
 public record ImportCommitRequest(
     ImportCommitItem[]? Items,
     Dictionary<string, string>? NicknameMap,
@@ -59,7 +59,7 @@ public record ImportCommitItemStatus(
     string Status, // "imported" | "skipped" | "failed"
     string? Message);
 
-/// <summary>Response from POST /api/invoices/import/commit.</summary>
+/// <summary>Response from POST /api/invoicing/invoices/import/commit.</summary>
 public record ImportCommitResponse(
     int Imported,
     int Skipped,

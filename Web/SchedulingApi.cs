@@ -6,8 +6,6 @@ namespace Web;
 
 public static class SchedulingApi
 {
-    private const string AuthCookieName = "s3d_order_session";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -25,8 +23,15 @@ public static class SchedulingApi
             try
             {
                 var result = await auth.LoginAsync(body.ClinicCode, body.Pin, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
-                ctx.Response.Cookies.Append(AuthCookieName, result.CookieToken, BuildCookieOptions(result.ExpiresAt, ctx));
-                return Results.Json(new { clinicCode = result.Actor.ClinicCode, clinicName = result.Actor.ClinicDisplayName, credentialLabel = result.Actor.CredentialLabel }, JsonOptions);
+                ctx.Response.Cookies.Append(SchedulingEndpointAuth.AuthCookieName, result.CookieToken, BuildCookieOptions(result.ExpiresAt, ctx));
+                return Results.Json(new
+                {
+                    clinicCode = result.Actor.ClinicCode,
+                    clinicName = result.Actor.ClinicDisplayName,
+                    credentialLabel = result.Actor.CredentialLabel,
+                    role = result.Actor.Role,
+                    isTechnician = result.Actor.IsTechnician
+                }, JsonOptions);
             }
             catch (Exception ex) when (ex is InvalidOperationException or FormatException)
             {
@@ -39,7 +44,7 @@ public static class SchedulingApi
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             await auth.LogoutAsync(actor.SessionId, ctx.RequestAborted);
-            ctx.Response.Cookies.Delete(AuthCookieName);
+            ctx.Response.Cookies.Delete(SchedulingEndpointAuth.AuthCookieName);
             return Results.Json(new { ok = true }, JsonOptions);
         });
 
@@ -47,7 +52,15 @@ public static class SchedulingApi
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            return Results.Json(new { clinicCode = actor.ClinicCode, clinicName = actor.ClinicDisplayName, credentialId = actor.CredentialId, credentialLabel = actor.CredentialLabel }, JsonOptions);
+            return Results.Json(new
+            {
+                clinicCode = actor.ClinicCode,
+                clinicName = actor.ClinicDisplayName,
+                credentialId = actor.CredentialId,
+                credentialLabel = actor.CredentialLabel,
+                role = actor.Role,
+                isTechnician = actor.IsTechnician
+            }, JsonOptions);
         });
 
         app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
@@ -88,6 +101,8 @@ public static class SchedulingApi
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (actor.IsTechnician)
+                return Results.Json(new { error = "Technician order creation requires target clinic selection and is not available yet." }, statusCode: 403, options: JsonOptions);
             var body = await ReadJson<CreateOrderRequest>(ctx);
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
@@ -101,22 +116,22 @@ public static class SchedulingApi
             }
         });
 
+        app.MapGet("/api/scheduling/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, int? limit) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var items = await orders.ListOrdersForActorAsync(actor, limit ?? 100, ctx.RequestAborted);
+            return Results.Json(new { items = items.Select(ToDto) }, JsonOptions);
+        });
+
         app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
-            if (order == null || !string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase))
+            if (order == null || (!actor.IsTechnician && !string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase)))
                 return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
             return Results.Json(new { order = ToDto(order) }, JsonOptions);
-        });
-
-        app.MapGet("/api/scheduling/technician/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, int? limit) =>
-        {
-            var actor = await RequireActor(ctx, auth);
-            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            var items = await orders.ListOrdersAsync(limit ?? 100, ctx.RequestAborted);
-            return Results.Json(new { items = items.Select(ToDto) }, JsonOptions);
         });
     }
 
@@ -131,8 +146,7 @@ public static class SchedulingApi
 
     private static async Task<AuthenticatedActor?> RequireActor(HttpContext ctx, SchedulingAuthService auth)
     {
-        ctx.Request.Cookies.TryGetValue(AuthCookieName, out var token);
-        return await auth.AuthenticateAsync(token, ctx.RequestAborted);
+        return await SchedulingEndpointAuth.AuthenticateAsync(ctx, auth);
     }
 
     private static async Task<T?> ReadJson<T>(HttpContext ctx)

@@ -34,6 +34,7 @@
 
     <ItemGroup>
         <EmbeddedResource Include="wwwroot\index.html" />
+        <EmbeddedResource Include="wwwroot\orders.html" />
         <EmbeddedResource Include="..\licenses\*.txt">
             <LogicalName>Web.licenses.%(Filename)%(Extension)</LogicalName>
         </EmbeddedResource>

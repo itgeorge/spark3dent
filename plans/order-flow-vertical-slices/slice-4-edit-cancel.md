@@ -159,15 +159,17 @@ login | list | create | review | edit
 
 List row actions:
 
-- Review/open row,
-- Edit,
-- Cancel.
+- Review/open row (already added in Slice 2.5),
+- Edit (optional shortcut; primary placement should be in the read-only review header),
+- Cancel (optional shortcut; primary placement should be in the read-only review header).
 
 Review actions:
 
 - Back,
 - Edit,
 - Cancel.
+
+Slice 2.5 introduced the read-only review UI in `Web/wwwroot/orders.html`. Add Edit and Cancel buttons to the review header next to the single Back to orders button, rather than only in the list row. List row actions can remain secondary/optional.
 
 Edit mode:
 
@@ -187,7 +189,8 @@ Technician clinic selector:
 
 - visible only to technicians,
 - on create: select target clinic before or above the stepper,
-- on edit: show order's clinic; changing clinic during edit should be carefully considered. Preferred: do not allow changing clinic on edit in v1 unless product explicitly wants reassignment.
+- on edit: show order's clinic; changing clinic during edit should be carefully considered. Preferred: do not allow changing clinic on edit in v1 unless product explicitly wants reassignment,
+- add a small technician-only way to discover active target clinics (for example `GET /api/scheduling/clinics` returning code/display name) rather than hardcoding clinic choices in the browser.
 
 ## Files Expected to Change
 

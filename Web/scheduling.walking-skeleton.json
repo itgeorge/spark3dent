@@ -13,7 +13,15 @@
           "id": "assistant-1",
           "label": "Assistant 1",
           "pinHash": "pbkdf2-sha256$210000$P/ZQ8M8GLP7OOanOiiEcxA==$Rs2HRFNeRpOJdIUnYPVWhh7EM83bQXV6asPSfkWRYtI=",
-          "isActive": true
+          "isActive": true,
+          "role": "clinic"
+        },
+        {
+          "id": "technician-1",
+          "label": "Technician 1",
+          "pinHash": "pbkdf2-sha256$210000$MDEyMzQ1Njc4OWFiY2RlZg==$wxj/Fh99bX4LV0imwZhs0o25URzSHR0CsRDd60g2tD4=",
+          "isActive": true,
+          "role": "technician"
         }
       ]
     }

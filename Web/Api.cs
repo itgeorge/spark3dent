@@ -28,8 +28,11 @@ public static class Api
         var config = app.Services.GetRequiredService<Config>();
         var logger = app.Services.GetRequiredService<Utilities.ILogger>();
 
+        var invoicing = app.MapGroup("/api/invoicing")
+            .AddEndpointFilter(SchedulingEndpointAuth.RequireTechnicianActorAsync);
+
         // --- Clients API ---
-        app.MapGet("/api/clients", async (int? limit, string? startAfter) =>
+        invoicing.MapGet("/clients", async (int? limit, string? startAfter) =>
         {
             var l = limit ?? 100;
             var result = await clientRepo.ListAsync(l, startAfter);
@@ -37,7 +40,7 @@ public static class Api
             return Results.Json(new { items, nextStartAfter = result.NextStartAfter }, JsonOptions);
         });
 
-        app.MapGet("/api/clients/latest", async (int? limit) =>
+        invoicing.MapGet("/clients/latest", async (int? limit) =>
         {
             var l = limit ?? 10;
             var result = await clientRepo.LatestAsync(l);
@@ -45,7 +48,7 @@ public static class Api
             return Results.Json(new { items }, JsonOptions);
         });
 
-        app.MapGet("/api/clients/{nickname}", async (string nickname) =>
+        invoicing.MapGet("/clients/{nickname}", async (string nickname) =>
         {
             try
             {
@@ -58,7 +61,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/clients", async (HttpContext ctx) =>
+        invoicing.MapPost("/clients", async (HttpContext ctx) =>
         {
             var body = await ReadJson<ClientCreateRequest>(ctx);
             if (body == null)
@@ -91,7 +94,7 @@ public static class Api
             }
         });
 
-        app.MapPut("/api/clients/{nickname}", async (string nickname, HttpContext ctx) =>
+        invoicing.MapPut("/clients/{nickname}", async (string nickname, HttpContext ctx) =>
         {
             var body = await ReadJson<ClientUpdateRequest>(ctx);
             if (body == null)
@@ -136,7 +139,7 @@ public static class Api
             return Results.Json(ToClientDto(updated), JsonOptions);
         });
 
-        app.MapMethods("/api/clients/{nickname}/rename", new[] { "PATCH" }, async (string nickname, HttpContext ctx) =>
+        invoicing.MapMethods("/clients/{nickname}/rename", new[] { "PATCH" }, async (string nickname, HttpContext ctx) =>
         {
             var body = await ReadJson<ClientRenameRequest>(ctx);
             if (body == null)
@@ -165,7 +168,7 @@ public static class Api
         });
 
         // --- Invoices API ---
-        app.MapGet("/api/invoices", async (int? limit, string? startAfter) =>
+        invoicing.MapGet("/invoices", async (int? limit, string? startAfter) =>
         {
             var limitOrDefault = limit ?? 100;
             var invoices = await invMgmt.ListInvoicesAsync(limitOrDefault, startAfter);
@@ -197,7 +200,7 @@ public static class Api
             return Results.Json(new { items, nextStartAfter = invoices.NextStartAfter }, JsonOptions);
         });
 
-        app.MapGet("/api/invoices/{number}", async (string number) =>
+        invoicing.MapGet("/invoices/{number}", async (string number) =>
         {
             try
             {
@@ -210,7 +213,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/invoices/issue", async (HttpContext ctx) =>
+        invoicing.MapPost("/invoices/issue", async (HttpContext ctx) =>
         {
             var body = await ReadJson<IssueInvoiceRequest>(ctx);
             if (body == null)
@@ -249,7 +252,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/invoices/correct", async (HttpContext ctx) =>
+        invoicing.MapPost("/invoices/correct", async (HttpContext ctx) =>
         {
             var body = await ReadJson<CorrectInvoiceRequest>(ctx);
             if (body == null)
@@ -305,7 +308,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/invoices/preview", async (HttpContext ctx) =>
+        invoicing.MapPost("/invoices/preview", async (HttpContext ctx) =>
         {
             var body = await ReadJson<PreviewInvoiceRequest>(ctx);
             if (body == null)
@@ -380,7 +383,7 @@ public static class Api
         });
 
         // --- Invoice Import API (legacy PDF) ---
-        app.MapPost("/api/invoices/import/analyze", async (HttpContext ctx, IInvoiceImporter importer) =>
+        invoicing.MapPost("/invoices/import/analyze", async (HttpContext ctx, IInvoiceImporter importer) =>
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -416,7 +419,7 @@ public static class Api
             return Results.Json(response, JsonOptions);
         });
 
-        app.MapPost("/api/invoices/import/commit", async (HttpContext ctx, IInvoiceImporter importer) =>
+        invoicing.MapPost("/invoices/import/commit", async (HttpContext ctx, IInvoiceImporter importer) =>
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -433,7 +436,7 @@ public static class Api
             return Results.Json(response, JsonOptions);
         });
 
-        app.MapGet("/api/invoices/{number}/pdf", async (string number) =>
+        invoicing.MapGet("/invoices/{number}/pdf", async (string number) =>
         {
             try
             {

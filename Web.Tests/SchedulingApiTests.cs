@@ -59,13 +59,80 @@ public class SchedulingApiTests
         Assert.That(shortenedCode, Is.EqualTo(code![3..]));
         Assert.That(orderElement.GetProperty("shade").GetString(), Is.EqualTo("A3.5"));
 
-        var list = await client.GetAsync("/api/scheduling/technician/orders");
+        var list = await client.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var listText = await list.Content.ReadAsStringAsync();
         Assert.That(listText, Does.Contain(code));
 
         var logout = await client.PostAsync("/api/scheduling/auth/logout", Json("{}"));
         Assert.That(logout.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_UnauthenticatedOrderListReturns401()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+
+        var response = await client.GetAsync("/api/scheduling/orders");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_TechnicianCanListOrdersButCannotCreateYet()
+    {
+        using var fixture = new ApiTestFixture();
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+        var create = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Clinic Case",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var code = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString();
+
+        using var techClient = fixture.Client;
+        await ApiTestFixture.LoginAsTechnicianAsync(techClient);
+        var list = await techClient.GetAsync("/api/scheduling/orders");
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain(code));
+
+        var techCreate = await techClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Tech Case",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(techCreate.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_RetiredTechnicianOrdersRouteReturns404()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsTechnicianAsync(client);
+
+        var response = await client.GetAsync("/api/scheduling/technician/orders");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

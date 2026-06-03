@@ -25,6 +25,7 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string? _openAiKey;
     private readonly IInvoiceImporter? _invoiceImporterOverride;
     private readonly Utilities.ILogger? _loggerOverride;
+    private readonly bool _autoLoginAsTechnician;
 
     public ApiTestFixture(
         string startInvoiceNumber = "1",
@@ -32,7 +33,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         string? runtimePort = "0",
         string? openAiKey = null,
         IInvoiceImporter? invoiceImporterOverride = null,
-        Utilities.ILogger? loggerOverride = null)
+        Utilities.ILogger? loggerOverride = null,
+        bool autoLoginAsTechnician = false)
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
@@ -44,9 +46,29 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _openAiKey = openAiKey;
         _invoiceImporterOverride = invoiceImporterOverride;
         _loggerOverride = loggerOverride;
+        _autoLoginAsTechnician = autoLoginAsTechnician;
     }
 
-    public HttpClient Client => CreateClient();
+    public HttpClient Client
+    {
+        get
+        {
+            var client = CreateClient();
+            if (_autoLoginAsTechnician)
+                LoginAsTechnicianAsync(client).GetAwaiter().GetResult();
+            return client;
+        }
+    }
+
+    public static async Task LoginAsTechnicianAsync(HttpClient client)
+    {
+        var response = await client.PostAsync(
+            "/api/scheduling/auth/login",
+            new StringContent("{\"clinicCode\":\"DEMO\",\"pin\":\"654321\"}", System.Text.Encoding.UTF8, "application/json"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var cookie = response.Headers.GetValues("Set-Cookie").First(v => v.StartsWith("s3d_order_session="));
+        client.DefaultRequestHeaders.Add("Cookie", cookie.Split(';')[0]);
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

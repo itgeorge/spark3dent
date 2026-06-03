@@ -180,6 +180,13 @@ public class SchedulingOrderServiceTest
                 lock (_gate)
                     return Task.FromResult<IReadOnlyList<OrderRecord>>(_ordersByCode.Values.ToList());
             }
+
+            public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default)
+            {
+                lock (_gate)
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(
+                        _ordersByCode.Values.Where(o => string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase)).ToList());
+            }
         }
     }
 }

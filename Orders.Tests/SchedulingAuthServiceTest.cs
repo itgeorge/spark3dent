@@ -5,6 +5,38 @@ namespace Orders.Tests;
 public class SchedulingAuthServiceTest
 {
     [Test]
+    public async Task LoginAsync_GivenTechnicianCredential_ReturnsTechnicianActor()
+    {
+        var hasher = new PinHasher();
+        var credentialHash = hasher.Hash("654321", iterations: 10_000);
+        var config = TestSchedulingConfigProvider.Create(credentialHash, ActorRole.Technician);
+        var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
+        var repo = new InMemoryAuthSessionRepository();
+        var service = new SchedulingAuthService(config, repo, hasher, clock);
+
+        var result = await service.LoginAsync("DEMO", "654321", "127.0.0.1", "test");
+
+        Assert.That(result.Actor.Role, Is.EqualTo(ActorRole.Technician));
+        Assert.That(result.Actor.IsTechnician, Is.True);
+    }
+
+    [Test]
+    public async Task LoginAsync_GivenCredentialWithoutExplicitRole_DefaultsToClinicActor()
+    {
+        var hasher = new PinHasher();
+        var credentialHash = hasher.Hash("123456", iterations: 10_000);
+        var config = TestSchedulingConfigProvider.Create(credentialHash);
+        var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
+        var repo = new InMemoryAuthSessionRepository();
+        var service = new SchedulingAuthService(config, repo, hasher, clock);
+
+        var result = await service.LoginAsync("DEMO", "123456", "127.0.0.1", "test");
+
+        Assert.That(result.Actor.Role, Is.EqualTo(ActorRole.Clinic));
+        Assert.That(result.Actor.IsTechnician, Is.False);
+    }
+
+    [Test]
     public async Task AuthenticateAsync_GivenValidSession_RefreshesSlidingExpiry()
     {
         var hasher = new PinHasher();

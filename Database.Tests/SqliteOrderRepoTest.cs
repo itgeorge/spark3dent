@@ -108,6 +108,19 @@ public class SqliteOrderRepoTest
         Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "BBB-234", "AAA-234" }));
     }
 
+    [Test]
+    public async Task ListOrdersForClinicAsync_ReturnsOnlyClinicOrdersNewestFirst()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("AAA-234", "demo old", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), clinicCode: "DEMO"));
+        await repo.CreateOrderAsync(BuildOrder("BBB-234", "other", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), clinicCode: "OTHER"));
+        await repo.CreateOrderAsync(BuildOrder("CCC-234", "demo new", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), clinicCode: "DEMO"));
+
+        var orders = await repo.ListOrdersForClinicAsync("DEMO");
+
+        Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "CCC-234", "AAA-234" }));
+    }
+
     private static async Task<CreateOutcome[]> RaceCreateSameOrderCodeAsync(SqliteOrderRepo repo, int racingOrderCount, string sharedOrderCode)
     {
         using var startBarrier = new Barrier(racingOrderCount);
@@ -145,11 +158,11 @@ public class SqliteOrderRepoTest
         public static CreateOutcome Failure(Exception exception) => new(null, exception);
     }
 
-    private static OrderRecord BuildOrder(string code, string caseName, DateTimeOffset createdAt, Shade shade = Shade.Unspecified) => new(
+    private static OrderRecord BuildOrder(string code, string caseName, DateTimeOffset createdAt, Shade shade = Shade.Unspecified, string clinicCode = "DEMO") => new(
         0,
         code,
-        "DEMO",
-        "Demo Clinic",
+        clinicCode,
+        clinicCode == "DEMO" ? "Demo Clinic" : "Other Clinic",
         "cred-1",
         "Credential 1",
         "fingerprint",

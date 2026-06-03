@@ -1509,7 +1509,7 @@
     }
 
     async function loadLatestClients(){
-      const r = await fetch("/api/clients/latest?limit=5");
+      const r = await fetch("/api/invoicing/clients/latest?limit=5");
       if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
       const data = await r.json();
       latestClients = (data.items || []).map(mapClient);
@@ -1517,7 +1517,7 @@
     }
 
     async function loadInvoices(){
-      const r = await fetch("/api/invoices?limit=100");
+      const r = await fetch("/api/invoicing/invoices?limit=100");
       if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на фактури"); return; }
       const data = await r.json();
       invoices = (data.items || []).map(inv => ({
@@ -1543,7 +1543,7 @@
       clients = [];
       try {
         for(;;){
-          const url = cursor ? `/api/clients?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/clients?limit=${PAGE}`;
+          const url = cursor ? `/api/invoicing/clients?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoicing/clients?limit=${PAGE}`;
           const r = await fetch(url);
           if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
           const data = await r.json();
@@ -1567,7 +1567,7 @@
       invoices = [];
       try {
         for(;;){
-          const url = cursor ? `/api/invoices?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoices?limit=${PAGE}`;
+          const url = cursor ? `/api/invoicing/invoices?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoicing/invoices?limit=${PAGE}`;
           const r = await fetch(url);
           if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на фактури"); return; }
           const data = await r.json();
@@ -1700,7 +1700,7 @@
     }
 
     function downloadPdf(number){
-      window.open(`/api/invoices/${encodeURIComponent(number)}/pdf`, "_blank", "noopener");
+      window.open(`/api/invoicing/invoices/${encodeURIComponent(number)}/pdf`, "_blank", "noopener");
     }
 
     function renderClients(list, rootEl){
@@ -1911,7 +1911,7 @@
       showLoadingOverlay(editorMode === "issue" ? "Издаване на фактура..." : "Запазване на корекция...");
       try {
         if(editorMode === "issue"){
-          const r = await fetch("/api/invoices/issue", {
+          const r = await fetch("/api/invoicing/invoices/issue", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ clientNickname: selectedClientNickname, amountCents: amtCents, date })
@@ -1920,7 +1920,7 @@
           if(!r.ok){ showErrorPopup(data.error || "Неуспешно издаване на фактура"); return; }
           toast(`Издадена фактура №${data.invoice?.number || "?"}`);
         }else{
-          const r = await fetch("/api/invoices/correct", {
+          const r = await fetch("/api/invoicing/invoices/correct", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date, correctInvoiceNumber: correctingInvoiceNumber })
@@ -2115,7 +2115,7 @@
         saved = true;
         showLoadingOverlay("Преименуване...");
         try {
-          const r = await fetch(`/api/clients/${encodeURIComponent(nickname)}/rename`, {
+          const r = await fetch(`/api/invoicing/clients/${encodeURIComponent(nickname)}/rename`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ newNickname: newNick })
@@ -2210,7 +2210,7 @@
       showLoadingOverlay("Запазване на клиент...");
       try {
         if(clientModalMode === "edit"){
-          const r = await fetch(`/api/clients/${encodeURIComponent(clientModalEditNickname)}`, {
+          const r = await fetch(`/api/invoicing/clients/${encodeURIComponent(clientModalEditNickname)}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
@@ -2219,7 +2219,7 @@
           if(!r.ok){ showErrorPopup(data.error || "Неуспешна актуализация на клиент"); return; }
           toast(`Клиент „${nickname}" актуализиран`);
         }else{
-          const r = await fetch("/api/clients", {
+          const r = await fetch("/api/invoicing/clients", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
@@ -2305,7 +2305,7 @@
         $("#previewStatus").className = "chip ok";
         let container = $("#tab_preview");
         try {
-          const detailR = await fetch(`/api/invoices/${encodeURIComponent(invNum)}`);
+          const detailR = await fetch(`/api/invoicing/invoices/${encodeURIComponent(invNum)}`);
           if (!detailR.ok) throw new Error("Неуспешно зареждане на данни");
           const detail = await detailR.json();
           const buyer = detail.buyerAddress || {};
@@ -2361,7 +2361,7 @@
 
       try {
         const previewBody = { clientNickname: clientNick, amountCents: amtCents, date, format: "html", ...(invNum && { invoiceNumber: invNum }) };
-        const r = await fetch("/api/invoices/preview", {
+        const r = await fetch("/api/invoicing/invoices/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(previewBody)
@@ -2563,7 +2563,7 @@
         const form = new FormData();
         importSelectedFiles.forEach(f=> form.append("files", f));
         form.append("nicknameFromMol", "true");
-        const r = await fetch("/api/invoices/import/analyze", {
+        const r = await fetch("/api/invoicing/invoices/import/analyze", {
           method: "POST",
           body: form
         });
@@ -2690,7 +2690,7 @@
       $("#btnImportCommit").disabled = true;
       showLoadingOverlay("Импортиране...");
       try {
-        const r = await fetch("/api/invoices/import/commit", {
+        const r = await fetch("/api/invoicing/invoices/import/commit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items, nicknameMap, dryRun: false })

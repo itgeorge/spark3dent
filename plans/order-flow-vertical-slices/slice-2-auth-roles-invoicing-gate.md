@@ -212,28 +212,28 @@ rg -n '"/api/(clients|invoices)' Web/wwwroot/index.html Web -g '*.cs' -g '*.html
 
 ## Implementation Checklist
 
-- [ ] Add actor role enum/model.
-- [ ] Extend credential config with role defaulting to clinic.
-- [ ] Add technician credential to walking skeleton config.
-- [ ] Update auth service to populate actor role.
-- [ ] Add centralized auth/authorization helpers or endpoint filters.
-- [ ] Move invoicing/client routes under `/api/invoicing`.
-- [ ] Apply technician-only authorization to `/api/invoicing` group.
-- [ ] Update `index.html` fetch paths to `/api/invoicing/*`.
-- [ ] Update scheduler order listing behavior for clinic vs technician.
-- [ ] Decide fate of `/api/scheduling/technician/orders` and document it.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify clinic vs technician access.
-- [ ] Update `master-plan.md` and later slice plans with discoveries.
+- [x] Add actor role enum/model.
+- [x] Extend credential config with role defaulting to clinic.
+- [x] Add technician credential to walking skeleton config.
+- [x] Update auth service to populate actor role.
+- [x] Add centralized auth/authorization helpers or endpoint filters.
+- [x] Move invoicing/client routes under `/api/invoicing`.
+- [x] Apply technician-only authorization to `/api/invoicing` group.
+- [x] Update `index.html` fetch paths to `/api/invoicing/*`.
+- [x] Update scheduler order listing behavior for clinic vs technician.
+- [x] Decide fate of `/api/scheduling/technician/orders` and document it.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify clinic vs technician access.
+- [x] Update `master-plan.md` and later slice plans with discoveries.
 
 ## Completion Notes
 
 Fill in after implementation.
 
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Route migration notes:
-- Discoveries affecting later slices:
+- Status: Complete
+- Files changed: `Orders/AuthenticatedActor.cs`, `Orders/ClinicConfig.cs`, `Orders/SchedulingAuthService.cs`, `Web/scheduling.walking-skeleton.json`, `Web/SchedulingEndpointAuth.cs`, `Web/SchedulingApi.cs`, `Web/Api.cs`, `Web/wwwroot/index.html`, `Web/wwwroot/orders.html`, `Web/ImportDtos.cs`, `Web.Tests/ApiTestFixture.cs`, `Web.Tests/InvoicingAuthTests.cs`, `Web.Tests/*ApiTests.cs`, `Orders.Tests/*`, `Database.Tests/SqliteOrderRepoTest.cs`.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj`; `dotnet test Database.Tests/Database.Tests.csproj`; `dotnet test Web.Tests/Web.Tests.csproj`; `dotnet build Web/Web.csproj`; full `dotnet test`.
+- Manual checks: Headless Chromium browser evaluation passed: clinic gets 403 from `/api/invoicing/clients`; technician sees scheduler list with create hidden and a create-not-yet notice; technician can call role-aware scheduler list; retired `/api/scheduling/technician/orders` returns 404; technician can open `/` invoicer and call `/api/invoicing/clients`; legacy `/api/clients` and `/api/invoices` return 404.
+- Route migration notes: `/api/invoicing/*` is now the only invoicing/client API prefix. Legacy `/api/clients*` and `/api/invoices*` return 404. `/api/scheduling/orders` is role-aware. `/api/scheduling/technician/orders` is retired and returns 404. Technician create via `POST /api/scheduling/orders` returns 403 until Slice 4 adds target clinic selection.
+- Discoveries affecting later slices: Demo technician credential is under clinic `DEMO` with PIN `654321` as a temporary convention; master plan notes this should be restructured after main flows. Slice 4 should add a clinic-list/target-clinic mechanism for technician create/edit.
