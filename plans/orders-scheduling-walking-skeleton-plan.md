@@ -4,6 +4,8 @@
 
 This plan covers the first end-to-end orders/scheduling walking skeleton for Spark3Dent. The goal is to validate the real clinic-facing flow while the feature is still used only by the dental technician / current organization for product-development feedback.
 
+For the follow-on integration of the stepper prototype into the normal app flow, use the vertical-slice handoff plan at `plans/order-flow-vertical-slices/master-plan.md`. That master plan tracks the per-slice implementation plans, handoff protocol, route/auth decisions, and post-slice course corrections.
+
 ## How to Use This Plan
 
 - Complete tasks in order unless a task explicitly says it can be done independently.
