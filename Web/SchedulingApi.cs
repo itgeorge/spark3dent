@@ -50,15 +50,6 @@ public static class SchedulingApi
             return Results.Json(new { clinicCode = actor.ClinicCode, clinicName = actor.ClinicDisplayName, credentialId = actor.CredentialId, credentialLabel = actor.CredentialLabel }, JsonOptions);
         });
 
-        app.MapPost("/api/scheduling/config/reload", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
-        {
-            // TODO(v1.5): remove or disable this walking-skeleton reload endpoint before preview testing.
-            var actor = await RequireActor(ctx, auth);
-            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            var snapshot = await provider.ReloadAsync(ctx.RequestAborted);
-            return Results.Json(new { loadedAt = snapshot.LoadedAt, clinicCount = snapshot.Options.Clinics.Count, workRuleCount = snapshot.Options.WorkRules.Count }, JsonOptions);
-        });
-
         app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
         {
             var actor = await RequireActor(ctx, auth);

@@ -188,6 +188,18 @@ public class SchedulingApiTests
         Assert.That(await dates.Content.ReadAsStringAsync(), Does.Contain("same jaw"));
     }
 
+    [Test]
+    public async Task SchedulingConfigReloadEndpoint_IsRemoved()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var response = await client.PostAsync("/api/scheduling/config/reload", Json("{}"));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
     private static async Task LoginAsync(HttpClient client)
     {
         var login = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"123456\"}"));

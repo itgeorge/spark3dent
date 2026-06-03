@@ -33,13 +33,13 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 11. **Technician impersonation for v1:** the technician should select clinic code + PIN and use the same flow a clinic will later use. Avoid a separate shortcut flow for order creation in this plan.
 12. **Order status:** only `Created` is required for the walking skeleton.
 13. **Case reference:** use `CaseName`, not `PatientName`.
-14. **Teeth selection:** walking skeleton uses numeric tooth/range input. Crown = single tooth. Non-crown = range. Bridge abutments default to the two range endpoints.
+14. **Teeth selection:** the initial walking skeleton supported numeric tooth/range input; prototyping evolved this into a visual FDI tooth picker in `Web/wwwroot/order-prototypes/stepper.html`. Crown = single tooth. Non-crown = contiguous same-jaw range. Bridge abutments still default to the two range endpoints until explicit abutment selection is designed.
 15. **Delivery date selection:** user may select any valid date after/on the calculated minimum date, not only the earliest date.
 16. **Delivery availability plain-English rules:** a delivery date is selectable when it is on/after the minimum calculated date, not weekend, not a closed/holiday day, and not the first business day after a closed period.
 17. **Walking-skeleton date filtering:** implement at least a weekend-only filter in this plan so filtering is demonstrably active. Bulgarian holiday automation is a follow-up unless pulled into this plan later.
-18. **Configuration:** clinics, credentials, and work rules may be loaded from uploaded/server JSON for the walking skeleton. Config reload can require app restart, but expose a temporary reload endpoint for v1 development.
-19. **Temporary reload endpoint:** add a TODO to remove/disable the config reload endpoint before v1.5 preview testing.
-20. **Order code:** hide generation/normalization behind an interface. Use a best-guess unambiguous implementation initially; final Bulgarian/Latin ambiguity research is a follow-up.
+18. **Configuration:** clinics, credentials, and work rules are loaded from uploaded/server JSON for the walking skeleton. Config reload requires app restart; the temporary reload endpoint was removed after prototyping.
+19. **Config reload endpoint:** removed before preview hardening; do not reintroduce without an explicit admin/security design.
+20. **Order code:** generation is hidden behind an interface. The current implementation uses descriptive order-code stems based on delivery date/material/tooth count plus a short suffix; final Bulgarian/Latin ambiguity research and normalization remain follow-ups.
 
 ---
 
@@ -87,8 +87,8 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 - [x] Add default work-rule values suitable for walking-skeleton testing.
 - [x] Implement startup-only loading from a configured file path.
 - [x] Add validation errors for malformed config, duplicate clinic codes, duplicate credential labels within a clinic, inactive/missing credentials, and unsupported work-rule combinations.
-- [x] Add a temporary authenticated/dev-only API endpoint to force config reload without restarting the app.
-- [x] Add explicit TODO/comment near the reload endpoint: remove or disable before v1.5 preview testing.
+- [x] Initially added a temporary authenticated/dev-only API endpoint to force config reload without restarting the app.
+- [x] Removed the temporary config reload endpoint after prototyping; config changes now require restart unless a future admin design reintroduces reload safely.
 
 ---
 
@@ -155,7 +155,7 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 ## Phase 7 - Order Code Interface and Best-Guess Implementation
 
 - [x] Define `IOrderCodeGenerator` and, if needed, `IOrderCodeNormalizer`.
-- [x] Implement initial best-guess short code generator with uppercase, grouped, visually safer characters.
+- [x] Implement initial generator; evolved during prototyping into descriptive order codes with delivery date/material/tooth-count stem and short letter suffix.
 - [x] Avoid obviously ambiguous characters such as `0/O`, `1/I/L`, and known problematic Bulgarian/Latin examples where practical.
 - [x] Ensure generated codes are checked for uniqueness before order save.
 - [x] Add tests for format, uniqueness retry behavior, and basic normalization if implemented.
@@ -182,14 +182,15 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
   - case name,
   - impression/collection date with Today shortcut,
   - product/work/material/construction selection,
-  - numeric tooth/range input,
+  - tooth/range input,
+  - shade as a first-class order field, including `Unspecified`,
   - delivery date selection with disabled dates/validation messages,
   - submit.
 - [x] Show clear UI explanation when a date is disabled because it is weekend/closed or first business day after closure.
 - [x] Show order confirmation with large order code and instruction to write it on the impression/package.
 - [x] Add simple order list view for the technician/current organization.
 - [x] Add logout UI.
-- [x] Keep UI intentionally simple; do not build visual tooth chart in this plan.
+- [x] Prototype a visual FDI tooth chart and stepper UX in `Web/wwwroot/order-prototypes/stepper.html`; promotion to the real `/orders` UI is a separate follow-up plan.
 
 ---
 
@@ -206,7 +207,7 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
 
 - [x] Add sample non-secret scheduling JSON config for local development. (`Web/scheduling.walking-skeleton.json`)
 - [x] Add deployment note for uploading scheduling JSON to the Hetzner server. (config path supported via `App:SchedulingConfigPath`; detailed Hetzner doc follow-up remains)
-- [x] Add deployment note for restarting the app after config changes, plus temporary reload endpoint usage during v1 development. (`POST /api/scheduling/config/reload`; TODO kept in code to remove before v1.5)
+- [x] Add deployment note for restarting the app after config changes. The temporary reload endpoint has been removed; restart is required for JSON config changes.
 - [x] Manually validate full flow on local app: (API smoke + headless-browser screenshots under `agent-qa/orders-skeleton/`)
   - generate PIN hash,
   - add clinic credential config,
@@ -215,7 +216,7 @@ This plan covers the first end-to-end orders/scheduling walking skeleton for Spa
   - see confirmation code,
   - see order in technician list,
   - logout.
-- [ ] Manually validate full flow on Hetzner/staging-like deployment before marking walking skeleton complete.
+- [-] Manually validate full flow on Hetzner/staging-like deployment before marking walking skeleton complete. (Skipped for now by decision; revisit during deployment/pre-release work.)
 
 ---
 
@@ -249,12 +250,14 @@ Before marking the walking skeleton complete, the coding agent must run a realis
 Completed locally on 2026-05-31. Assumptions/decisions made during implementation:
 
 - Scheduling domain code lives in a new `Orders` project. EF persistence lives in `Database`; Web owns HTTP endpoints/UI wiring.
-- Walking-skeleton clinics/credentials/work rules are loaded from JSON at startup (`Web/scheduling.walking-skeleton.json`) with a temporary authenticated reload endpoint.
+- Walking-skeleton clinics/credentials/work rules are loaded from JSON at startup (`Web/scheduling.walking-skeleton.json`). The temporary authenticated reload endpoint was removed; config changes require restart.
 - Clinics and credentials are JSON-configured for now; orders and auth sessions are persisted in SQLite. Orders snapshot clinic/credential labels and PIN-hash fingerprint for audit.
 - Session cookies are opaque server-side sessions. The local HTTP dev cookie sets `Secure` only when the incoming request is HTTPS so local testing works; production behind TLS should be reviewed with forwarded headers before v1.5.
 - Date availability uses the planned minimal weekend-only provider. Monday/first-business-day-after-weekend is delivery-disabled while still counting for lead time.
-- Order-code generator uses a best-guess safe alphabet behind `IOrderCodeGenerator`; final BG/Latin ambiguity research remains a follow-up.
-- SQLite cannot order by `DateTimeOffset` server-side in the current EF provider, so the skeleton order list loads and sorts in memory. This is acceptable for v1 pilot volume and should be revisited with capacity/admin hardening.
+- Order-code generator uses descriptive codes behind `IOrderCodeGenerator`; final BG/Latin ambiguity research and normalization remain follow-ups.
+- SQLite order listing now sorts by a persisted `CreatedAtUnixTimeMilliseconds` column to avoid provider limitations around ordering by `DateTimeOffset`.
+- Shade is now a first-class order property (`Shade` enum) persisted through API/SQLite; UI includes `Unspecified` as an explicit option.
+- The preferred prototyping direction is the stepper flow in `Web/wwwroot/order-prototypes/stepper.html`; integrating it into `/orders` is intentionally deferred to a separate plan.
 
 Validation evidence:
 
@@ -270,7 +273,12 @@ Validation evidence:
 
 These are intentionally not detailed here. When the next detailed plan is created, copy these items forward, refine them based on what was learned during the walking skeleton, and keep any still-deferred items as follow-up TODOs in that next plan.
 
-- [ ] **Immediate next plan to create:** Calendar/holiday hardening plan.
+- [ ] **Immediate next plan to create:** Stepper-to-real-orders UI integration plan.
+  - Promote the preferred `Web/wwwroot/order-prototypes/stepper.html` flow into the real `/orders` page.
+  - Preserve visual FDI tooth selection, shade choices including `Unspecified`, overview/confirmation steps, and descriptive shortened order codes.
+  - Decide whether older prototype pages should remain, be archived, or be removed.
+  - Carry all still-deferred TODOs from this section into that plan.
+- [ ] Calendar/holiday hardening plan.
   - Include Bulgarian public holiday provider behind `INonWorkingDayProvider` / `IHolidayCalendarProvider`.
   - Use an always-fetch-and-parse implementation for `https://xn--b1aekbb1acci5f.com/` for v1 unless research reveals a better source.
   - Add parser tests using saved HTML fixtures.
@@ -290,10 +298,10 @@ These are intentionally not detailed here. When the next detailed plan is create
 - [ ] Teeth/abutment UX refinement plan.
   - Confirm bridge abutment rules with the user before detailed implementation.
   - Add UI for selecting exact abutment teeth within range.
-  - Later add visual tooth selector.
+  - Finalize/polish the visual FDI tooth selector from the stepper prototype as production UI.
   - Carry still-deferred TODOs into the next plan.
 - [ ] v1.5 preview-readiness plan.
-  - Remove/disable temporary config reload endpoint before preview testing.
+  - Confirm the temporary config reload endpoint remains removed.
   - Add privacy/cookie page.
   - Improve credential management beyond JSON upload.
   - Add audit viewing/export if needed.

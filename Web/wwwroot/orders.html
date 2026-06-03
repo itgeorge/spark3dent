@@ -43,7 +43,7 @@
         <div><label>Tooth/range start</label><input id="toothStart" type="number" value="11" /></div>
         <div><label>Tooth/range end</label><input id="toothEnd" type="number" value="11" /></div>
       </div>
-      <label>Shade</label><input type="hidden" id="shade" value="A3" /><div class="shade-groups" id="shadeChoices"></div>
+      <label>Shade</label><input type="hidden" id="shade" value="unspecified" /><div class="shade-groups" id="shadeChoices"></div>
       <label>Notes</label><textarea id="notes" placeholder="Optional"></textarea>
       <label>Delivery date</label><input id="deliveryDate" type="date" />
       <button id="refreshDates" class="btn" style="margin-top:10px">Refresh date availability</button>
@@ -67,8 +67,9 @@
 <script>
 const $=id=>document.getElementById(id); const api=(url,opt={})=>fetch(url,{headers:{'content-type':'application/json',...(opt.headers||{})},...opt});
 const SHADE_GROUPS=[{label:'A',shades:['A1','A2','A3','A3.5','A4']},{label:'B',shades:['B1','B2','B3','B4']},{label:'C',shades:['C1','C2','C3','C4']},{label:'D',shades:['D2','D3','D4']},{label:'BL',shades:['BL1','BL2','BL3','BL4']}];
-function shadeCardHtml(code,sel){return `<button type="button" class="shade-card${code===sel?' active':''}" data-shade="${code}" aria-label="Shade ${code}" aria-pressed="${code===sel}">${code}</button>`}
-function renderShadeChoices(){const sel=$('shade').value; $('shadeChoices').innerHTML=SHADE_GROUPS.map(g=>`<div class="shade-group">${g.shades.map(code=>shadeCardHtml(code,sel)).join('')}</div>`).join('')}
+const UNSPECIFIED_SHADE='unspecified';
+function shadeCardHtml(code,sel,label=code){return `<button type="button" class="shade-card${code===sel?' active':''}" data-shade="${code}" aria-label="Shade ${label}" aria-pressed="${code===sel}">${label}</button>`}
+function renderShadeChoices(){const sel=$('shade').value; $('shadeChoices').innerHTML=SHADE_GROUPS.map(g=>`<div class="shade-group">${g.shades.map(code=>shadeCardHtml(code,sel)).join('')}</div>`).join('')+`<div class="shade-group">${shadeCardHtml(UNSPECIFIED_SHADE,sel,'Unspecified')}</div>`}
 function setShade(code){$('shade').value=code; renderShadeChoices();}
 const todayStr=()=>new Date().toISOString().slice(0,10); let selectedDelivery='';
 function msg(el,text,kind=''){el.textContent=text;el.className='msg '+kind;el.classList.remove('hidden')}
