@@ -52,7 +52,7 @@ Existing relevant files/routes:
 | 1 | `plans/order-flow-vertical-slices/slice-1-orders-list-create.md` | Complete | Real `/orders` page served from embedded `orders.html`; clinic-scoped order list and create flow using stepper UX |
 | 2 | `plans/order-flow-vertical-slices/slice-2-auth-roles-invoicing-gate.md` | Complete | Actor roles added; `/api/invoicing/*` technician-only; scheduler list is role-aware; old technician list route retired |
 | 2.5 | `plans/order-flow-vertical-slices/slice-2.5-read-only-order-review.md` | Complete | Existing orders can be opened from the list in a read-only review view |
-| 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Not started | Product switcher/topbar; hide invoicer from non-technicians |
+| 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added; `/` has technician login gate and redirects clinic users to Scheduler |
 | 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Not started | Edit/cancel orders with permissions and technician clinic selector |
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Not started | Audit log for scheduling/invoicing/client operations |
 
@@ -95,12 +95,14 @@ Append dated notes here after each slice.
 - 2026-06-03: Slice 2 complete. Added `ActorRole` on scheduling credentials/actors. Demo technician credential uses clinic `DEMO` with PIN `654321`; this is a temporary walking-skeleton convention and should be restructured after the main flows are complete. Invoicing/client APIs moved to `/api/invoicing/*` and require technician role. Legacy `/api/clients*`, `/api/invoices*`, and `/api/scheduling/technician/orders` are retired/404. Technician order creation is blocked until Slice 4 adds target clinic selection.
 - 2026-06-03: Slice 2.5 complete. `Web/wwwroot/orders.html` now has list row/View behavior that fetches `GET /api/scheduling/orders/{code}` and displays a simplified read-only step-5-style review as a modal over a blurred backdrop. It closes via the top Back to orders button, Escape, or backdrop click. Slice 4 should add Edit/Cancel buttons to the review header.
 - 2026-06-03: Scheduler order lists now sort by expected/requested delivery date descending, with newest-created first only as a tie-breaker within the same delivery date.
+- 2026-06-04: Slice 3 complete. `/` now uses a client-side scheduling-auth gate before initializing invoicing data; non-technician authenticated users are redirected to `/orders`. Product switchers own Scheduler/Invoicer navigation; settings no longer contains Scheduler.
 
 ## Verification Evidence
 
 - 2026-06-03 Slices 1–2: `dotnet test Orders.Tests/Orders.Tests.csproj` passed (43 tests); `dotnet test Database.Tests/Database.Tests.csproj` passed (71 tests); `dotnet test Web.Tests/Web.Tests.csproj` passed (87 tests); `dotnet build Web/Web.csproj` succeeded with 0 warnings/errors; full `dotnet test` passed (Configuration 10, Storage 41, Orders 43, Accounting 61, Database 71, Invoices 251, Web 87).
 - 2026-06-03 Slices 1–2: Headless Chromium browser evaluation passed 19/19 checks against a temp DB on `http://127.0.0.1:61234`: clinic `/orders` login/list/create/confirmation/back-to-list/logout; clinic 403 on `/api/invoicing/clients`; technician `/orders` list with create hidden/notice; role-aware scheduling list 200; retired technician route 404; technician `/` invoicer page and `/api/invoicing/clients` 200; legacy `/api/clients` and `/api/invoices` 404.
 - 2026-06-03 Slice 2.5: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj` passed (87 tests); headless Chromium smoke passed for create order -> list -> View -> read-only review -> Back.
+- 2026-06-04 Slice 3: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj --no-build` passed (87 tests); `node --check` passed for extracted inline scripts from `index.html` and `orders.html`; headless Chromium smoke passed for unauthenticated `/` login prompt, technician `/` login/product switcher/API access, technician `/orders` switcher, clinic `/orders` without Invoicer switcher, and clinic direct `/` redirect to `/orders`.
 
 ## Global Verification Commands
 

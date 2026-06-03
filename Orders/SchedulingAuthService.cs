@@ -23,11 +23,11 @@ public sealed class SchedulingAuthService
 
     public async Task<LoginResult> LoginAsync(string clinicCode, string pin, string ip, string userAgent, CancellationToken ct = default)
     {
-        PinHasher.ValidatePinShape(pin);
-        var clinic = _configProvider.Current.GetClinic(clinicCode.Trim());
+        var clinic = TryGetActiveClinic(clinicCode.Trim())
+            ?? throw new InvalidOperationException("Invalid credentials.");
         var credential = FindMatchingCredential(clinic, pin);
         if (credential == null)
-            throw new InvalidOperationException("Invalid clinic code or PIN.");
+            throw new InvalidOperationException("Invalid credentials.");
 
         var token = GenerateToken();
         var now = _clock.UtcNow;

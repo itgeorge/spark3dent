@@ -19,7 +19,7 @@ public static class SchedulingApi
         {
             var body = await ReadJson<LoginRequest>(ctx);
             if (body == null || string.IsNullOrWhiteSpace(body.ClinicCode) || string.IsNullOrWhiteSpace(body.Pin))
-                return Results.Json(new { error = "clinicCode and pin are required." }, statusCode: 400, options: JsonOptions);
+                return Results.Json(new { error = "Credentials are required." }, statusCode: 400, options: JsonOptions);
             try
             {
                 var result = await auth.LoginAsync(body.ClinicCode, body.Pin, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);

@@ -44,6 +44,6 @@ public static class SchedulingConfigValidator
         if (!string.IsNullOrWhiteSpace(credential.Label) && !credentialLabels.Add(credential.Label))
             throw new InvalidOperationException($"Duplicate credential label '{credential.Label}' for clinic {clinicCode}.");
         if (credential.IsActive && string.IsNullOrWhiteSpace(credential.PinHash))
-            throw new InvalidOperationException($"Active credential '{credential.Id}' must have a PIN hash.");
+            throw new InvalidOperationException($"Active credential '{credential.Id}' must have a credential hash.");
     }
 }

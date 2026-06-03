@@ -126,6 +126,7 @@
 
     .actions{
       display:flex;
+      align-items:center;
       gap:10px;
     }
 
@@ -902,6 +903,84 @@
       background: var(--a2);
     }
 
+    /* App auth and product navigation */
+    .auth-shell{
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .auth-card{
+      width: min(100%, 520px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .auth-card-head{
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .auth-card-head img{ width: 38px; height: 38px; border-radius: 10px; object-fit: contain; }
+    .auth-card-body{ padding: 20px; }
+    .auth-card-body label{ display:block; margin: 12px 0 6px; font-size: 12px; font-weight: 800; color: var(--muted); }
+    .auth-card-body input{ width:100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; }
+    .auth-msg{ margin-top: 12px; padding: 10px 12px; border: 1px solid #fecaca; border-radius: 12px; color: #991b1b; background: #fff1f2; font-size: 13px; }
+    .app.auth-locked .app-header,
+    .app.auth-locked > .container{ display:none; }
+    .app:not(.auth-locked) .auth-shell{ display:none; }
+    .actor-pill{
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 11px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      background: rgba(255,255,255,.85);
+      white-space: nowrap;
+    }
+    .product-switcher-wrap{ position: relative; }
+    .product-switcher-menu{
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 6px;
+      min-width: 220px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      padding: 6px 0;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px);
+      transition: opacity .15s ease, transform .15s ease;
+      z-index: 50;
+    }
+    .product-switcher-wrap.open .product-switcher-menu{
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .product-switcher-item{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 14px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      transition: background .15s ease;
+    }
+    .product-switcher-item:hover{ background: rgba(124,58,237,.08); }
+    .product-switcher-item.active{ color: #6d28d9; background: rgba(124,58,237,.08); }
+
     /* Settings dropdown */
     .settings-dropdown-wrap{
       position: relative;
@@ -1037,7 +1116,25 @@
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="app auth-locked" id="appRoot">
+    <section id="invoicerAuthShell" class="auth-shell" aria-label="Invoicer login">
+      <div class="auth-card">
+        <div class="auth-card-head">
+          <img src="images/logo.png" alt="" aria-hidden="true" />
+          <div>
+            <h1 style="margin:0;font-size:18px;">Spark3Dent Invoicer</h1>
+          </div>
+        </div>
+        <div class="auth-card-body">
+          <label for="invoicerLoginClinic">Clinic code</label>
+          <input id="invoicerLoginClinic" value="DEMO" autocomplete="username" />
+          <label for="invoicerLoginPin">Password</label>
+          <input id="invoicerLoginPin" type="password" value="654321" autocomplete="current-password" />
+          <button class="btn primary" id="invoicerLoginBtn" type="button" style="width:100%;margin-top:16px;">Enter</button>
+          <div id="invoicerLoginMsg" class="auth-msg hidden"></div>
+        </div>
+      </div>
+    </section>
     <header class="app-header">
     <div class="topbar">
       <div class="topbar-inner">
@@ -1048,13 +1145,17 @@
           </div>
         </div>
         <div class="actions">
+          <span id="invoicerActor" class="actor-pill hidden"></span>
+          <div class="product-switcher-wrap" id="productSwitcherWrap">
+            <button class="btn icon" id="btnProductSwitcher" title="Продукти" aria-haspopup="true" aria-expanded="false">&#9638;</button>
+            <div class="product-switcher-menu" id="productSwitcherMenu" role="menu">
+              <a href="/orders" class="product-switcher-item" role="menuitem"><span>&#128197;</span><span>Scheduler / Orders</span></a>
+              <a href="/" class="product-switcher-item active" role="menuitem" aria-current="page"><span>&#128179;</span><span>Invoicer</span></a>
+            </div>
+          </div>
           <div class="settings-dropdown-wrap" id="settingsDropdownWrap">
             <button class="btn icon" id="btnTopSettings" title="Настройки" aria-haspopup="true" aria-expanded="false">&#9881;</button>
             <div class="settings-dropdown-menu" id="settingsDropdownMenu" role="menu">
-              <a href="/orders" class="settings-dropdown-item" role="menuitem">
-                <span class="icon">&#128197;</span>
-                <span>Поръчки / график</span>
-              </a>
               <a href="/licenses" class="settings-dropdown-item" role="menuitem">
                 <span class="icon">&#128214;</span>
                 <span>Лицензи</span>
@@ -1065,6 +1166,7 @@
               </button>
             </div>
           </div>
+          <button class="btn" id="invoicerLogoutBtn" type="button">Logout</button>
           <input type="file" id="importFileInput" multiple accept=".pdf,application/pdf" style="display:none;" />
         </div>
       </div>
@@ -1392,6 +1494,7 @@
     let editorMode = "issue";
     let selectedClientNickname = null;
     let correctingInvoiceNumber = null;
+    let appInitialized = false;
 
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -1476,6 +1579,52 @@
         clearTimeout(h);
         h = setTimeout(()=> fn(...args), ms);
       };
+    }
+
+    function actorLabel(actor){
+      if(!actor) return "";
+      const role = actor.isTechnician ? "Technician" : "Clinic";
+      return `${actor.clinicName || actor.clinicCode} / ${actor.credentialLabel} (${role})`;
+    }
+
+    async function schedulingJson(url, options = {}){
+      const response = await fetch(url, {
+        headers: { "content-type": "application/json", ...(options.headers || {}) },
+        ...options
+      });
+      const data = await response.json().catch(()=>({}));
+      return { response, data };
+    }
+
+    function showInvoicerLogin(message){
+      $("#appRoot").classList.add("auth-locked");
+      const msg = $("#invoicerLoginMsg");
+      msg.textContent = message || "";
+      msg.classList.toggle("hidden", !message);
+      $("#invoicerLoginBtn").disabled = false;
+      $("#invoicerLoginBtn").textContent = "Enter";
+    }
+
+    async function unlockInvoicer(actor){
+      $("#invoicerLoginBtn").disabled = false;
+      $("#invoicerLoginBtn").textContent = "Enter";
+      $("#invoicerActor").textContent = actorLabel(actor);
+      $("#invoicerActor").classList.remove("hidden");
+      $("#appRoot").classList.remove("auth-locked");
+      if(!appInitialized){
+        appInitialized = true;
+        await init();
+      }
+    }
+
+    async function bootstrapAuth(){
+      const { response, data } = await schedulingJson("/api/scheduling/auth/me");
+      if(!response.ok) return showInvoicerLogin();
+      if(!data.isTechnician){
+        window.location.replace("/orders");
+        return;
+      }
+      await unlockInvoicer(data);
     }
 
     // ---- API ----
@@ -2472,11 +2621,28 @@
     let importAnalyzeResult = null;
     let importSelectedFiles = [];
 
+    function toggleProductSwitcher(){
+      const wrap = $("#productSwitcherWrap");
+      const btn = $("#btnProductSwitcher");
+      wrap.classList.toggle("open");
+      btn.setAttribute("aria-expanded", wrap.classList.contains("open"));
+      closeSettingsDropdown();
+    }
+    function closeProductSwitcher(){
+      $("#productSwitcherWrap").classList.remove("open");
+      $("#btnProductSwitcher").setAttribute("aria-expanded", "false");
+    }
+    $("#btnProductSwitcher").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      toggleProductSwitcher();
+    });
+
     function toggleSettingsDropdown(){
       const wrap = $("#settingsDropdownWrap");
       const btn = $("#btnTopSettings");
       wrap.classList.toggle("open");
       btn.setAttribute("aria-expanded", wrap.classList.contains("open"));
+      closeProductSwitcher();
     }
     function closeSettingsDropdown(){
       $("#settingsDropdownWrap").classList.remove("open");
@@ -2488,9 +2654,13 @@
     });
     document.addEventListener("click", (e)=>{
       if(!e.target.closest("#settingsDropdownWrap")) closeSettingsDropdown();
+      if(!e.target.closest("#productSwitcherWrap")) closeProductSwitcher();
     });
     document.addEventListener("keydown", (e)=>{
-      if(e.key === "Escape") closeSettingsDropdown();
+      if(e.key === "Escape"){
+        closeSettingsDropdown();
+        closeProductSwitcher();
+      }
     });
 
     function showImportModalError(msg){
@@ -2759,7 +2929,45 @@
       selectedInvoiceNumber = invoices[0]?.number ?? null;
     }
 
-    init();
+    $("#invoicerLoginBtn").addEventListener("click", async ()=>{
+      const btn = $("#invoicerLoginBtn");
+      if(btn.disabled) return;
+      const msg = $("#invoicerLoginMsg");
+      btn.disabled = true;
+      btn.textContent = "Signing in…";
+      msg.classList.add("hidden");
+      try{
+        const { response, data } = await schedulingJson("/api/scheduling/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ clinicCode: $("#invoicerLoginClinic").value, pin: $("#invoicerLoginPin").value })
+        });
+        if(!response.ok){
+          showInvoicerLogin(data.error || "Login failed.");
+          return;
+        }
+        if(!data.isTechnician){
+          window.location.replace("/orders");
+          return;
+        }
+        await unlockInvoicer(data);
+      }catch{
+        showInvoicerLogin("Login failed.");
+      }
+    });
+    ["#invoicerLoginClinic", "#invoicerLoginPin"].forEach(sel => {
+      $(sel).addEventListener("keydown", e => {
+        if(e.key === "Enter") $("#invoicerLoginBtn").click();
+      });
+    });
+    $("#invoicerLogoutBtn").addEventListener("click", async ()=>{
+      await schedulingJson("/api/scheduling/auth/logout", { method: "POST", body: "{}" });
+      closeSettingsDropdown();
+      closeProductSwitcher();
+      $("#invoicerActor").classList.add("hidden");
+      showInvoicerLogin();
+    });
+
+    bootstrapAuth();
   </script>
 </body>
 </html>

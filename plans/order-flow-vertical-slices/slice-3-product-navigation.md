@@ -128,19 +128,19 @@ Manual clinic checks:
 
 ## Implementation Checklist
 
-- [ ] Ensure `auth/me` response includes role/isTechnician from Slice 2.
-- [ ] Add unauthenticated login behavior for `/`.
-- [ ] Ensure `/` does not render/operate the full invoicer shell before technician auth.
-- [ ] Add product switcher markup/CSS/JS to `index.html`.
-- [ ] Remove Scheduler link from settings dropdown in `index.html`.
-- [ ] Add compatible product switcher/topbar to `orders.html`.
-- [ ] Hide Invoicer entry for non-technicians.
-- [ ] Implement direct `/` clinic/non-technician behavior.
-- [ ] Verify unauthenticated `/` and `/orders` both prompt login immediately.
-- [ ] Test technician navigation both ways.
-- [ ] Test clinic cannot see/use invoicer navigation.
-- [ ] Run `dotnet build Web/Web.csproj` and relevant tests.
-- [ ] Update `master-plan.md` and this plan with completion notes.
+- [x] Ensure `auth/me` response includes role/isTechnician from Slice 2.
+- [x] Add unauthenticated login behavior for `/`.
+- [x] Ensure `/` does not render/operate the full invoicer shell before technician auth.
+- [x] Add product switcher markup/CSS/JS to `index.html`.
+- [x] Remove Scheduler link from settings dropdown in `index.html`.
+- [x] Add compatible product switcher/topbar to `orders.html`.
+- [x] Hide Invoicer entry for non-technicians.
+- [x] Implement direct `/` clinic/non-technician behavior.
+- [x] Verify unauthenticated `/` and `/orders` both prompt login immediately.
+- [x] Test technician navigation both ways.
+- [x] Test clinic cannot see/use invoicer navigation.
+- [x] Run `dotnet build Web/Web.csproj` and relevant tests.
+- [x] Update `master-plan.md` and this plan with completion notes.
 
 ## Out of Scope
 
@@ -151,10 +151,23 @@ Manual clinic checks:
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
+- Status: Complete (2026-06-04)
 - Files changed:
+  - `Web/wwwroot/index.html`
+  - `Web/wwwroot/orders.html`
+  - `plans/order-flow-vertical-slices/master-plan.md`
+  - `plans/order-flow-vertical-slices/slice-3-product-navigation.md`
 - Tests run:
+  - `dotnet build Web/Web.csproj` — passed.
+  - `dotnet test Web.Tests/Web.Tests.csproj --no-build` — passed, 87 tests.
+  - Extracted inline scripts from `Web/wwwroot/index.html` and `Web/wwwroot/orders.html`; `node --check` passed for both.
 - Manual checks:
+  - Headless Chromium smoke verified unauthenticated `/` shows the Invoicer login gate instead of initializing the invoicer shell.
+  - Headless Chromium smoke verified unauthenticated `/orders` shows the Scheduler login prompt after logout.
+  - Technician demo login (`DEMO / 654321`) on `/` unlocks Invoicer, shows actor pill/product switcher with Scheduler + Invoicer, and `/api/invoicing/clients?limit=1` returns 200.
+  - Technician `/orders` shows Scheduler list with product switcher including Invoicer.
+  - After logout, clinic demo login (`DEMO / 123456`) on `/orders` shows Scheduler without an Invoicer switcher.
+  - Clinic direct navigation to `/` redirects back to `/orders`.
 - Discoveries affecting later slices:
+  - `/` page access is enforced in client-side UX only; `/api/invoicing/*` remains the server-side security boundary.
+  - Product switcher UI is still duplicated between `index.html` and `orders.html`; no shared component/file was introduced.

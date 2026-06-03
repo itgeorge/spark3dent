@@ -143,6 +143,23 @@ public class SchedulingApiTests
 
         var badLogin = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"000000\"}"));
         Assert.That(badLogin.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var badLoginJson = JsonDocument.Parse(await badLogin.Content.ReadAsStringAsync());
+        Assert.That(badLoginJson.RootElement.GetProperty("error").GetString(), Is.EqualTo("Invalid credentials."));
+
+        var shapedLogin = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"abc\"}"));
+        Assert.That(shapedLogin.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var shapedLoginJson = JsonDocument.Parse(await shapedLogin.Content.ReadAsStringAsync());
+        Assert.That(shapedLoginJson.RootElement.GetProperty("error").GetString(), Is.EqualTo("Invalid credentials."));
+
+        var unknownClinicLogin = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"UNKNOWN\",\"pin\":\"abc\"}"));
+        Assert.That(unknownClinicLogin.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        var unknownClinicLoginJson = JsonDocument.Parse(await unknownClinicLogin.Content.ReadAsStringAsync());
+        Assert.That(unknownClinicLoginJson.RootElement.GetProperty("error").GetString(), Is.EqualTo("Invalid credentials."));
+
+        var missingLogin = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"\"}"));
+        Assert.That(missingLogin.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var missingLoginJson = JsonDocument.Parse(await missingLogin.Content.ReadAsStringAsync());
+        Assert.That(missingLoginJson.RootElement.GetProperty("error").GetString(), Is.EqualTo("Credentials are required."));
 
         var me = await client.GetAsync("/api/scheduling/auth/me");
         Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));

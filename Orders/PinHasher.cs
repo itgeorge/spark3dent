@@ -42,7 +42,7 @@ public sealed class PinHasher
     public static void ValidatePinShape(string pin)
     {
         if (pin.Length != 6 || pin.Any(ch => ch < '0' || ch > '9'))
-            throw new InvalidOperationException("PIN must be exactly 6 digits.");
+            throw new InvalidOperationException("Invalid credential secret.");
     }
 
     private byte[] Derive(string pin, byte[] salt, int iterations)
