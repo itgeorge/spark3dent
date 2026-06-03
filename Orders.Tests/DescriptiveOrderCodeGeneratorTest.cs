@@ -94,7 +94,22 @@ public class DescriptiveOrderCodeGeneratorTest
 
         Assert.That(DescriptiveOrderCodeGenerator.ToShortenedCode(code), Is.EqualTo(code[3..]));
         AssertDescriptiveCode(code, "26-2905-M1");
-        Assert.That(DescriptiveOrderCodeGenerator.ToShortenedCode("26-2905-M1K7"), Is.EqualTo("2905-M1K7"));
+        Assert.That(DescriptiveOrderCodeGenerator.ToShortenedCode("26-2905-M1KX"), Is.EqualTo("2905-M1KX"));
+    }
+
+    [Test]
+    public void Generate_WhenCalledRepeatedly_SuffixContainsOnlyLetters()
+    {
+        var draft = CreateDraft(
+            Material.Pfm,
+            ConstructionType.Crown,
+            new ToothRange(11, 11),
+            new DateOnly(2026, 5, 29));
+
+        var suffixes = Enumerable.Range(0, 42).Select(_ => _generator.Generate(draft)[^2..]);
+
+        Assert.That(suffixes, Has.All.Matches("^[A-Z]{2}$"));
+        Assert.That(suffixes, Has.None.Matches(".*\\d.*"));
     }
 
     [Test]

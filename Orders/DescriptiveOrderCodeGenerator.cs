@@ -4,7 +4,7 @@ namespace Orders;
 
 public sealed class DescriptiveOrderCodeGenerator : IOrderCodeGenerator
 {
-    private const string SuffixAlphabet = "23456789ACDEFGHJKMNPQRSTWXYZ";
+    private const string SuffixAlphabet = "ACDEFGHJKLMNPRSTWXYZ";
 
     public string Generate(OrderDraft draft) => $"{BuildStem(draft)}{GenerateSuffix()}";
 
