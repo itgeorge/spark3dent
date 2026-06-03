@@ -78,9 +78,9 @@
           <div class="overview-body">
             <div class="overview-details">
               <p id="finalOverviewText" class="overview-summary" aria-label="Order overview"></p>
-              <input id="finalCaseName" class="overview-text" type="text" readonly aria-label="Case name" value="">
+              <p id="finalCaseName" class="overview-summary" aria-label="Case name"></p>
+              <p id="finalExtraNote" class="overview-summary hidden" aria-label="Extra lab note"></p>
               <input id="finalOverviewDate" class="overview-text" type="text" readonly aria-label="Selected delivery date" value="">
-              <div id="finalNoteWrap" class="hidden"><input id="finalExtraNote" class="overview-text" type="text" readonly aria-label="Extra lab note" value=""></div>
             </div>
             <div class="selected-teeth-preview-wrap" id="finalOverviewTeeth"></div>
           </div>
@@ -156,7 +156,7 @@ function renderSelectedTeethPreview(container,range){if(!container)return;const 
 function setOverviewField(el,text){if(!el)return;if('value' in el)el.value=text;else el.textContent=text}
 function renderOverviewInto(textEl,dateEl,teethEl){setOverviewField(textEl,overviewOrderText());setOverviewField(dateEl,deadline.value||selectedDate?formatDateBulgarianWithWeekday(deadline.value||selectedDate):'');renderSelectedTeethPreview(teethEl,selectedTeethRange())}
 function renderOverview(){renderOverviewInto(overviewText,overviewDate,overviewTeeth)}
-function renderFinalOverview(){renderOverviewInto(finalOverviewText,finalOverviewDate,finalOverviewTeeth);if(finalCaseName)finalCaseName.value=caseName.value.trim();const note=extraNote.value.trim();if(finalExtraNote)finalExtraNote.value=note;if(finalNoteWrap)finalNoteWrap.classList.toggle('hidden',!note)}
+function renderFinalOverview(){renderOverviewInto(finalOverviewText,finalOverviewDate,finalOverviewTeeth);setOverviewField(finalCaseName,caseName.value.trim());const note=extraNote.value.trim();if(finalExtraNote){setOverviewField(finalExtraNote,note?`Note: ${note}`:'');finalExtraNote.classList.toggle('hidden',!note)}}
 function resetForwardProgress(changedStage){const resetFrom=changedStage<3?3:changedStage;if(changedStage<3){const currentDelivery=deadline.value||selectedDate;if(currentDelivery)calendarMonth=monthForIso(currentDelivery)}let didReset=false;for(const s of [...completedSteps]){if(s>=resetFrom){completedSteps.delete(s);didReset=true}}if(orderCreated){orderCreated=false;didReset=true;code.textContent='—'}if(step===5&&!orderCreated)step=resetFrom;if(didReset)render()}
 function draft(delivery=deadline.value||selectedDate||'',start=impression.value,end='2026-07-05'){return{caseName:caseName.value,impressionDate:impression.value,productCategory:productCategory(),workType:workType(),material,constructionType:backendConstruction(),toothStart:+ts.value,toothEnd:+te.value,requestedDeliveryDate:delivery,shade:shade.value,notes:extraNote.value,start,end}}
 function showErr(t){err.textContent=t;err.classList.remove('hidden')}function clearErr(){err.classList.add('hidden')}
