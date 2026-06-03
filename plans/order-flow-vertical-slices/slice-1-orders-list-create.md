@@ -47,7 +47,7 @@ Behavior for Slice 1:
 
 - requires existing scheduling auth cookie,
 - returns orders only for `actor.ClinicCode`,
-- sorted newest first,
+- sorted by expected/requested delivery date descending,
 - includes all statuses currently available (`Created` only at this point),
 - keeps existing `/api/scheduling/technician/orders` unchanged until Slice 2.
 
@@ -196,4 +196,4 @@ Fill in after implementation.
 - Files changed: `Orders/Repositories.cs`, `Orders/SchedulingOrderService.cs`, `Database/SqliteOrderRepo.cs`, `Web/SchedulingApi.cs`, `Web/WebProgram.cs`, `Web/Web.csproj`, `Web/wwwroot/orders.html`, `Database.Tests/SqliteOrderRepoTest.cs`, `Orders.Tests/SchedulingOrderServiceTest.cs`, `Web.Tests/SchedulingApiTests.cs`.
 - Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj`; `dotnet test Database.Tests/Database.Tests.csproj`; `dotnet test Web.Tests/Web.Tests.csproj`; `dotnet build Web/Web.csproj`; full `dotnet test`.
 - Manual checks: Headless Chromium browser evaluation passed for clinic `/orders`: unauthenticated login screen, clinic login, submitted-orders list, `+ New order`, stepper create, confirmation code, return to list, created order visible, logout back to login.
-- Discoveries affecting later slices: `/orders` now uses `GET /api/scheduling/orders`; Slice 2 made that endpoint role-aware and retired `/api/scheduling/technician/orders`.
+- Discoveries affecting later slices: `/orders` now uses `GET /api/scheduling/orders`; Slice 2 made that endpoint role-aware and retired `/api/scheduling/technician/orders`. Follow-up changed list ordering to expected/requested delivery date descending, with newest-created first as the same-date tie-breaker.

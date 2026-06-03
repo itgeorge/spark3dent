@@ -97,11 +97,19 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
-    public async Task ListOrdersAsync_OrdersByCreatedAtDescendingInDatabase()
+    public async Task ListOrdersAsync_OrdersByRequestedDeliveryDateDescendingInDatabase()
     {
         var repo = new SqliteOrderRepo(_contextFactory);
-        await repo.CreateOrderAsync(BuildOrder("AAA-234", "old", DateTimeOffset.Parse("2026-05-31T10:00:00Z")));
-        await repo.CreateOrderAsync(BuildOrder("BBB-234", "new", DateTimeOffset.Parse("2026-05-31T11:00:00Z")));
+        await repo.CreateOrderAsync(BuildOrder(
+            "AAA-234",
+            "created first, due sooner",
+            DateTimeOffset.Parse("2026-05-31T10:00:00Z"),
+            requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        await repo.CreateOrderAsync(BuildOrder(
+            "BBB-234",
+            "created later, due later",
+            DateTimeOffset.Parse("2026-05-31T11:00:00Z"),
+            requestedDeliveryDate: new DateOnly(2026, 6, 10)));
 
         var orders = await repo.ListOrdersAsync();
 
@@ -109,12 +117,47 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
-    public async Task ListOrdersForClinicAsync_ReturnsOnlyClinicOrdersNewestFirst()
+    public async Task ListOrdersAsync_WhenDeliveryDatesTie_OrdersNewestFirstWithinDate()
     {
         var repo = new SqliteOrderRepo(_contextFactory);
-        await repo.CreateOrderAsync(BuildOrder("AAA-234", "demo old", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), clinicCode: "DEMO"));
-        await repo.CreateOrderAsync(BuildOrder("BBB-234", "other", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), clinicCode: "OTHER"));
-        await repo.CreateOrderAsync(BuildOrder("CCC-234", "demo new", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), clinicCode: "DEMO"));
+        await repo.CreateOrderAsync(BuildOrder(
+            "AAA-234",
+            "created first",
+            DateTimeOffset.Parse("2026-05-31T10:00:00Z"),
+            requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        await repo.CreateOrderAsync(BuildOrder(
+            "BBB-234",
+            "created later",
+            DateTimeOffset.Parse("2026-05-31T11:00:00Z"),
+            requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+
+        var orders = await repo.ListOrdersAsync();
+
+        Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "BBB-234", "AAA-234" }));
+    }
+
+    [Test]
+    public async Task ListOrdersForClinicAsync_ReturnsOnlyClinicOrdersByRequestedDeliveryDateDescending()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder(
+            "AAA-234",
+            "demo due sooner",
+            DateTimeOffset.Parse("2026-05-31T10:00:00Z"),
+            clinicCode: "DEMO",
+            requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        await repo.CreateOrderAsync(BuildOrder(
+            "BBB-234",
+            "other due sooner",
+            DateTimeOffset.Parse("2026-05-31T11:00:00Z"),
+            clinicCode: "OTHER",
+            requestedDeliveryDate: new DateOnly(2026, 6, 1)));
+        await repo.CreateOrderAsync(BuildOrder(
+            "CCC-234",
+            "demo due later",
+            DateTimeOffset.Parse("2026-05-31T12:00:00Z"),
+            clinicCode: "DEMO",
+            requestedDeliveryDate: new DateOnly(2026, 6, 10)));
 
         var orders = await repo.ListOrdersForClinicAsync("DEMO");
 
@@ -158,7 +201,13 @@ public class SqliteOrderRepoTest
         public static CreateOutcome Failure(Exception exception) => new(null, exception);
     }
 
-    private static OrderRecord BuildOrder(string code, string caseName, DateTimeOffset createdAt, Shade shade = Shade.Unspecified, string clinicCode = "DEMO") => new(
+    private static OrderRecord BuildOrder(
+        string code,
+        string caseName,
+        DateTimeOffset createdAt,
+        Shade shade = Shade.Unspecified,
+        string clinicCode = "DEMO",
+        DateOnly? requestedDeliveryDate = null) => new(
         0,
         code,
         clinicCode,
@@ -175,7 +224,7 @@ public class SqliteOrderRepoTest
         11,
         11,
         "",
-        new DateOnly(2026, 6, 5),
+        requestedDeliveryDate ?? new DateOnly(2026, 6, 5),
         OrderStatus.Created,
         shade,
         null,

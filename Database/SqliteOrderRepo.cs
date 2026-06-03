@@ -56,7 +56,8 @@ public sealed class SqliteOrderRepo : IOrderRepository
 
     private static IQueryable<SchedulingOrderEntity> OrderedLimited(IQueryable<SchedulingOrderEntity> query, int limit) =>
         query
-            .OrderByDescending(o => o.CreatedAtUnixTimeMilliseconds)
+            .OrderByDescending(o => o.RequestedDeliveryDate)
+            .ThenByDescending(o => o.CreatedAtUnixTimeMilliseconds)
             .ThenByDescending(o => o.Id)
             .Take(Math.Clamp(limit, 1, 500));
 

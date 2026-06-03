@@ -94,6 +94,7 @@ Append dated notes here after each slice.
 - 2026-06-03: Slice 1 complete. Added clinic-scoped `GET /api/scheduling/orders`, repository/service clinic listing, and a real embedded `/orders` page with login, list, `+ New order`, stepper create flow, confirmation, and return-to-list.
 - 2026-06-03: Slice 2 complete. Added `ActorRole` on scheduling credentials/actors. Demo technician credential uses clinic `DEMO` with PIN `654321`; this is a temporary walking-skeleton convention and should be restructured after the main flows are complete. Invoicing/client APIs moved to `/api/invoicing/*` and require technician role. Legacy `/api/clients*`, `/api/invoices*`, and `/api/scheduling/technician/orders` are retired/404. Technician order creation is blocked until Slice 4 adds target clinic selection.
 - 2026-06-03: Slice 2.5 complete. `Web/wwwroot/orders.html` now has list row/View behavior that fetches `GET /api/scheduling/orders/{code}` and displays a simplified read-only step-5-style review as a modal over a blurred backdrop. It closes via the top Back to orders button, Escape, or backdrop click. Slice 4 should add Edit/Cancel buttons to the review header.
+- 2026-06-03: Scheduler order lists now sort by expected/requested delivery date descending, with newest-created first only as a tie-breaker within the same delivery date.
 
 ## Verification Evidence
 
