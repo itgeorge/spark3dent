@@ -1015,6 +1015,25 @@
       .brand{ min-width: 160px; }
       .row{ grid-template-columns: 70px 120px 1fr 64px minmax(90px, auto); }
     }
+
+    @media (max-width: 600px){
+      .container{ padding: 12px; }
+      .row{
+        grid-template-columns: 46px minmax(78px, 1fr) auto auto;
+        grid-template-areas: "status meta download amount";
+        gap: 6px 8px;
+        padding: 10px 12px;
+        align-items: start;
+      }
+      .row-status{ grid-area: status; align-items: flex-start; }
+      .meta{ grid-area: meta; }
+      .main{ display: none; }
+      .row-download{ grid-area: download; justify-content: flex-end; }
+      .right{ grid-area: amount; align-items: flex-start; }
+      .amount{ font-size: 13px; }
+      .chip{ font-size: 10px; padding: 4px 7px; }
+      .row-download .btn{ padding: 6px 8px; font-size: 11px; }
+    }
   </style>
 </head>
 <body>
