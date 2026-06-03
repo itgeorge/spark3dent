@@ -78,9 +78,9 @@ Route should use actor clinic code, never accept clinic code from query in this 
 
 ## Frontend Scope
 
-Replace or substantially rewrite `Web/wwwroot/orders.html` as a scheduler page composed from:
+Create a new `Web/wwwroot/orders.html` scheduler page composed from:
 
-- auth/login behavior from existing `orders.html`,
+- auth/login behavior from the removed walking-skeleton `orders.html` if recovered from git history is useful,
 - stepper UX from `Web/wwwroot/order-prototypes/stepper.html`,
 - list/card visual patterns from `Web/wwwroot/index.html`.
 
@@ -129,8 +129,9 @@ Do not over-invest in reusable modules in Slice 1 unless it makes the implementa
 - `Orders/Repositories.cs`
 - `Orders/SchedulingOrderService.cs`
 - `Database/SqliteOrderRepo.cs`
-- `Web/wwwroot/orders.html`
-- `Web/Web.csproj` only if embedded resource declarations change, likely no change because `orders.html` is already embedded.
+- `Web/wwwroot/orders.html` (new real scheduler page)
+- `Web/Web.csproj` to embed the new `orders.html` resource once created.
+- `Web/WebProgram.cs` to replace the temporary `/orders` redirect with serving the new embedded page.
 - Tests:
   - `Database.Tests/SqliteOrderRepoTest.cs`
   - `Orders.Tests/SchedulingOrderServiceTest.cs` if service method is tested
@@ -179,7 +180,7 @@ If route-level tests are practical:
 - [ ] Add service method for clinic-scoped order listing.
 - [ ] Add `GET /api/scheduling/orders` route.
 - [ ] Add/update tests for clinic-scoped listing.
-- [ ] Replace `/orders` UI with login/list/create flow.
+- [ ] Create `/orders` UI with login/list/create flow and remove the temporary redirect.
 - [ ] Adapt stepper create flow into `/orders`.
 - [ ] Add simple status text in list.
 - [ ] Ensure create returns to or can navigate back to list.

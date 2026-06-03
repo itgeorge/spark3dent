@@ -9,7 +9,7 @@ This master plan tracks the integration of the order stepper prototype into the 
 Existing relevant files/routes:
 
 - Prototype order stepper: `Web/wwwroot/order-prototypes/stepper.html`
-- Current walking-skeleton orders page: `Web/wwwroot/orders.html`
+- Old walking-skeleton orders page removed; `/orders` temporarily redirects to the stepper prototype until Slice 1 creates the real scheduler page.
 - Invoicer home page/UI: `Web/wwwroot/index.html`
 - Orders API: `Web/SchedulingApi.cs`
 - Invoicing/client API: `Web/Api.cs`
@@ -138,7 +138,7 @@ Invoicing/client after Slice 2:
 
 Slice 1:
 
-- `Web/wwwroot/orders.html`
+- `Web/wwwroot/orders.html` (create new real scheduler page)
 - `Web/SchedulingApi.cs`
 - `Orders/Repositories.cs`
 - `Orders/SchedulingOrderService.cs`

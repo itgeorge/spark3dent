@@ -117,7 +117,7 @@
     }
   ],
   "uiPlaceholderColors": {
-    "note": "Hardcoded hex values currently used in stepper.html / orders.html before this reference dataset.",
+    "note": "Hardcoded hex values currently used in stepper.html before this reference dataset.",
     "shades": {
       "A1": "#F2E9D8",
       "A2": "#E8DCC4",

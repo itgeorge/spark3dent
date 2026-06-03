@@ -120,11 +120,7 @@ app.MapGet("/", async (Config cfg) =>
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
-app.MapGet("/orders", async () =>
-{
-    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("orders.html", webAssembly);
-    return Results.Content(html, "text/html; charset=utf-8");
-});
+app.MapGet("/orders", () => Results.Redirect("/order-prototypes/stepper.html"));
 
 app.MapGet("/licenses", async () =>
 {
