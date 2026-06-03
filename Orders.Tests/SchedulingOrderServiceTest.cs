@@ -141,7 +141,7 @@ public class SchedulingOrderServiceTest
 
             public SequenceOrderCodeGenerator(params string[] codes) => _codes = new Queue<string>(codes);
 
-            public string Generate()
+            public string Generate(OrderDraft draft)
             {
                 lock (_gate)
                 {

@@ -62,7 +62,7 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER")));
 builder.Services.AddSingleton<INonWorkingDayProvider, WeekendOnlyNonWorkingDayProvider>();
 builder.Services.AddSingleton<DateAvailabilityService>();
-builder.Services.AddSingleton<IOrderCodeGenerator, SafeOrderCodeGenerator>();
+builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
 builder.Services.AddScoped<SchedulingAuthService>();

@@ -47,7 +47,7 @@ public sealed class SchedulingOrderService
         await _availability.ValidateDeliveryDateAsync(draft.RequestedDeliveryDate, minimum, ct);
 
         var orderWithoutCode = BuildOrder(actor, draft, ip, userAgent);
-        return await CreateWithUniqueCodeAsync(orderWithoutCode, ct);
+        return await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
     }
 
     public Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default) => _orders.GetOrderByCodeAsync(orderCode, ct);
@@ -95,11 +95,11 @@ public sealed class SchedulingOrderService
             userAgent);
     }
 
-    private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, CancellationToken ct)
+    private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, CancellationToken ct)
     {
         for (var attempt = 1; attempt <= _maxOrderCodeAttempts; attempt++)
         {
-            var code = _codeGenerator.Generate();
+            var code = _codeGenerator.Generate(draft);
             try
             {
                 return await _orders.CreateOrderAsync(orderWithoutCode with { OrderCode = code }, ct);
