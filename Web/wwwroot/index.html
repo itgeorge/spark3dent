@@ -943,8 +943,8 @@
       background: rgba(255,255,255,.85);
       white-space: nowrap;
     }
-    .product-switcher-wrap{ position: relative; }
-    .product-switcher-menu{
+    .app-menu-wrap{ position: relative; }
+    .app-menu{
       position: absolute;
       top: 100%;
       right: 0;
@@ -961,25 +961,36 @@
       transition: opacity .15s ease, transform .15s ease;
       z-index: 50;
     }
-    .product-switcher-wrap.open .product-switcher-menu{
+    .app-menu-wrap.open .app-menu{
       opacity: 1;
       pointer-events: auto;
       transform: translateY(0);
     }
-    .product-switcher-item{
+    .app-menu-item{
       display: flex;
       align-items: center;
       gap: 10px;
       width: 100%;
       padding: 10px 14px;
+      border: none;
+      background: transparent;
       color: var(--text);
       text-decoration: none;
       font-size: 13px;
       font-weight: 700;
+      text-align: left;
+      cursor: pointer;
       transition: background .15s ease;
     }
-    .product-switcher-item:hover{ background: rgba(124,58,237,.08); }
-    .product-switcher-item.active{ color: #6d28d9; background: rgba(124,58,237,.08); }
+    .app-menu-item:hover{ background: rgba(124,58,237,.08); }
+    .app-menu-item.active{ color: #6d28d9; background: rgba(124,58,237,.08); }
+    .app-menu-divider{
+      height: 1px;
+      margin: 6px 0;
+      background: var(--border);
+    }
+    .app-menu-logout{ color: #991b1b; }
+    .app-menu-logout:hover{ background: rgba(239,68,68,.08); }
 
     /* Settings dropdown */
     .settings-dropdown-wrap{
@@ -1146,11 +1157,13 @@
         </div>
         <div class="actions">
           <span id="invoicerActor" class="actor-pill hidden"></span>
-          <div class="product-switcher-wrap" id="productSwitcherWrap">
-            <button class="btn icon" id="btnProductSwitcher" title="Продукти" aria-haspopup="true" aria-expanded="false">&#9638;</button>
-            <div class="product-switcher-menu" id="productSwitcherMenu" role="menu">
-              <a href="/orders" class="product-switcher-item" role="menuitem"><span>&#128197;</span><span>Scheduler / Orders</span></a>
-              <a href="/" class="product-switcher-item active" role="menuitem" aria-current="page"><span>&#128179;</span><span>Invoicer</span></a>
+          <div class="app-menu-wrap" id="appMenuWrap">
+            <button class="btn icon" id="btnAppMenu" title="Menu" aria-haspopup="true" aria-expanded="false" aria-label="Menu">&#9776;</button>
+            <div class="app-menu" id="appMenu" role="menu">
+              <a href="/orders" class="app-menu-item" role="menuitem"><span>&#128197;</span><span>Scheduler / Orders</span></a>
+              <a href="/" class="app-menu-item active" role="menuitem" aria-current="page"><span>&#128179;</span><span>Invoicer</span></a>
+              <div class="app-menu-divider" role="separator"></div>
+              <button type="button" class="app-menu-item app-menu-logout" id="invoicerLogoutBtn" role="menuitem">Logout</button>
             </div>
           </div>
           <div class="settings-dropdown-wrap" id="settingsDropdownWrap">
@@ -1166,7 +1179,6 @@
               </button>
             </div>
           </div>
-          <button class="btn" id="invoicerLogoutBtn" type="button">Logout</button>
           <input type="file" id="importFileInput" multiple accept=".pdf,application/pdf" style="display:none;" />
         </div>
       </div>
@@ -2621,20 +2633,20 @@
     let importAnalyzeResult = null;
     let importSelectedFiles = [];
 
-    function toggleProductSwitcher(){
-      const wrap = $("#productSwitcherWrap");
-      const btn = $("#btnProductSwitcher");
+    function toggleAppMenu(){
+      const wrap = $("#appMenuWrap");
+      const btn = $("#btnAppMenu");
       wrap.classList.toggle("open");
       btn.setAttribute("aria-expanded", wrap.classList.contains("open"));
       closeSettingsDropdown();
     }
-    function closeProductSwitcher(){
-      $("#productSwitcherWrap").classList.remove("open");
-      $("#btnProductSwitcher").setAttribute("aria-expanded", "false");
+    function closeAppMenu(){
+      $("#appMenuWrap").classList.remove("open");
+      $("#btnAppMenu").setAttribute("aria-expanded", "false");
     }
-    $("#btnProductSwitcher").addEventListener("click", (e)=>{
+    $("#btnAppMenu").addEventListener("click", (e)=>{
       e.stopPropagation();
-      toggleProductSwitcher();
+      toggleAppMenu();
     });
 
     function toggleSettingsDropdown(){
@@ -2642,7 +2654,7 @@
       const btn = $("#btnTopSettings");
       wrap.classList.toggle("open");
       btn.setAttribute("aria-expanded", wrap.classList.contains("open"));
-      closeProductSwitcher();
+      closeAppMenu();
     }
     function closeSettingsDropdown(){
       $("#settingsDropdownWrap").classList.remove("open");
@@ -2654,12 +2666,12 @@
     });
     document.addEventListener("click", (e)=>{
       if(!e.target.closest("#settingsDropdownWrap")) closeSettingsDropdown();
-      if(!e.target.closest("#productSwitcherWrap")) closeProductSwitcher();
+      if(!e.target.closest("#appMenuWrap")) closeAppMenu();
     });
     document.addEventListener("keydown", (e)=>{
       if(e.key === "Escape"){
         closeSettingsDropdown();
-        closeProductSwitcher();
+        closeAppMenu();
       }
     });
 
@@ -2962,7 +2974,7 @@
     $("#invoicerLogoutBtn").addEventListener("click", async ()=>{
       await schedulingJson("/api/scheduling/auth/logout", { method: "POST", body: "{}" });
       closeSettingsDropdown();
-      closeProductSwitcher();
+      closeAppMenu();
       $("#invoicerActor").classList.add("hidden");
       showInvoicerLogin();
     });
