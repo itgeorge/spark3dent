@@ -54,7 +54,9 @@ public class SchedulingApiTests
         var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
         var orderElement = createDoc.RootElement.GetProperty("order");
         var code = orderElement.GetProperty("orderCode").GetString();
+        var shortenedCode = orderElement.GetProperty("shortenedOrderCode").GetString();
         Assert.That(code, Is.Not.Null.And.Contains("-"));
+        Assert.That(shortenedCode, Is.EqualTo(code![3..]));
         Assert.That(orderElement.GetProperty("shade").GetString(), Is.EqualTo("A3.5"));
 
         var list = await client.GetAsync("/api/scheduling/technician/orders");

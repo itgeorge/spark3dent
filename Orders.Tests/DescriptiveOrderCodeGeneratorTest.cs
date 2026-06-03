@@ -68,6 +68,36 @@ public class DescriptiveOrderCodeGeneratorTest
     }
 
     [Test]
+    public void Generate_GivenBridgeWithMoreThanNineTeeth_UsesTwoDigitToothCount()
+    {
+        var draft = CreateDraft(
+            Material.FullContourZirconia,
+            ConstructionType.Bridge,
+            new ToothRange(18, 22),
+            new DateOnly(2026, 11, 13));
+
+        var code = _generator.Generate(draft);
+
+        AssertDescriptiveCode(code, "26-1311-Z10");
+    }
+
+    [Test]
+    public void ToShortenedCode_GivenDescriptiveOrderCode_DropsYearPrefix()
+    {
+        var draft = CreateDraft(
+            Material.Pfm,
+            ConstructionType.Crown,
+            new ToothRange(11, 11),
+            new DateOnly(2026, 5, 29));
+
+        var code = _generator.Generate(draft);
+
+        Assert.That(DescriptiveOrderCodeGenerator.ToShortenedCode(code), Is.EqualTo(code[3..]));
+        AssertDescriptiveCode(code, "26-2905-M1");
+        Assert.That(DescriptiveOrderCodeGenerator.ToShortenedCode("26-2905-M1K7"), Is.EqualTo("2905-M1K7"));
+    }
+
+    [Test]
     public void Generate_WhenCalledRepeatedly_ProducesDistinctSuffixes()
     {
         var draft = CreateDraft(
@@ -80,16 +110,16 @@ public class DescriptiveOrderCodeGeneratorTest
         var suffixes = codes.Select(code => code[^2..]).ToHashSet(StringComparer.Ordinal);
 
         Assert.That(suffixes, Has.Count.GreaterThan(1));
-        Assert.That(codes, Has.All.StartWith("26-2905-M1-"));
-        Assert.That(codes, Has.All.Length.EqualTo("26-2905-M1-".Length + 2));
+        Assert.That(codes, Has.All.StartWith("26-2905-M1"));
+        Assert.That(codes, Has.All.Length.EqualTo("26-2905-M1".Length + 2));
     }
 
     private static void AssertDescriptiveCode(string code, string expectedStem)
     {
         Assert.Multiple(() =>
         {
-            Assert.That(code, Does.StartWith($"{expectedStem}-"));
-            Assert.That(code, Has.Length.EqualTo(expectedStem.Length + 3));
+            Assert.That(code, Does.StartWith(expectedStem));
+            Assert.That(code, Has.Length.EqualTo(expectedStem.Length + 2));
         });
     }
 

@@ -6,7 +6,14 @@ public sealed class DescriptiveOrderCodeGenerator : IOrderCodeGenerator
 {
     private const string SuffixAlphabet = "23456789ACDEFGHJKMNPQRSTWXYZ";
 
-    public string Generate(OrderDraft draft) => $"{BuildStem(draft)}-{GenerateSuffix()}";
+    public string Generate(OrderDraft draft) => $"{BuildStem(draft)}{GenerateSuffix()}";
+
+    public static string ToShortenedCode(string orderCode)
+    {
+        if (orderCode.Length >= 3 && char.IsDigit(orderCode[0]) && char.IsDigit(orderCode[1]) && orderCode[2] == '-')
+            return orderCode[3..];
+        return orderCode;
+    }
 
     private static string BuildStem(OrderDraft draft)
     {
@@ -15,7 +22,8 @@ public sealed class DescriptiveOrderCodeGenerator : IOrderCodeGenerator
         var datePart = delivery.ToString("ddMM");
         var materialCode = MaterialCode(draft.Material);
         var toothCount = draft.TeethRange.Teeth.Length;
-        return $"{yearPrefix}-{datePart}-{materialCode}{toothCount}";
+        var toothCountPart = toothCount > 9 ? toothCount.ToString("00") : toothCount.ToString();
+        return $"{yearPrefix}-{datePart}-{materialCode}{toothCountPart}";
     }
 
     private static char MaterialCode(Material material) => material switch

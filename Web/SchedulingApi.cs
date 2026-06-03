@@ -166,6 +166,7 @@ public static class SchedulingApi
     {
         o.Id,
         o.OrderCode,
+        shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
         o.ClinicCode,
         o.ClinicDisplayName,
         o.CredentialId,
