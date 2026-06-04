@@ -82,12 +82,12 @@
     <div class="body">
       <div class="pane" id="s1">
         <div id="techClinicPicker" class="hidden"><label for="targetClinic">Target clinic</label><select id="targetClinic"></select></div>
-        <label>Construction shape</label><div class="choice-grid construction-grid" id="constructionChoices">
+        <label>Construction</label><div class="choice-grid construction-grid" id="constructionChoices">
           <button class="choice" type="button" data-con="crown"><b>Crown</b><span>One tooth</span></button>
           <button class="choice" type="button" data-con="bridge"><b>Bridge</b><span>Adjacent range</span></button>
           <button class="choice" type="button" data-con="facet"><b>Facet</b><span>Veneer range</span></button>
         </div>
-        <label>Quick tooth picker</label><div class="tooth-chart quick-tooth-chart" id="quickTeeth"></div>
+        <div class="tooth-chart quick-tooth-chart" id="quickTeeth"></div>
         <div class="tooth-readouts-wrap"><div class="tooth-readouts" id="toothReadouts"><div class="tooth-readout-field" id="toothJawField"><div class="tooth-readout-center"><label>Jaw</label><button type="button" class="jaw-toggle" id="jawToggle" aria-label="No jaw selected. Select a tooth" title="No jaw selected">-</button></div></div><div class="tooth-readout-field" id="toothStartField"><div class="tooth-readout-center"><label id="toothStartLabel">Tooth</label><div class="tooth-stepper" role="group" aria-label="Start tooth"><button type="button" class="tooth-nudge" data-part="start" data-nudge="-1" aria-label="Previous start tooth">←</button><input id="ts" class="tooth-readout" type="text" readonly value="" tabindex="-1" aria-readonly="true" placeholder="—"><button type="button" class="tooth-nudge" data-part="start" data-nudge="1" aria-label="Next start tooth">→</button></div></div></div><div class="tooth-readout-field hidden" id="toothEndField"><div class="tooth-readout-center"><label id="toothEndLabel">End</label><div class="tooth-stepper" role="group" aria-label="End tooth"><button type="button" class="tooth-nudge" data-part="end" data-nudge="-1" aria-label="Previous end tooth">←</button><input id="te" class="tooth-readout" type="text" readonly value="" tabindex="-1" aria-readonly="true" placeholder="—"><button type="button" class="tooth-nudge" data-part="end" data-nudge="1" aria-label="Next end tooth">→</button></div></div></div></div></div>
       </div>
       <div class="pane hidden" id="s2">
