@@ -279,6 +279,8 @@ Invoicing/client:
   - `Web.Tests/ApiTestFixture.cs`
   - `plans/order-flow-vertical-slices/master-plan.md`
   - `plans/order-flow-vertical-slices/slice-5-audit-log.md`
+- Post-slice audit inspection polish files changed:
+  - `Cli/CliProgram.cs`
 - Tests run:
   - `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` — passed, 53 tests.
   - `dotnet test Database.Tests/Database.Tests.csproj --no-restore` — passed, 75 tests.
@@ -294,6 +296,10 @@ Invoicing/client:
   - `Database` owns SQLite persistence (`AuditEventEntity`, `SqliteAuditLog`, migration).
   - Scheduler audit writes are service-level in `SchedulingOrderService` after successful repository persistence.
   - Invoicing/client audit writes are route-handler-level in `Web/Api.cs` after successful mutation, because the invoicing/client API currently coordinates repositories/services directly there.
+- Post-slice audit inspection polish:
+  - Added CLI command `audit list [filters]` in `Cli/CliProgram.cs`.
+  - Supported filters include `--service`, `--operation`, `--entity-type`, `--entity-id`, `--actor-role`, `--actor-clinic`, `--actor-credential`, `--since`, `--until`, `--limit`, and `--db`.
+  - Supports `--json` for machine-readable export.
 - Future audit enhancements:
   - Add a dedicated invoicing/client application service layer and move route-handler audit calls into it.
   - Add richer but still safe diffs for client/invoice corrections.

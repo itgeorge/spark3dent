@@ -49,6 +49,7 @@ Existing relevant files/routes:
 9. Audit logging is implemented after the main scheduler/invoicer auth and order modification flows are in place.
 10. Slice 5 audit boundary: audit contracts (`AuditEvent`, `IAuditLog`) live in `Utilities` to avoid a new project; SQLite persistence lives in `Database`; scheduler logs at service level; invoicing/client logs in route handlers until a fuller app-service layer exists.
 11. A simple technician-only audit read endpoint exists at `GET /api/invoicing/audit` for inspection/manual verification.
+12. A CLI audit listing command exists for operator inspection/export: `audit list [filters]`, including `--json` and filters such as `--service`, `--operation`, `--entity-type`, `--entity-id`, `--actor-role`, `--actor-clinic`, `--since`, `--until`, `--limit`, and `--db`.
 
 ## Slice Index and Status
 
@@ -104,6 +105,7 @@ Append dated notes here after each slice.
 - 2026-06-04: Slice 4 complete. Added `Cancelled` status, `PUT /api/scheduling/orders/{code}`, `DELETE /api/scheduling/orders/{code}` soft-cancel, and technician-only `GET /api/scheduling/clinics`. Clinics can edit/cancel only own non-cancelled orders; non-owned direct access returns 404. Technicians can edit/cancel any order and create orders by selecting target clinic. Existing order clinic reassignment is not supported.
 - 2026-06-04: Post-slice UI polish extracted shared app chrome/topbar behavior to `Web/wwwroot/js/app-chrome.js` and `Web/wwwroot/css/app-chrome.css`, used by both `index.html` and `orders.html`. Product switcher and logout now live in the hamburger menu, with settings remaining as an invoicer-specific extra action.
 - 2026-06-04: Slice 5 complete. Added append-only `AuditEvents` table/repository and `Utilities` audit contracts. Scheduler create/update/cancel logs happen in `SchedulingOrderService` after persistence and explicitly include acting actor fields separate from target clinic metadata. Invoicing/client route handlers log client create/update/rename, invoice issue/correct, and non-dry-run import commit after successful mutation. Added technician-only `GET /api/invoicing/audit` for inspection.
+- 2026-06-04: Post-slice audit inspection polish added CLI support for `audit list [filters]`, with table or JSON output and filters for service, operation, entity, actor, date range, limit, and database path.
 
 ## Verification Evidence
 
@@ -157,6 +159,7 @@ Invoicing/client after Slice 2:
 - Existing `/api/clients...` and `/api/invoices...` moved to `/api/invoicing/clients...` and `/api/invoicing/invoices...`; old paths now 404.
 - All `/api/invoicing/*` endpoints require technician auth.
 - `GET /api/invoicing/audit?entityType=&entityId=&limit=100` returns recent audit events for technician inspection.
+- CLI: `audit list [filters]` lists audit events newest-first for operator inspection/export; use `--json` for machine-readable output.
 - Update `Web/wwwroot/index.html` fetch calls accordingly.
 
 ## Files Most Likely to Change by Slice
