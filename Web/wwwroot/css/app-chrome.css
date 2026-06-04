@@ -167,8 +167,3 @@ button.app-chrome-brand{
 .app-menu-logout:hover{
   background: rgba(239,68,68,.08);
 }
-@media (max-width: 520px){
-  .app-chrome-product{
-    display: none;
-  }
-}
