@@ -146,7 +146,7 @@ Manual clinic checks:
 
 - Edit/cancel order behavior.
 - Audit log.
-- Major topbar component extraction.
+- Major topbar component extraction during the initial Slice 3 implementation. A later post-slice polish commit did extract shared app chrome assets.
 - Advanced admin/settings pages.
 
 ## Completion Notes
@@ -157,6 +157,11 @@ Manual clinic checks:
   - `Web/wwwroot/orders.html`
   - `plans/order-flow-vertical-slices/master-plan.md`
   - `plans/order-flow-vertical-slices/slice-3-product-navigation.md`
+- Post-slice polish files changed:
+  - `Web/wwwroot/js/app-chrome.js`
+  - `Web/wwwroot/css/app-chrome.css`
+  - `Web/wwwroot/index.html`
+  - `Web/wwwroot/orders.html`
 - Tests run:
   - `dotnet build Web/Web.csproj` — passed.
   - `dotnet test Web.Tests/Web.Tests.csproj --no-build` — passed, 87 tests.
@@ -170,4 +175,4 @@ Manual clinic checks:
   - Clinic direct navigation to `/` redirects back to `/orders`.
 - Discoveries affecting later slices:
   - `/` page access is enforced in client-side UX only; `/api/invoicing/*` remains the server-side security boundary.
-  - Product switcher UI is still duplicated between `index.html` and `orders.html`; no shared component/file was introduced.
+  - Initial Slice 3 implementation duplicated product switcher UI between `index.html` and `orders.html`, but post-slice polish extracted the shared topbar/menu into `AppChrome` (`Web/wwwroot/js/app-chrome.js`, `Web/wwwroot/css/app-chrome.css`).

@@ -8,9 +8,12 @@ This master plan tracks the integration of the order stepper prototype into the 
 
 Existing relevant files/routes:
 
-- Prototype order stepper: `Web/wwwroot/order-prototypes/stepper.html`
-- Old walking-skeleton orders page removed; `/orders` temporarily redirects to the stepper prototype until Slice 1 creates the real scheduler page.
-- Invoicer home page/UI: `Web/wwwroot/index.html`
+- Prototype order stepper retained for reference: `Web/wwwroot/order-prototypes/stepper.html`
+- Real scheduler page: `Web/wwwroot/orders.html`, served at `/orders`.
+- Invoicer home page/UI: `Web/wwwroot/index.html`, served at `/`.
+- Shared app topbar/menu assets:
+  - `Web/wwwroot/js/app-chrome.js`
+  - `Web/wwwroot/css/app-chrome.css`
 - Orders API: `Web/SchedulingApi.cs`
 - Invoicing/client API: `Web/Api.cs`
 - Page routing/static serving: `Web/WebProgram.cs`
@@ -52,7 +55,7 @@ Existing relevant files/routes:
 | 1 | `plans/order-flow-vertical-slices/slice-1-orders-list-create.md` | Complete | Real `/orders` page served from embedded `orders.html`; clinic-scoped order list and create flow using stepper UX |
 | 2 | `plans/order-flow-vertical-slices/slice-2-auth-roles-invoicing-gate.md` | Complete | Actor roles added; `/api/invoicing/*` technician-only; scheduler list is role-aware; old technician list route retired |
 | 2.5 | `plans/order-flow-vertical-slices/slice-2.5-read-only-order-review.md` | Complete | Existing orders can be opened from the list in a read-only review view |
-| 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added; `/` has technician login gate and redirects clinic users to Scheduler |
+| 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added and later extracted to shared AppChrome assets; `/` has technician login gate and redirects clinic users to Scheduler |
 | 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Complete | Edit/cancel orders with permissions; technician create supports target clinic selector |
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Not started | Audit log for scheduling/invoicing/client operations |
 
@@ -97,6 +100,7 @@ Append dated notes here after each slice.
 - 2026-06-03: Scheduler order lists now sort by expected/requested delivery date descending, with newest-created first only as a tie-breaker within the same delivery date.
 - 2026-06-04: Slice 3 complete. `/` now uses a client-side scheduling-auth gate before initializing invoicing data; non-technician authenticated users are redirected to `/orders`. Product switchers own Scheduler/Invoicer navigation; settings no longer contains Scheduler.
 - 2026-06-04: Slice 4 complete. Added `Cancelled` status, `PUT /api/scheduling/orders/{code}`, `DELETE /api/scheduling/orders/{code}` soft-cancel, and technician-only `GET /api/scheduling/clinics`. Clinics can edit/cancel only own non-cancelled orders; non-owned direct access returns 404. Technicians can edit/cancel any order and create orders by selecting target clinic. Existing order clinic reassignment is not supported.
+- 2026-06-04: Post-slice UI polish extracted shared app chrome/topbar behavior to `Web/wwwroot/js/app-chrome.js` and `Web/wwwroot/css/app-chrome.css`, used by both `index.html` and `orders.html`. Product switcher and logout now live in the hamburger menu, with settings remaining as an invoicer-specific extra action.
 
 ## Verification Evidence
 
@@ -177,7 +181,8 @@ Slice 3:
 
 - `Web/wwwroot/index.html`
 - `Web/wwwroot/orders.html`
-- possibly shared topbar CSS/JS if extracted
+- `Web/wwwroot/js/app-chrome.js`
+- `Web/wwwroot/css/app-chrome.css`
 - `Web/WebProgram.cs` if page access behavior changes
 
 Slice 4:
@@ -204,7 +209,7 @@ Slice 5:
 
 ## Open Questions to Resolve During Implementation
 
-- Exact technician config shape: role on credential vs separate technician section. Current recommendation: role on credential for smallest change.
-- Whether `/` unauthenticated/non-technician should redirect to `/orders` or show a small access-denied/login shell. Current preference: hide invoicer in navigation and block APIs; page behavior can be decided in Slice 2/3.
-- Whether technician order creation chooses clinic before opening stepper or inside stepper. Current preference: select clinic before/above stepper in Slice 4.
+- Exact technician config shape remains a future cleanup: current implementation uses role-on-credential, with the demo technician credential under clinic `DEMO` and PIN `654321` as a walking-skeleton convention.
+- `/` access behavior is resolved for v1: client-side scheduling-auth gate shows login when unauthenticated and redirects clinic users to `/orders`; `/api/invoicing/*` remains the server-side security boundary.
+- Technician order creation target selection is resolved for v1: technician create uses the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
 - Whether audit log should be append-only DB table only or also file logging. Current preference: DB append-only; existing app logger can remain separate.
