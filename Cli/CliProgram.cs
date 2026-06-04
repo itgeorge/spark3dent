@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Accounting;
 using AppSetup;
+using Database;
 using Invoices;
+using Microsoft.EntityFrameworkCore;
 using Orders;
 using Utilities;
 
@@ -37,7 +40,7 @@ class CliProgram
             return;
         }
 
-        await RunCommandLoopAsync(args, setup.InvoiceManagement, setup.ClientRepo, setup.PdfExporter, setup.ImageExporter, logger);
+        await RunCommandLoopAsync(args, setup.InvoiceManagement, setup.ClientRepo, setup.PdfExporter, setup.ImageExporter, logger, config.SingleBox.DatabasePath);
     }
 
     static bool TryRunSchedulingHelper(string[] args, Configuration.Config config)
@@ -71,11 +74,12 @@ class CliProgram
         IClientRepo clientRepo,
         IInvoiceExporter pdfExporter,
         IInvoiceExporter? imageExporter,
-        ILogger logger)
+        ILogger logger,
+        string dbPath)
     {
         if (args.Length > 0)
         {
-            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
+            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger, dbPath);
             return;
         }
 
@@ -94,7 +98,7 @@ class CliProgram
                 break;
             }
 
-            await ExecuteCommandAsync(parts.ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
+            await ExecuteCommandAsync(parts.ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter, logger, dbPath);
         }
     }
 
@@ -104,7 +108,8 @@ class CliProgram
         IClientRepo clientRepo,
         IInvoiceExporter pdfExporter,
         IInvoiceExporter? imageExporter,
-        ILogger logger)
+        ILogger logger,
+        string dbPath)
     {
         try
         {
@@ -130,6 +135,12 @@ class CliProgram
             if (cmd == "invoices")
             {
                 await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter);
+                return;
+            }
+
+            if (cmd == "audit")
+            {
+                await RunAuditCommandAsync(args.Skip(1).ToArray(), dbPath);
                 return;
             }
 
@@ -162,7 +173,210 @@ class CliProgram
         Console.WriteLine("                          - Import legacy PDF invoices recursively; prompt for client nicknames");
         Console.WriteLine("  scheduling hash-pin <pin>");
         Console.WriteLine("                          - Generate a hashed scheduling PIN for JSON config");
+        Console.WriteLine("  audit list [filters]    - List audit events (newest first)");
+        Console.WriteLine("                          - Filters: --service, --operation, --entity-type, --entity-id,");
+        Console.WriteLine("                            --actor-role, --actor-clinic, --since, --until, --limit, --json, --db");
     }
+
+    static async Task RunAuditCommandAsync(string[] args, string defaultDbPath)
+    {
+        if (args.Length == 0 || args[0].Equals("help", StringComparison.OrdinalIgnoreCase))
+        {
+            PrintAuditUsage();
+            return;
+        }
+
+        var sub = args[0].ToLowerInvariant();
+        if (sub != "list")
+        {
+            Console.WriteLine($"Unknown subcommand: {sub}. Use: audit list");
+            return;
+        }
+
+        var (opts, positional) = CliOptsParser.ParseWithPositional(
+            args.Skip(1).ToList(),
+            new Dictionary<string, string> { ["l"] = "limit", ["s"] = "service", ["o"] = "operation" });
+        if (positional.Count > 0)
+        {
+            Console.WriteLine("Unexpected positional argument(s): " + string.Join(" ", positional));
+            PrintAuditUsage();
+            return;
+        }
+
+        var dbPath = GetOption(opts, "db") ?? defaultDbPath;
+        if (string.IsNullOrWhiteSpace(dbPath))
+        {
+            Console.WriteLine("Error: database path is not configured. Pass --db <path>.");
+            return;
+        }
+
+        var limit = 100;
+        if (GetOption(opts, "limit") is { } limitStr && (!int.TryParse(limitStr, out limit) || limit <= 0))
+        {
+            Console.WriteLine("Error: --limit must be a positive integer.");
+            return;
+        }
+        limit = Math.Clamp(limit, 1, 500);
+
+        var since = ParseAuditDateOption(GetOption(opts, "since"), isUntil: false, "--since");
+        if (since.Invalid) return;
+        var until = ParseAuditDateOption(GetOption(opts, "until"), isUntil: true, "--until");
+        if (until.Invalid) return;
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using var ctx = new AppDbContext(options);
+        var query = ctx.AuditEvents.AsNoTracking().AsQueryable();
+
+        query = ApplyStringFilter(query, GetOption(opts, "service", "service-name", "servicename"), e => e.ServiceName);
+        query = ApplyStringFilter(query, GetOption(opts, "operation"), e => e.Operation);
+        query = ApplyStringFilter(query, GetOption(opts, "entity-type", "entitytype"), e => e.EntityType);
+        query = ApplyStringFilter(query, GetOption(opts, "entity-id", "entityid"), e => e.EntityId);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-role", "actorrole"), e => e.ActorRole);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-clinic", "actor-clinic-code", "actorclinic", "actorcliniccode"), e => e.ActorClinicCode);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-credential", "actor-credential-id", "actorcredential", "actorcredentialid"), e => e.ActorCredentialId);
+
+        if (since.Value.HasValue)
+            query = query.Where(e => e.OccurredAtUnixTimeMilliseconds >= since.Value.Value.ToUnixTimeMilliseconds());
+        if (until.Value.HasValue)
+            query = query.Where(e => e.OccurredAtUnixTimeMilliseconds <= until.Value.Value.ToUnixTimeMilliseconds());
+
+        var rows = await query
+            .OrderByDescending(e => e.OccurredAtUnixTimeMilliseconds)
+            .ThenByDescending(e => e.Id)
+            .Take(limit)
+            .Select(e => new AuditListRow(
+                e.Id,
+                e.ServiceName,
+                e.Operation,
+                e.EntityType,
+                e.EntityId,
+                e.EntityDisplay,
+                e.ActorRole,
+                e.ActorClinicCode,
+                e.ActorCredentialId,
+                e.ActorCredentialLabel,
+                e.ActorSessionId,
+                e.OccurredAt,
+                e.Ip,
+                e.UserAgent,
+                e.MetadataJson))
+            .ToListAsync();
+
+        if (CliOptsParser.HasFlag(opts, "json") || string.Equals(GetOption(opts, "format"), "json", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true }));
+            return;
+        }
+
+        if (rows.Count == 0)
+        {
+            Console.WriteLine("No audit events found.");
+            return;
+        }
+
+        Console.WriteLine($"{"Id",-6} {"Occurred",-20} {"Service",-11} {"Operation",-23} {"Entity",-28} {"Actor",-28} Metadata");
+        Console.WriteLine(new string('-', 138));
+        foreach (var row in rows)
+        {
+            var occurred = row.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            var entity = Truncate($"{row.EntityType}:{row.EntityId}", 26);
+            var actorParts = new[] { row.ActorRole, row.ActorClinicCode, row.ActorCredentialLabel ?? row.ActorCredentialId }
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+            var actor = Truncate(string.Join("/", actorParts), 26);
+            Console.WriteLine($"{row.Id,-6} {occurred,-20} {Truncate(row.ServiceName, 10),-11} {Truncate(row.Operation, 22),-23} {entity,-28} {actor,-28} {Truncate(row.MetadataJson ?? "", 80)}");
+        }
+    }
+
+    static void PrintAuditUsage()
+    {
+        Console.WriteLine("Usage: audit list [filters]");
+        Console.WriteLine("Filters:");
+        Console.WriteLine("  --service <name>             Scheduling | Invoicing | Clients");
+        Console.WriteLine("  --operation <name>           e.g. OrderCreated, InvoiceIssued");
+        Console.WriteLine("  --entity-type <type>         e.g. SchedulingOrder, Invoice, Client");
+        Console.WriteLine("  --entity-id <id>             Entity id/order code/invoice number/client nickname");
+        Console.WriteLine("  --actor-role <role>          Clinic | Technician");
+        Console.WriteLine("  --actor-clinic <code>        Acting actor clinic code");
+        Console.WriteLine("  --actor-credential <id>      Acting credential id");
+        Console.WriteLine("  --since <date|timestamp>     yyyy-MM-dd or ISO timestamp");
+        Console.WriteLine("  --until <date|timestamp>     yyyy-MM-dd or ISO timestamp");
+        Console.WriteLine("  --limit <n>                  1..500, default 100");
+        Console.WriteLine("  --json                       Output JSON");
+        Console.WriteLine("  --db <path>                  Override configured SQLite DB path");
+    }
+
+    static IQueryable<Database.Entities.AuditEventEntity> ApplyStringFilter(
+        IQueryable<Database.Entities.AuditEventEntity> query,
+        string? value,
+        System.Linq.Expressions.Expression<Func<Database.Entities.AuditEventEntity, string?>> selector)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return query;
+
+        var trimmed = value.Trim();
+        return query.Where(BuildEqualsExpression(selector, trimmed));
+    }
+
+    static System.Linq.Expressions.Expression<Func<Database.Entities.AuditEventEntity, bool>> BuildEqualsExpression(
+        System.Linq.Expressions.Expression<Func<Database.Entities.AuditEventEntity, string?>> selector,
+        string value)
+    {
+        var toLower = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+        var notNull = System.Linq.Expressions.Expression.NotEqual(selector.Body, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+        var loweredMember = System.Linq.Expressions.Expression.Call(selector.Body, toLower);
+        var equals = System.Linq.Expressions.Expression.Equal(loweredMember, System.Linq.Expressions.Expression.Constant(value.ToLowerInvariant()));
+        var body = System.Linq.Expressions.Expression.AndAlso(notNull, equals);
+        return System.Linq.Expressions.Expression.Lambda<Func<Database.Entities.AuditEventEntity, bool>>(body, selector.Parameters);
+    }
+
+    static (DateTimeOffset? Value, bool Invalid) ParseAuditDateOption(string? raw, bool isUntil, string optionName)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return (null, false);
+
+        if (DateOnly.TryParseExact(raw.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateOnly))
+        {
+            var dateTime = isUntil
+                ? dateOnly.ToDateTime(TimeOnly.MaxValue)
+                : dateOnly.ToDateTime(TimeOnly.MinValue);
+            return (new DateTimeOffset(dateTime, TimeSpan.Zero), false);
+        }
+
+        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto))
+            return (dto.ToUniversalTime(), false);
+
+        Console.WriteLine($"Error: {optionName} must be yyyy-MM-dd or an ISO timestamp.");
+        return (null, true);
+    }
+
+    static string? GetOption(Dictionary<string, string> opts, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (opts.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+        return null;
+    }
+
+    private sealed record AuditListRow(
+        long Id,
+        string ServiceName,
+        string Operation,
+        string EntityType,
+        string EntityId,
+        string? EntityDisplay,
+        string ActorRole,
+        string? ActorClinicCode,
+        string? ActorCredentialId,
+        string? ActorCredentialLabel,
+        string? ActorSessionId,
+        DateTimeOffset OccurredAt,
+        string? Ip,
+        string? UserAgent,
+        string? MetadataJson);
 
     static async Task RunClientsCommandAsync(string[] args, IClientRepo clientRepo)
     {
