@@ -1,10 +1,11 @@
 .app-chrome-host{
+  --app-chrome-pad-x: 18px;
+  --app-chrome-pad-y: 16px;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 16px 18px;
+  padding: var(--app-chrome-pad-y) var(--app-chrome-pad-x);
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 .app-chrome{
   display: flex;
@@ -12,18 +13,34 @@
   gap: 12px;
   width: 100%;
   min-width: 0;
+  flex-wrap: nowrap;
 }
 .app-chrome-brand{
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
   text-decoration: none;
   color: inherit;
 }
+button.app-chrome-brand{
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
 .app-chrome-brand.clickable{
   cursor: pointer;
+}
+.app-chrome-brand.clickable:hover{
+  opacity: .88;
 }
 .app-chrome-logo{
   width: 34px;
@@ -34,6 +51,13 @@
 }
 .app-chrome-brand-text{
   min-width: 0;
+  overflow: hidden;
+}
+.app-chrome-name,
+.app-chrome-product{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .app-chrome-name{
   font-size: 14px;
@@ -48,14 +72,13 @@
   color: var(--muted2, var(--muted));
   line-height: 1.2;
 }
-.app-chrome-spacer{
-  flex: 1;
-}
 .app-chrome-actions{
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 0 0 auto;
   flex-shrink: 0;
+  margin-left: auto;
 }
 .app-chrome-extra{
   display: flex;
@@ -144,17 +167,8 @@
 .app-menu-logout:hover{
   background: rgba(239,68,68,.08);
 }
-@media (max-width: 700px){
-  .app-chrome-host{
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-  .app-chrome-actions{
-    width: 100%;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
-  .app-chrome-spacer{
+@media (max-width: 520px){
+  .app-chrome-product{
     display: none;
   }
 }
