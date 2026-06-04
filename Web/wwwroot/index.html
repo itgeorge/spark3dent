@@ -91,9 +91,7 @@
     }
 
     .container{
-      max-width: 1280px;
-      margin:0 auto;
-      padding: 18px;
+      padding-block: 18px;
       width:100%;
     }
 
@@ -828,10 +826,11 @@
     /* Nav tabs */
     .nav-tabs{
       border-bottom: 1px solid rgba(226,232,240,.8);
-      padding: 0 18px;
+      padding-left: var(--app-chrome-pad-x, 18px);
+      padding-right: var(--app-chrome-pad-x, 18px);
     }
     .nav-tabs-inner{
-      max-width: 1280px;
+      max-width: var(--app-content-max, 1280px);
       margin: 0 auto;
       display: flex;
       gap: 0;
@@ -1007,7 +1006,7 @@
     }
 
     @media (max-width: 600px){
-      .container{ padding: 12px; }
+      .container{ padding-block: 12px; }
       .row{
         grid-template-columns: 46px minmax(78px, 1fr) auto auto;
         grid-template-areas: "status meta download amount";
@@ -1078,7 +1077,7 @@
     </div>
     </header>
 
-    <div class="container">
+    <div class="container app-page">
       <div id="viewDashboard">
         <div class="grid-2">
           <div class="card">

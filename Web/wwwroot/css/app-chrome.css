@@ -1,11 +1,23 @@
-.app-chrome-host{
+:root{
+  --app-content-max: 1280px;
   --app-chrome-pad-x: 18px;
   --app-chrome-pad-y: 16px;
-  max-width: 1280px;
+}
+.app-chrome-host{
+  max-width: var(--app-content-max);
   margin: 0 auto;
   padding: var(--app-chrome-pad-y) var(--app-chrome-pad-x);
   display: flex;
   align-items: center;
+}
+.app-page{
+  box-sizing: border-box;
+  max-width: var(--app-content-max);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--app-chrome-pad-x);
+  padding-right: var(--app-chrome-pad-x);
+  width: 100%;
 }
 .app-chrome{
   display: flex;
