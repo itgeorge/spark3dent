@@ -162,6 +162,43 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task ListActiveOrdersForCalendarAsync_FiltersClinicDateRangeAndCancelledOrders()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder(
+            "AAA-234",
+            "demo on start",
+            DateTimeOffset.Parse("2026-05-31T10:00:00Z"),
+            clinicCode: "DEMO",
+            requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        await repo.CreateOrderAsync(BuildOrder(
+            "BBB-234",
+            "demo outside",
+            DateTimeOffset.Parse("2026-05-31T11:00:00Z"),
+            clinicCode: "DEMO",
+            requestedDeliveryDate: new DateOnly(2026, 6, 4)));
+        var cancelled = await repo.CreateOrderAsync(BuildOrder(
+            "CCC-234",
+            "demo cancelled",
+            DateTimeOffset.Parse("2026-05-31T12:00:00Z"),
+            clinicCode: "DEMO",
+            requestedDeliveryDate: new DateOnly(2026, 6, 10)));
+        await repo.UpdateOrderAsync(cancelled with { Status = OrderStatus.Cancelled });
+        await repo.CreateOrderAsync(BuildOrder(
+            "DDD-234",
+            "other on end",
+            DateTimeOffset.Parse("2026-05-31T13:00:00Z"),
+            clinicCode: "OTHER",
+            requestedDeliveryDate: new DateOnly(2026, 6, 10)));
+
+        var demoOrders = await repo.ListActiveOrdersForCalendarAsync("DEMO", new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
+        var allOrders = await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
+
+        Assert.That(demoOrders.Select(o => o.OrderCode), Is.EqualTo(new[] { "AAA-234" }));
+        Assert.That(allOrders.Select(o => o.OrderCode), Is.EqualTo(new[] { "AAA-234", "DDD-234" }));
+    }
+
+    [Test]
     public async Task ListOrdersForClinicAsync_ReturnsOnlyClinicOrdersByRequestedDeliveryDateDescending()
     {
         var repo = new SqliteOrderRepo(_contextFactory);

@@ -1,7 +1,10 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Database;
+using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
+using Orders;
 
 namespace Web.Tests;
 
@@ -210,6 +213,67 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingCalendarEndpoint_RequiresAuthValidatesRangeAndIsNotCapturedByCodeRoute()
+    {
+        using var fixture = new ApiTestFixture();
+        using var anonymous = fixture.Client;
+
+        var unauthenticated = await anonymous.GetAsync("/api/scheduling/orders/calendar?start=2026-06-01&end=2026-06-30");
+        Assert.That(unauthenticated.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        using var client = fixture.CreateClient();
+        await LoginAsync(client);
+
+        var valid = await client.GetAsync("/api/scheduling/orders/calendar?start=2026-06-01&end=2026-06-30");
+        Assert.That(valid.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var validDoc = JsonDocument.Parse(await valid.Content.ReadAsStringAsync());
+        Assert.That(validDoc.RootElement.GetProperty("start").GetString(), Is.EqualTo("2026-06-01"));
+
+        var invalid = await client.GetAsync("/api/scheduling/orders/calendar?start=2026-06-30&end=2026-06-01");
+        Assert.That(invalid.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var tooLarge = await client.GetAsync("/api/scheduling/orders/calendar?start=2026-06-01&end=2026-09-30");
+        Assert.That(tooLarge.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task SchedulingCalendarEndpoint_IsRoleAwareInclusiveAndExcludesCancelled()
+    {
+        using var fixture = new ApiTestFixture();
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+
+        var demoStart = await CreateOrderAsync(clinicClient, "Demo Start", "2026-06-05");
+        var demoEndCancelled = await CreateOrderAsync(clinicClient, "Demo Cancelled", "2026-06-10");
+        var demoOutside = await CreateOrderAsync(clinicClient, "Demo Outside", "2026-06-12");
+        var cancel = await clinicClient.DeleteAsync($"/api/scheduling/orders/{demoEndCancelled}");
+        Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        using var techClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsTechnicianAsync(techClient);
+        var otherEnd = await SeedOrderAsync(fixture.DbPath, "OTH-610", "Other End", "OTHER", "2026-06-10");
+
+        var clinicCalendar = await clinicClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-05&end=2026-06-10");
+        Assert.That(clinicCalendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var clinicText = await clinicCalendar.Content.ReadAsStringAsync();
+        Assert.That(clinicText, Does.Contain(demoStart));
+        Assert.That(clinicText, Does.Not.Contain(demoEndCancelled));
+        Assert.That(clinicText, Does.Not.Contain(demoOutside));
+        Assert.That(clinicText, Does.Not.Contain(otherEnd));
+
+        var techCalendar = await techClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-05&end=2026-06-10");
+        Assert.That(techCalendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var techText = await techCalendar.Content.ReadAsStringAsync();
+        Assert.That(techText, Does.Contain(demoStart));
+        Assert.That(techText, Does.Contain(otherEnd));
+        Assert.That(techText, Does.Not.Contain(demoEndCancelled));
+
+        var list = await clinicClient.GetAsync("/api/scheduling/orders");
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain(demoEndCancelled));
+    }
+
+    [Test]
     public async Task SchedulingFlow_RetiredTechnicianOrdersRouteReturns404()
     {
         using var fixture = new ApiTestFixture();
@@ -375,6 +439,61 @@ public class SchedulingApiTests
         var login = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"123456\"}"));
         var cookie = login.Headers.GetValues("Set-Cookie").First(v => v.StartsWith("s3d_order_session="));
         client.DefaultRequestHeaders.Add("Cookie", cookie.Split(';')[0]);
+    }
+
+    private static async Task<string> CreateOrderAsync(HttpClient client, string caseName, string requestedDeliveryDate, string? clinicCode = null)
+    {
+        var clinicPrefix = clinicCode == null ? "" : $"\"clinicCode\":\"{clinicCode}\",";
+        var create = await client.PostAsync("/api/scheduling/orders", Json($$"""
+        {
+          {{clinicPrefix}}
+          "caseName":"{{caseName}}",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "requestedDeliveryDate":"{{requestedDeliveryDate}}"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString()!;
+    }
+
+    private static async Task<string> SeedOrderAsync(string dbPath, string code, string caseName, string clinicCode, string requestedDeliveryDate)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        var repo = new SqliteOrderRepo(() => new AppDbContext(options));
+        await repo.CreateOrderAsync(new OrderRecord(
+            0,
+            code,
+            clinicCode,
+            clinicCode == "DEMO" ? "Demo Dental Clinic" : "Other Clinic",
+            "seed",
+            "Seed",
+            "fingerprint",
+            caseName,
+            new DateOnly(2026, 6, 2),
+            ProductCategory.Permanent,
+            WorkType.Crown,
+            Material.FullContourZirconia,
+            ConstructionType.Crown,
+            11,
+            11,
+            "",
+            DateOnly.Parse(requestedDeliveryDate),
+            OrderStatus.Created,
+            Shade.Unspecified,
+            null,
+            DateTimeOffset.Parse("2026-06-02T12:00:00Z"),
+            DateTimeOffset.Parse("2026-06-02T12:00:00Z"),
+            "127.0.0.1",
+            "test"));
+        return code;
     }
 
     private static StringContent Json(string json) => new(json, Encoding.UTF8, "application/json");

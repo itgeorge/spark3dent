@@ -17,6 +17,7 @@ public interface IOrderRepository
     Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default);
     Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default);
     Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default);
+    Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default);
 }
 
 public sealed class DuplicateOrderCodeException : InvalidOperationException

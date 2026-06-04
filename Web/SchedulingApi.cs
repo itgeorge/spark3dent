@@ -134,6 +134,25 @@ public static class SchedulingApi
             return Results.Json(new { items = items.Select(ToDto) }, JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/orders/calendar", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, DateOnly? start, DateOnly? end) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (start == null || end == null)
+                return Results.Json(new { error = "Calendar start and end query parameters are required." }, statusCode: 400, options: JsonOptions);
+            if (start > end)
+                return Results.Json(new { error = "Calendar start date must be before or equal to end date." }, statusCode: 400, options: JsonOptions);
+            if (end.Value.DayNumber - start.Value.DayNumber + 1 > 93)
+                return Results.Json(new { error = "Calendar date range cannot exceed 93 days." }, statusCode: 400, options: JsonOptions);
+
+            var items = await orders.ListCalendarOrdersAsync(actor, start.Value, end.Value, ctx.RequestAborted);
+            var days = items
+                .GroupBy(o => o.RequestedDeliveryDate)
+                .OrderBy(g => g.Key)
+                .Select(g => new { date = g.Key, orders = g.Select(ToDto) });
+            return Results.Json(new { start = start.Value, end = end.Value, days }, JsonOptions);
+        });
+
         app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
         {
             var actor = await RequireActor(ctx, auth);

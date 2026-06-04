@@ -64,6 +64,25 @@ public sealed class SqliteOrderRepo : IOrderRepository
         return items.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var query = ctx.SchedulingOrders.AsNoTracking()
+            .Where(o => o.Status != nameof(OrderStatus.Cancelled)
+                && o.RequestedDeliveryDate >= start
+                && o.RequestedDeliveryDate <= end);
+        if (!string.IsNullOrWhiteSpace(clinicCode))
+            query = query.Where(o => o.ClinicCode == clinicCode);
+
+        var items = await query
+            .OrderBy(o => o.RequestedDeliveryDate)
+            .ThenBy(o => o.ClinicDisplayName)
+            .ThenBy(o => o.CaseName)
+            .ThenBy(o => o.OrderCode)
+            .ToListAsync(ct);
+        return items.Select(ToDomain).ToList();
+    }
+
     private static IQueryable<SchedulingOrderEntity> OrderedLimited(IQueryable<SchedulingOrderEntity> query, int limit) =>
         query
             .OrderByDescending(o => o.RequestedDeliveryDate)

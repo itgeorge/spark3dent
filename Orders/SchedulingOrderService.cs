@@ -159,6 +159,13 @@ public sealed class SchedulingOrderService
     public Task<IReadOnlyList<OrderRecord>> ListOrdersForActorAsync(AuthenticatedActor actor, int limit = 100, CancellationToken ct = default) =>
         actor.IsTechnician ? ListOrdersAsync(limit, ct) : ListOrdersForClinicAsync(actor.ClinicCode, limit, ct);
 
+    public Task<IReadOnlyList<OrderRecord>> ListCalendarOrdersAsync(AuthenticatedActor actor, DateOnly start, DateOnly end, CancellationToken ct = default)
+    {
+        if (start > end)
+            throw new InvalidOperationException("Calendar start date must be before or equal to end date.");
+        return _orders.ListActiveOrdersForCalendarAsync(actor.IsTechnician ? null : actor.ClinicCode, start, end, ct);
+    }
+
     private Task AppendOrderAuditAsync(AuthenticatedActor actor, string operation, OrderRecord order, string? ip, string? userAgent, object metadata, CancellationToken ct)
     {
         var auditEvent = new AuditEvent(

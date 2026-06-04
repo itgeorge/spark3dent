@@ -145,6 +145,37 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task ListCalendarOrdersAsync_AppliesActorScopeRangeAndExcludesCancelled()
+    {
+        var fixture = new Fixture(4);
+        var demoEarly = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Demo early") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 5)
+        }, "127.0.0.1", "test");
+        var demoLate = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Demo late") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test");
+        var other = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Other") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test", "OTHER");
+        var cancelled = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Cancelled") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test");
+        await fixture.Service.CancelOrderAsync(TestActors.Demo, cancelled.OrderCode);
+
+        var clinicOrders = await fixture.Service.ListCalendarOrdersAsync(TestActors.Demo, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
+        var techOrders = await fixture.Service.ListCalendarOrdersAsync(TestActors.Technician, new DateOnly(2026, 6, 10), new DateOnly(2026, 6, 10));
+
+        Assert.That(clinicOrders.Select(o => o.OrderCode), Is.EquivalentTo(new[] { demoEarly.OrderCode, demoLate.OrderCode }));
+        Assert.That(techOrders.Select(o => o.OrderCode), Is.EquivalentTo(new[] { demoLate.OrderCode, other.OrderCode }));
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.ListCalendarOrdersAsync(TestActors.Demo, new DateOnly(2026, 6, 11), new DateOnly(2026, 6, 10)));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_WhenManyConcurrentRequestsReceiveSameFirstOrderCode_RetriesAndAllSucceed()
     {
         const int racingOrderCount = 20;
@@ -360,6 +391,22 @@ public class SchedulingOrderServiceTest
                 lock (_gate)
                     return Task.FromResult<IReadOnlyList<OrderRecord>>(
                         _ordersByCode.Values.Where(o => string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase)).ToList());
+            }
+
+            public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default)
+            {
+                lock (_gate)
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(
+                        _ordersByCode.Values
+                            .Where(o => o.Status != OrderStatus.Cancelled
+                                && o.RequestedDeliveryDate >= start
+                                && o.RequestedDeliveryDate <= end
+                                && (clinicCode == null || string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase)))
+                            .OrderBy(o => o.RequestedDeliveryDate)
+                            .ThenBy(o => o.ClinicDisplayName)
+                            .ThenBy(o => o.CaseName)
+                            .ThenBy(o => o.OrderCode)
+                            .ToList());
             }
         }
     }

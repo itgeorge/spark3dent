@@ -62,7 +62,7 @@ Existing relevant files/routes:
 | 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added and later extracted to shared AppChrome assets; `/` has technician login gate and redirects clinic users to Scheduler |
 | 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Complete | Edit/cancel orders with permissions; technician create supports target clinic selector |
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Complete | Append-only DB audit log for scheduler create/update/cancel and invoicing/client mutations, plus technician read endpoint |
-| 6 | `plans/order-flow-vertical-slices/slice-6-orders-calendar-view.md` | Not started | Calendar display mode for active orders, with shared month-calendar component and dedicated calendar API |
+| 6 | `plans/order-flow-vertical-slices/slice-6-orders-calendar-view.md` | Complete | Calendar/list display mode with shared month-calendar component, dedicated active-orders calendar API, persisted mode preference, smart cell aggregation, and day popup |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -110,6 +110,7 @@ Append dated notes here after each slice.
 - 2026-06-04: Slice 5 complete. Added append-only `AuditEvents` table/repository and `Utilities` audit contracts. Scheduler create/update/cancel logs happen in `SchedulingOrderService` after persistence and explicitly include acting actor fields separate from target clinic metadata. Invoicing/client route handlers log client create/update/rename, invoice issue/correct, and non-dry-run import commit after successful mutation. Added technician-only `GET /api/invoicing/audit` for inspection.
 - 2026-06-04: Post-slice audit inspection polish added CLI support for `audit list [filters]`, with table or JSON output and filters for service, operation, entity, actor, date range, limit, and database path.
 - 2026-06-05: Added Slice 6 plan for an orders calendar display mode. Calendar mode should use a dedicated `/api/scheduling/orders/calendar` endpoint, exclude cancelled orders, default to calendar for technician/lab actors and list for clinic actors, persist view mode in `localStorage`, and extract a generic month-calendar component after first renaming the current delivery picker calendar classes to delivery-specific names.
+- 2026-06-05: Slice 6 complete. Added `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` before the `{code}` route, with auth, role scoping, active-only filtering, inclusive delivery-date range, and 93-day max range. `orders.html` now has persisted List/Calendar mode; technician defaults to calendar, clinic defaults to list; list still shows cancelled orders while calendar excludes them. Delivery picker now uses shared `MonthCalendar` assets with delivery-specific classes.
 
 ## Verification Evidence
 
@@ -119,6 +120,7 @@ Append dated notes here after each slice.
 - 2026-06-04 Slice 3: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj --no-build` passed (87 tests); `node --check` passed for extracted inline scripts from `index.html` and `orders.html`; headless Chromium smoke passed for unauthenticated `/` login prompt, technician `/` login/product switcher/API access, technician `/orders` switcher, clinic `/orders` without Invoicer switcher, and clinic direct `/` redirect to `/orders`.
 - 2026-06-04 Slice 4: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (50 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (73 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (88 tests); `dotnet build Web/Web.csproj --no-restore` passed; `node --check` passed for extracted `orders.html` inline script; headless Chromium smoke passed for clinic login, seeded order review, edit/save, cancel, and disabled cancelled actions.
 - 2026-06-04 Slice 5: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (53 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (75 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (91 tests); full `dotnet test --no-restore` passed (Configuration 10, Storage 41, Orders 53, Accounting 61, Database 75, Invoices 251, Web 91); `dotnet build Web/Web.csproj --no-restore` passed.
+- 2026-06-05 Slice 6: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (54 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (76 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (93 tests); `dotnet build Web/Web.csproj --no-restore` passed; `node --check Web/wwwroot/js/month-calendar.js` and `node --check` on extracted `orders.html` inline script passed; full `dotnet test --no-restore` passed (Configuration 10, Storage 41, Orders 54, Accounting 61, Database 76, Invoices 251, Web 93); headless Chromium/CDP smoke passed for clinic default list, cancelled-present list, active-only calendar, `localStorage` persistence, mobile 7-column month grid/count aggregation/day popup, popup row review, delivery picker shared component render, and technician default calendar.
 
 ## Global Verification Commands
 
@@ -157,7 +159,7 @@ Scheduling:
 - `GET /api/scheduling/orders/{code}`
 - `PUT /api/scheduling/orders/{code}`
 - `DELETE /api/scheduling/orders/{code}` soft-cancels
-- `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` (planned Slice 6; active orders only, role-aware, delivery-date range)
+- `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` (active orders only, role-aware, inclusive delivery-date range, 93-day max range)
 
 Invoicing/client after Slice 2:
 

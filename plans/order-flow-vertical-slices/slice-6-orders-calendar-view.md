@@ -19,7 +19,7 @@ Calendar mode should show active/submitted orders grouped by requested delivery 
 3. User-selected view mode persists in `localStorage`.
 4. Calendar view does **not** show cancelled orders. List view remains the place to see active and cancelled orders.
 5. Calendar view uses a month grid on mobile too; do not switch to agenda-only mobile layout.
-6. Small calendar cells aggregate orders into a clickable count card. Larger cells show some chips plus a `+X more` control. Count card / `+X more` opens a day popup listing all orders for that date.
+6. Small calendar cells aggregate orders into a clickable count card. Larger cells show some chips plus a `View all Y` control, where `Y` is the total order count for the day. Count card / `View all Y` opens a day popup listing all orders for that date.
 7. Individual order chips and day popup rows open the existing order review flow.
 8. Use a dedicated calendar API endpoint, not the existing list endpoint.
 9. Before extracting the generic calendar component, rename the current order-flow delivery picker CSS/DOM classes to be delivery-specific so generic class names are free for the shared component.
@@ -253,9 +253,9 @@ For each day:
 
 - 0 orders: empty cell with date number.
 - Very small cell: show one clickable aggregate card, e.g. `4 orders`.
-- Larger cell: show some order chips plus `+X more` if needed.
+- Larger cell: show some order chips plus `View all Y` if needed, where `Y` is the total order count for the day.
 - Individual chip click: open existing `showReview(orderCode)`.
-- Aggregate card / `+X more` click: open day popup with all active orders for that date.
+- Aggregate card / `View all Y` click: open day popup with all active orders for that date.
 
 Implementation options for smart sizing:
 
@@ -325,7 +325,7 @@ Frontend/manual tests:
 - selected mode persists in `localStorage`,
 - calendar month navigation fetches correct ranges,
 - calendar chips open existing review,
-- aggregate card / `+X more` opens day popup,
+- aggregate card / `View all Y` opens day popup,
 - day popup rows open existing review,
 - cancelled orders are absent from calendar but present in list,
 - delivery-date picker still works after component extraction.
@@ -348,7 +348,7 @@ Technician/lab actor:
 3. Confirm active orders from multiple clinics appear.
 4. Navigate months and confirm data updates.
 5. Click chip -> existing review opens.
-6. Force multiple orders on one date; confirm aggregate/`+X more` opens day popup.
+6. Force multiple orders on one date; confirm aggregate/`View all Y` opens day popup.
 7. Confirm list mode still shows cancelled orders.
 
 Responsive:
@@ -359,23 +359,23 @@ Responsive:
 
 ## Implementation Checklist
 
-- [ ] Rename current delivery-picker calendar CSS/DOM classes to delivery-specific names without behavior changes.
-- [ ] Add shared generic month-calendar JS/CSS component.
-- [ ] Refactor delivery picker to use shared month-calendar component.
-- [ ] Add repository/service support for active calendar order range query.
-- [ ] Add `GET /api/scheduling/orders/calendar` before `{code}` route.
-- [ ] Add backend tests for auth, role scoping, date range, and cancelled exclusion.
-- [ ] Add list/calendar view-mode state and localStorage persistence.
-- [ ] Add mode toggle to orders header.
-- [ ] Implement technician/lab default calendar and clinic default list.
-- [ ] Implement calendar month navigation and API fetching.
-- [ ] Render calendar cells with chips/aggregate behavior.
-- [ ] Add day popup listing all active orders for a date.
-- [ ] Wire chips/popup rows to existing order review.
-- [ ] Verify list mode still includes cancelled orders.
-- [ ] Verify delivery-date picker still works.
-- [ ] Run relevant tests/build and browser smoke.
-- [ ] Update master plan and this plan completion notes.
+- [x] Rename current delivery-picker calendar CSS/DOM classes to delivery-specific names without behavior changes.
+- [x] Add shared generic month-calendar JS/CSS component.
+- [x] Refactor delivery picker to use shared month-calendar component.
+- [x] Add repository/service support for active calendar order range query.
+- [x] Add `GET /api/scheduling/orders/calendar` before `{code}` route.
+- [x] Add backend tests for auth, role scoping, date range, and cancelled exclusion.
+- [x] Add list/calendar view-mode state and localStorage persistence.
+- [x] Add mode toggle to orders header.
+- [x] Implement technician/lab default calendar and clinic default list.
+- [x] Implement calendar month navigation and API fetching.
+- [x] Render calendar cells with chips/aggregate behavior.
+- [x] Add day popup listing all active orders for a date.
+- [x] Wire chips/popup rows to existing order review.
+- [x] Verify list mode still includes cancelled orders.
+- [x] Verify delivery-date picker still works via script/build checks; browser manual smoke not run in this handoff.
+- [x] Run relevant tests/build and headless browser smoke.
+- [x] Update master plan and this plan completion notes.
 
 ## Out of Scope
 
@@ -389,12 +389,10 @@ Responsive:
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Calendar component API chosen:
-- API response shape chosen:
-- Discoveries affecting lab/IAM/audit slices:
+- Status: Complete on 2026-06-05.
+- Files changed: `Web/wwwroot/orders.html`, `Web/wwwroot/js/month-calendar.js`, `Web/wwwroot/css/month-calendar.css`, `Web/SchedulingApi.cs`, `Orders/Repositories.cs`, `Orders/SchedulingOrderService.cs`, `Database/SqliteOrderRepo.cs`, `Orders.Tests/SchedulingOrderServiceTest.cs`, `Database.Tests/SqliteOrderRepoTest.cs`, `Web.Tests/SchedulingApiTests.cs`, this plan, and `master-plan.md`.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` (54 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` (76 passed); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` (93 passed); `dotnet build Web/Web.csproj --no-restore` passed; `node --check Web/wwwroot/js/month-calendar.js` passed; `node --check` on extracted `orders.html` inline script passed; full `dotnet test --no-restore` passed (Configuration 10, Storage 41, Orders 54, Accounting 61, Database 76, Invoices 251, Web 93).
+- Manual checks: Headless Chromium smoke via CDP passed on a temp DB. Verified clinic defaults to list; list includes a cancelled order; switching to calendar persists in `localStorage`; calendar contains active orders and excludes cancelled orders; mobile width remains a 7-column month grid and shows aggregate count cards; aggregate count opens the day popup; popup row opens existing review; delivery-date picker renders through the shared component and auto-selects a date; technician login defaults to calendar.
+- Calendar component API chosen: `window.MonthCalendar.create(root, { month, renderCell, onMonthChange, weekdays, titleFormatter, className })`, plus helpers `MonthCalendar.bounds`, `addDays`, `toIsoDate`, and `isSameMonth`. The component owns month bounds, header/nav, weekday headers, outside-month/weekend/today classes, and a cell shell; consumers render delivery-picker or orders-specific cell content.
+- API response shape chosen: `{ start, end, days }`, returning only dates with active orders. Each day is `{ date, orders }`, and each order reuses the existing order DTO (`orderCode`, `shortenedOrderCode`, clinic fields, case, teeth, shade, `requestedDeliveryDate`, status, etc.).
+- Discoveries affecting lab/IAM/audit slices: Current API tests seed an extra clinic order directly because the walking-skeleton web config only defines `DEMO`; future lab/org work should add realistic multi-clinic test config. The frontend still uses `actor.isTechnician` as the lab/business-user predicate as planned.
