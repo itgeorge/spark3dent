@@ -97,6 +97,31 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task UpdateOrderAsync_PersistsChangedFieldsAndCancelledStatus()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        var created = await repo.CreateOrderAsync(BuildOrder("UPD-234", "before", DateTimeOffset.Parse("2026-05-31T10:00:00Z")));
+        var updatedAt = DateTimeOffset.Parse("2026-05-31T12:00:00Z");
+
+        var updated = await repo.UpdateOrderAsync(created with
+        {
+            CaseName = "after",
+            Status = OrderStatus.Cancelled,
+            ToothStart = 12,
+            ToothEnd = 12,
+            UpdatedAt = updatedAt
+        });
+        var reloaded = await repo.GetOrderByCodeAsync("UPD-234");
+
+        Assert.That(updated.CaseName, Is.EqualTo("after"));
+        Assert.That(reloaded, Is.Not.Null);
+        Assert.That(reloaded!.CaseName, Is.EqualTo("after"));
+        Assert.That(reloaded.Status, Is.EqualTo(OrderStatus.Cancelled));
+        Assert.That(reloaded.ToothStart, Is.EqualTo(12));
+        Assert.That(reloaded.UpdatedAt, Is.EqualTo(updatedAt));
+    }
+
+    [Test]
     public async Task ListOrdersAsync_OrdersByRequestedDeliveryDateDescendingInDatabase()
     {
         var repo = new SqliteOrderRepo(_contextFactory);

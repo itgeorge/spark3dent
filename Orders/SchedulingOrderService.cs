@@ -40,14 +40,55 @@ public sealed class SchedulingOrderService
         return await _availability.GetStatusesAsync(start, end, minimum, ct);
     }
 
-    public async Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, CancellationToken ct = default)
+    public Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, CancellationToken ct = default) =>
+        CreateOrderAsync(actor, draft, ip, userAgent, targetClinicCode: null, ct);
+
+    public async Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, string? targetClinicCode, CancellationToken ct = default)
     {
         ValidateDraft(draft);
         var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
         await _availability.ValidateDeliveryDateAsync(draft.RequestedDeliveryDate, minimum, ct);
 
-        var orderWithoutCode = BuildOrder(actor, draft, ip, userAgent);
+        var targetClinic = ResolveTargetClinic(actor, targetClinicCode);
+        var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent);
         return await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
+    }
+
+    public async Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, CancellationToken ct = default)
+    {
+        var existing = await GetAuthorizedOrderAsync(actor, orderCode, ct);
+        if (existing.Status == OrderStatus.Cancelled)
+            throw new InvalidOperationException("Cancelled orders cannot be modified.");
+
+        ValidateDraft(draft);
+        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
+        await _availability.ValidateDeliveryDateAsync(draft.RequestedDeliveryDate, minimum, ct);
+
+        var updated = existing with
+        {
+            CaseName = draft.CaseName.Trim(),
+            ImpressionDate = draft.ImpressionDate,
+            ProductCategory = draft.ProductCategory,
+            WorkType = draft.WorkType,
+            Material = draft.Material,
+            ConstructionType = draft.ConstructionType,
+            ToothStart = draft.TeethRange.Start,
+            ToothEnd = draft.TeethRange.End,
+            AbutmentTeeth = string.Join(",", draft.TeethRange.DefaultAbutments(draft.ConstructionType)),
+            RequestedDeliveryDate = draft.RequestedDeliveryDate,
+            Shade = draft.Shade,
+            Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
+            UpdatedAt = _clock.UtcNow
+        };
+        return await _orders.UpdateOrderAsync(updated, ct);
+    }
+
+    public async Task<OrderRecord> CancelOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct = default)
+    {
+        var existing = await GetAuthorizedOrderAsync(actor, orderCode, ct);
+        if (existing.Status == OrderStatus.Cancelled)
+            throw new InvalidOperationException("Order is already cancelled.");
+        return await _orders.UpdateOrderAsync(existing with { Status = OrderStatus.Cancelled, UpdatedAt = _clock.UtcNow }, ct);
     }
 
     public Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default) => _orders.GetOrderByCodeAsync(orderCode, ct);
@@ -70,14 +111,36 @@ public sealed class SchedulingOrderService
         draft.TeethRange.Validate(draft.ConstructionType);
     }
 
-    private OrderRecord BuildOrder(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent)
+    private ClinicConfig ResolveTargetClinic(AuthenticatedActor actor, string? targetClinicCode)
+    {
+        if (!actor.IsTechnician)
+        {
+            if (!string.IsNullOrWhiteSpace(targetClinicCode) && !string.Equals(targetClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Clinic users cannot create orders for another clinic.");
+            return _configProvider.Current.GetClinic(actor.ClinicCode);
+        }
+
+        if (string.IsNullOrWhiteSpace(targetClinicCode))
+            throw new InvalidOperationException("Target clinic is required for technician order creation.");
+        return _configProvider.Current.GetClinic(targetClinicCode.Trim());
+    }
+
+    private async Task<OrderRecord> GetAuthorizedOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct)
+    {
+        var order = await _orders.GetOrderByCodeAsync(orderCode, ct);
+        if (order == null || (!actor.IsTechnician && !string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase)))
+            throw new KeyNotFoundException("Order not found.");
+        return order;
+    }
+
+    private OrderRecord BuildOrder(AuthenticatedActor actor, ClinicConfig targetClinic, OrderDraft draft, string ip, string userAgent)
     {
         var now = _clock.UtcNow;
         return new OrderRecord(
             0,
             "",
-            actor.ClinicCode,
-            actor.ClinicDisplayName,
+            targetClinic.Code,
+            targetClinic.DisplayName,
             actor.CredentialId,
             actor.CredentialLabel,
             actor.CredentialPinHashFingerprint,

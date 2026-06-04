@@ -42,6 +42,12 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
                 Credentials = credentialHash == null
                     ? []
                     : [new ClinicCredentialConfig { Id = "cred-1", Label = "Cred 1", PinHash = credentialHash, IsActive = true, Role = credentialRole }]
+            },
+            new ClinicConfig
+            {
+                Code = "OTHER",
+                DisplayName = "Other Clinic",
+                Credentials = []
             }
         ]
     }, DateTimeOffset.UtcNow, "test"));
@@ -50,4 +56,6 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
 internal static class TestActors
 {
     public static readonly AuthenticatedActor Demo = new("DEMO", "Demo", "cred-1", "Cred 1", "fingerprint", "session-1");
+    public static readonly AuthenticatedActor Other = new("OTHER", "Other Clinic", "cred-other", "Other Cred", "other-fingerprint", "session-2");
+    public static readonly AuthenticatedActor Technician = new("DEMO", "Demo", "tech-1", "Technician", "tech-fingerprint", "session-tech", ActorRole.Technician);
 }

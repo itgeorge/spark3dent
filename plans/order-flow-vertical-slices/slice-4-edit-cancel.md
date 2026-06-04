@@ -255,20 +255,20 @@ Technician:
 
 ## Implementation Checklist
 
-- [ ] Extend order status with `Cancelled`.
-- [ ] Add repository update/cancel persistence support.
-- [ ] Add service authorization helpers for own-vs-technician.
-- [ ] Add update service method.
-- [ ] Add cancel service method.
-- [ ] Add `PUT /api/scheduling/orders/{code}`.
-- [ ] Add `DELETE /api/scheduling/orders/{code}` soft-cancel.
-- [ ] Add technician target clinic handling for create.
-- [ ] Add clinic selector UI for technician create.
-- [ ] Add review/edit/cancel UI states and actions.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify clinic/technician behavior.
-- [ ] Update `master-plan.md` and audit slice assumptions.
+- [x] Extend order status with `Cancelled`.
+- [x] Add repository update/cancel persistence support.
+- [x] Add service authorization helpers for own-vs-technician.
+- [x] Add update service method.
+- [x] Add cancel service method.
+- [x] Add `PUT /api/scheduling/orders/{code}`.
+- [x] Add `DELETE /api/scheduling/orders/{code}` soft-cancel.
+- [x] Add technician target clinic handling for create.
+- [x] Add clinic selector UI for technician create.
+- [x] Add review/edit/cancel UI states and actions.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify clinic/technician behavior.
+- [x] Update `master-plan.md` and audit slice assumptions.
 
 ## Out of Scope
 
@@ -279,12 +279,40 @@ Technician:
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
+- Status: Complete (2026-06-04)
 - Files changed:
+  - `Orders/Enums.cs`
+  - `Orders/Repositories.cs`
+  - `Orders/SchedulingOrderService.cs`
+  - `Database/SqliteOrderRepo.cs`
+  - `Web/SchedulingApi.cs`
+  - `Web/wwwroot/orders.html`
+  - `Orders.Tests/SchedulingOrderServiceTest.cs`
+  - `Orders.Tests/TestSupport.cs`
+  - `Database.Tests/SqliteOrderRepoTest.cs`
+  - `Web.Tests/SchedulingApiTests.cs`
+  - `plans/order-flow-vertical-slices/master-plan.md`
+  - `plans/order-flow-vertical-slices/slice-4-edit-cancel.md`
+  - `plans/order-flow-vertical-slices/slice-5-audit-log.md`
 - Tests run:
+  - `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` — passed, 50 tests.
+  - `dotnet test Database.Tests/Database.Tests.csproj --no-restore` — passed, 73 tests.
+  - `dotnet test Web.Tests/Web.Tests.csproj --no-restore` — passed, 88 tests.
+  - `dotnet build Web/Web.csproj --no-restore` — passed.
+  - Extracted inline script from `Web/wwwroot/orders.html`; `node --check` passed.
 - Manual checks:
+  - Headless Chromium smoke verified clinic login, order appears in list, review actions appear, edit/save updates review, cancel sets Cancelled status, and cancelled review disables Edit/Cancel.
 - Permission decisions:
+  - Clinics can update/cancel only orders whose `ClinicCode` matches their actor clinic.
+  - Non-owned direct GET/PUT/DELETE returns 404 `Order not found.` to avoid existence leaks.
+  - Edit/cancel of already-cancelled orders returns 400; UI disables those controls after cancellation.
+  - Technicians can update/cancel any order.
+  - Existing order clinic reassignment is not supported in v1 edit mode.
 - Technician target-clinic behavior:
+  - Added technician-only `GET /api/scheduling/clinics` returning active clinic code/display entries.
+  - Technician create requires `clinicCode` in the create body and the UI shows a target clinic selector above the stepper.
+  - Clinic create ignores same-clinic target but rejects a different target clinic.
+  - Created technician-targeted orders store the target clinic code/display and store the technician credential id/label/fingerprint in the existing credential fields until Slice 5 adds explicit audit actor metadata.
 - Discoveries affecting Slice 5:
+  - Audit should distinguish target clinic from acting credential/actor. Slice 4 intentionally reuses existing credential fields for the acting technician when a technician creates for a target clinic.
+  - Audit operations should include order create/update/cancel endpoint names: `POST /api/scheduling/orders`, `PUT /api/scheduling/orders/{code}`, `DELETE /api/scheduling/orders/{code}`.

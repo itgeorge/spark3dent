@@ -6,6 +6,94 @@ namespace Orders.Tests;
 public class SchedulingOrderServiceTest
 {
     [Test]
+    public async Task UpdateOrderAsync_GivenClinicOwnOrder_UpdatesFields()
+    {
+        var fixture = new Fixture(1);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
+        var draft = fixture.CreateOrderDraft("Updated case") with
+        {
+            TeethRange = new ToothRange(12, 12),
+            RequestedDeliveryDate = new DateOnly(2026, 6, 9),
+            Notes = "updated note"
+        };
+
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, draft);
+
+        Assert.That(updated.OrderCode, Is.EqualTo(created.OrderCode));
+        Assert.That(updated.CaseName, Is.EqualTo("Updated case"));
+        Assert.That(updated.ToothStart, Is.EqualTo(12));
+        Assert.That(updated.Notes, Is.EqualTo("updated note"));
+        Assert.That(updated.CreatedAt, Is.EqualTo(created.CreatedAt));
+        Assert.That(updated.Status, Is.EqualTo(OrderStatus.Created));
+    }
+
+    [Test]
+    public async Task UpdateOrderAsync_GivenClinicOtherOrder_ReturnsNotFound()
+    {
+        var fixture = new Fixture(1);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Other"), "127.0.0.1", "test", "OTHER");
+
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Nope")));
+    }
+
+    [Test]
+    public async Task UpdateOrderAsync_GivenTechnicianAnyOrder_UpdatesFields()
+    {
+        var fixture = new Fixture(1);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
+
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Technician, created.OrderCode, fixture.CreateOrderDraft("Tech edit"));
+
+        Assert.That(updated.CaseName, Is.EqualTo("Tech edit"));
+    }
+
+    [Test]
+    public async Task CancelOrderAsync_SetsCancelledAndRejectsFurtherChanges()
+    {
+        var fixture = new Fixture(1);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Cancel me"), "127.0.0.1", "test");
+
+        var cancelled = await fixture.Service.CancelOrderAsync(TestActors.Demo, created.OrderCode);
+
+        Assert.That(cancelled.Status, Is.EqualTo(OrderStatus.Cancelled));
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("No edit")));
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CancelOrderAsync(TestActors.Demo, created.OrderCode));
+    }
+
+    [Test]
+    public async Task CreateOrderAsync_GivenTechnicianTargetClinic_CreatesForTargetClinicWithTechnicianCredential()
+    {
+        var fixture = new Fixture(1);
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("For other"), "127.0.0.1", "test", "OTHER");
+
+        Assert.That(created.ClinicCode, Is.EqualTo("OTHER"));
+        Assert.That(created.ClinicDisplayName, Is.EqualTo("Other Clinic"));
+        Assert.That(created.CredentialId, Is.EqualTo(TestActors.Technician.CredentialId));
+    }
+
+    [Test]
+    public void CreateOrderAsync_GivenClinicTargetingOtherClinic_Rejects()
+    {
+        var fixture = new Fixture(1);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Bad target"), "127.0.0.1", "test", "OTHER"));
+    }
+
+    [Test]
+    public void CreateOrderAsync_GivenTechnicianWithoutTargetClinic_Rejects()
+    {
+        var fixture = new Fixture(1);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Missing target"), "127.0.0.1", "test"));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_WhenManyConcurrentRequestsReceiveSameFirstOrderCode_RetriesAndAllSucceed()
     {
         const int racingOrderCount = 20;
@@ -173,6 +261,17 @@ public class SchedulingOrderServiceTest
             {
                 lock (_gate)
                     return Task.FromResult(_ordersByCode.TryGetValue(orderCode, out var order) ? order : null);
+            }
+
+            public Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default)
+            {
+                lock (_gate)
+                {
+                    if (!_ordersByCode.ContainsKey(order.OrderCode))
+                        throw new InvalidOperationException("Order not found.");
+                    _ordersByCode[order.OrderCode] = order;
+                    return Task.FromResult(order);
+                }
             }
 
             public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default)

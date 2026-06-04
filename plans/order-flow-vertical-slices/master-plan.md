@@ -53,7 +53,7 @@ Existing relevant files/routes:
 | 2 | `plans/order-flow-vertical-slices/slice-2-auth-roles-invoicing-gate.md` | Complete | Actor roles added; `/api/invoicing/*` technician-only; scheduler list is role-aware; old technician list route retired |
 | 2.5 | `plans/order-flow-vertical-slices/slice-2.5-read-only-order-review.md` | Complete | Existing orders can be opened from the list in a read-only review view |
 | 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added; `/` has technician login gate and redirects clinic users to Scheduler |
-| 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Not started | Edit/cancel orders with permissions and technician clinic selector |
+| 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Complete | Edit/cancel orders with permissions; technician create supports target clinic selector |
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Not started | Audit log for scheduling/invoicing/client operations |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
@@ -96,6 +96,7 @@ Append dated notes here after each slice.
 - 2026-06-03: Slice 2.5 complete. `Web/wwwroot/orders.html` now has list row/View behavior that fetches `GET /api/scheduling/orders/{code}` and displays a simplified read-only step-5-style review as a modal over a blurred backdrop. It closes via the top Back to orders button, Escape, or backdrop click. Slice 4 should add Edit/Cancel buttons to the review header.
 - 2026-06-03: Scheduler order lists now sort by expected/requested delivery date descending, with newest-created first only as a tie-breaker within the same delivery date.
 - 2026-06-04: Slice 3 complete. `/` now uses a client-side scheduling-auth gate before initializing invoicing data; non-technician authenticated users are redirected to `/orders`. Product switchers own Scheduler/Invoicer navigation; settings no longer contains Scheduler.
+- 2026-06-04: Slice 4 complete. Added `Cancelled` status, `PUT /api/scheduling/orders/{code}`, `DELETE /api/scheduling/orders/{code}` soft-cancel, and technician-only `GET /api/scheduling/clinics`. Clinics can edit/cancel only own non-cancelled orders; non-owned direct access returns 404. Technicians can edit/cancel any order and create orders by selecting target clinic. Existing order clinic reassignment is not supported.
 
 ## Verification Evidence
 
@@ -103,6 +104,7 @@ Append dated notes here after each slice.
 - 2026-06-03 Slices 1–2: Headless Chromium browser evaluation passed 19/19 checks against a temp DB on `http://127.0.0.1:61234`: clinic `/orders` login/list/create/confirmation/back-to-list/logout; clinic 403 on `/api/invoicing/clients`; technician `/orders` list with create hidden/notice; role-aware scheduling list 200; retired technician route 404; technician `/` invoicer page and `/api/invoicing/clients` 200; legacy `/api/clients` and `/api/invoices` 404.
 - 2026-06-03 Slice 2.5: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj` passed (87 tests); headless Chromium smoke passed for create order -> list -> View -> read-only review -> Back.
 - 2026-06-04 Slice 3: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj --no-build` passed (87 tests); `node --check` passed for extracted inline scripts from `index.html` and `orders.html`; headless Chromium smoke passed for unauthenticated `/` login prompt, technician `/` login/product switcher/API access, technician `/orders` switcher, clinic `/orders` without Invoicer switcher, and clinic direct `/` redirect to `/orders`.
+- 2026-06-04 Slice 4: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (50 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (73 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (88 tests); `dotnet build Web/Web.csproj --no-restore` passed; `node --check` passed for extracted `orders.html` inline script; headless Chromium smoke passed for clinic login, seeded order review, edit/save, cancel, and disabled cancelled actions.
 
 ## Global Verification Commands
 
@@ -135,6 +137,7 @@ Scheduling:
 - `POST /api/scheduling/auth/logout`
 - `GET /api/scheduling/auth/me`
 - `POST /api/scheduling/dates`
+- `GET /api/scheduling/clinics` (technician-only active clinic list for target selection)
 - `GET /api/scheduling/orders` (clinic actors see own clinic; technician actors see all)
 - `POST /api/scheduling/orders`
 - `GET /api/scheduling/orders/{code}`

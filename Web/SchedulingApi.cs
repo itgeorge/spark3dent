@@ -78,6 +78,18 @@ public static class SchedulingApi
             return Results.Json(new { rules, defaultMinBusinessDays = provider.Current.Options.DefaultMinBusinessDays }, JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/clinics", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsTechnician) return Results.Json(new { error = "Technician access required." }, statusCode: 403, options: JsonOptions);
+            var clinics = provider.Current.Options.Clinics
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .Select(c => new { clinicCode = c.Code, clinicDisplayName = c.DisplayName });
+            return Results.Json(new { items = clinics }, JsonOptions);
+        });
+
         app.MapPost("/api/scheduling/dates", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -101,13 +113,11 @@ public static class SchedulingApi
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            if (actor.IsTechnician)
-                return Results.Json(new { error = "Technician order creation requires target clinic selection and is not available yet." }, statusCode: 403, options: JsonOptions);
             var body = await ReadJson<CreateOrderRequest>(ctx);
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var created = await orders.CreateOrderAsync(actor, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
+                var created = await orders.CreateOrderAsync(actor, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), body.ClinicCode, ctx.RequestAborted);
                 return Results.Json(new { order = ToDto(created) }, statusCode: 201, options: JsonOptions);
             }
             catch (InvalidOperationException ex)
@@ -132,6 +142,46 @@ public static class SchedulingApi
             if (order == null || (!actor.IsTechnician && !string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase)))
                 return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
             return Results.Json(new { order = ToDto(order) }, JsonOptions);
+        });
+
+        app.MapPut("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var body = await ReadJson<UpdateOrderRequest>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var updated = await orders.UpdateOrderAsync(actor, code, ToDraft(body, body.RequestedDeliveryDate), ctx.RequestAborted);
+                return Results.Json(new { order = ToDto(updated) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapDelete("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            try
+            {
+                var cancelled = await orders.CancelOrderAsync(actor, code, ctx.RequestAborted);
+                return Results.Json(new { order = ToDto(cancelled) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
         });
     }
 
@@ -189,7 +239,8 @@ public static class SchedulingApi
         o.Status,
         o.Shade,
         o.Notes,
-        o.CreatedAt
+        o.CreatedAt,
+        o.UpdatedAt
     };
 
     private static string RemoteIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -218,6 +269,12 @@ public static class SchedulingApi
     }
 
     public sealed record CreateOrderRequest : OrderShape
+    {
+        public DateOnly RequestedDeliveryDate { get; init; }
+        public string? ClinicCode { get; init; }
+    }
+
+    public sealed record UpdateOrderRequest : OrderShape
     {
         public DateOnly RequestedDeliveryDate { get; init; }
     }

@@ -147,6 +147,8 @@ Metadata suggestions:
 - requestedDeliveryDate,
 - status.
 
+Slice 4 note: technician-created orders store the selected target clinic in `OrderRecord.ClinicCode` / `ClinicDisplayName`, while the existing credential fields may contain the acting technician credential. Audit should explicitly record both acting actor metadata and target clinic metadata instead of inferring actor from order credential fields.
+
 ### OrderUpdated
 
 Metadata suggestions:

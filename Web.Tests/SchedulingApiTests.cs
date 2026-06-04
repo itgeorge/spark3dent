@@ -80,7 +80,7 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task SchedulingFlow_TechnicianCanListOrdersButCannotCreateYet()
+    public async Task SchedulingFlow_TechnicianCanListAndCreateWithTargetClinic()
     {
         using var fixture = new ApiTestFixture();
         using var clinicClient = fixture.Client;
@@ -107,7 +107,11 @@ public class SchedulingApiTests
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain(code));
 
-        var techCreate = await techClient.PostAsync("/api/scheduling/orders", Json("""
+        var clinics = await techClient.GetAsync("/api/scheduling/clinics");
+        Assert.That(clinics.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await clinics.Content.ReadAsStringAsync(), Does.Contain("DEMO"));
+
+        var techCreateMissingClinic = await techClient.PostAsync("/api/scheduling/orders", Json("""
         {
           "caseName":"Tech Case",
           "impressionDate":"2026-06-02",
@@ -120,7 +124,89 @@ public class SchedulingApiTests
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
-        Assert.That(techCreate.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(techCreateMissingClinic.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var techCreate = await techClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"DEMO",
+          "caseName":"Tech Case",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(techCreate.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_UpdateAndCancelOrder_EnforcesPermissions()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Original Case",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var code = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString();
+
+        var update = await client.PutAsync($"/api/scheduling/orders/{code}", Json("""
+        {
+          "caseName":"Updated Case",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":12,
+          "toothEnd":12,
+          "requestedDeliveryDate":"2026-06-05",
+          "notes":"updated"
+        }
+        """));
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var updatedOrder = JsonDocument.Parse(await update.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(updatedOrder.GetProperty("caseName").GetString(), Is.EqualTo("Updated Case"));
+        Assert.That(updatedOrder.GetProperty("toothStart").GetInt32(), Is.EqualTo(12));
+
+        var cancel = await client.DeleteAsync($"/api/scheduling/orders/{code}");
+        Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var cancelledOrder = JsonDocument.Parse(await cancel.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(cancelledOrder.GetProperty("status").GetString(), Is.EqualTo("cancelled"));
+
+        var updateCancelled = await client.PutAsync($"/api/scheduling/orders/{code}", Json("""
+        {
+          "caseName":"Nope",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":12,
+          "toothEnd":12,
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(updateCancelled.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        using var anonymous = fixture.CreateClient();
+        var anonymousCancel = await anonymous.DeleteAsync($"/api/scheduling/orders/{code}");
+        Assert.That(anonymousCancel.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
     [Test]

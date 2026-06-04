@@ -37,6 +37,16 @@ public sealed class SqliteOrderRepo : IOrderRepository
         return entity == null ? null : ToDomain(entity);
     }
 
+    public async Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var entity = await ctx.SchedulingOrders.FirstOrDefaultAsync(o => o.OrderCode == order.OrderCode, ct)
+            ?? throw new InvalidOperationException("Order not found.");
+        ApplyToEntity(entity, order);
+        await ctx.SaveChangesAsync(ct);
+        return ToDomain(entity);
+    }
+
     public async Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
@@ -65,34 +75,40 @@ public sealed class SqliteOrderRepo : IOrderRepository
         ex.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteEx &&
         sqliteEx.Message.Contains("SchedulingOrders.OrderCode", StringComparison.OrdinalIgnoreCase);
 
-    private static SchedulingOrderEntity ToEntity(OrderRecord order) => new()
+    private static SchedulingOrderEntity ToEntity(OrderRecord order)
     {
-        Id = order.Id,
-        OrderCode = order.OrderCode,
-        ClinicCode = order.ClinicCode,
-        ClinicDisplayName = order.ClinicDisplayName,
-        CredentialId = order.CredentialId,
-        CredentialLabel = order.CredentialLabel,
-        CredentialPinHashFingerprint = order.CredentialPinHashFingerprint,
-        CaseName = order.CaseName,
-        ImpressionDate = order.ImpressionDate,
-        ProductCategory = order.ProductCategory.ToString(),
-        WorkType = order.WorkType.ToString(),
-        Material = order.Material.ToString(),
-        ConstructionType = order.ConstructionType.ToString(),
-        ToothStart = order.ToothStart,
-        ToothEnd = order.ToothEnd,
-        AbutmentTeeth = order.AbutmentTeeth,
-        RequestedDeliveryDate = order.RequestedDeliveryDate,
-        Status = order.Status.ToString(),
-        Shade = order.Shade,
-        Notes = order.Notes,
-        CreatedAt = order.CreatedAt,
-        CreatedAtUnixTimeMilliseconds = order.CreatedAt.ToUnixTimeMilliseconds(),
-        UpdatedAt = order.UpdatedAt,
-        CreatedIp = order.CreatedIp,
-        CreatedUserAgent = order.CreatedUserAgent
-    };
+        var entity = new SchedulingOrderEntity { Id = order.Id };
+        ApplyToEntity(entity, order);
+        return entity;
+    }
+
+    private static void ApplyToEntity(SchedulingOrderEntity entity, OrderRecord order)
+    {
+        entity.OrderCode = order.OrderCode;
+        entity.ClinicCode = order.ClinicCode;
+        entity.ClinicDisplayName = order.ClinicDisplayName;
+        entity.CredentialId = order.CredentialId;
+        entity.CredentialLabel = order.CredentialLabel;
+        entity.CredentialPinHashFingerprint = order.CredentialPinHashFingerprint;
+        entity.CaseName = order.CaseName;
+        entity.ImpressionDate = order.ImpressionDate;
+        entity.ProductCategory = order.ProductCategory.ToString();
+        entity.WorkType = order.WorkType.ToString();
+        entity.Material = order.Material.ToString();
+        entity.ConstructionType = order.ConstructionType.ToString();
+        entity.ToothStart = order.ToothStart;
+        entity.ToothEnd = order.ToothEnd;
+        entity.AbutmentTeeth = order.AbutmentTeeth;
+        entity.RequestedDeliveryDate = order.RequestedDeliveryDate;
+        entity.Status = order.Status.ToString();
+        entity.Shade = order.Shade;
+        entity.Notes = order.Notes;
+        entity.CreatedAt = order.CreatedAt;
+        entity.CreatedAtUnixTimeMilliseconds = order.CreatedAt.ToUnixTimeMilliseconds();
+        entity.UpdatedAt = order.UpdatedAt;
+        entity.CreatedIp = order.CreatedIp;
+        entity.CreatedUserAgent = order.CreatedUserAgent;
+    }
 
     private static OrderRecord ToDomain(SchedulingOrderEntity e) => new(
         e.Id,
