@@ -50,6 +50,7 @@ Existing relevant files/routes:
 10. Slice 5 audit boundary: audit contracts (`AuditEvent`, `IAuditLog`) live in `Utilities` to avoid a new project; SQLite persistence lives in `Database`; scheduler logs at service level; invoicing/client logs in route handlers until a fuller app-service layer exists.
 11. A simple technician-only audit read endpoint exists at `GET /api/invoicing/audit` for inspection/manual verification.
 12. A CLI audit listing command exists for operator inspection/export: `audit list [filters]`, including `--json` and filters such as `--service`, `--operation`, `--entity-type`, `--entity-id`, `--actor-role`, `--actor-clinic`, `--since`, `--until`, `--limit`, and `--db`.
+13. Orders calendar view is a display mode of the scheduler list. It defaults to calendar for technician/lab actors and list for clinic actors, persists the selected mode in `localStorage`, excludes cancelled orders, and uses a dedicated calendar API endpoint.
 
 ## Slice Index and Status
 
@@ -61,6 +62,7 @@ Existing relevant files/routes:
 | 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added and later extracted to shared AppChrome assets; `/` has technician login gate and redirects clinic users to Scheduler |
 | 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Complete | Edit/cancel orders with permissions; technician create supports target clinic selector |
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Complete | Append-only DB audit log for scheduler create/update/cancel and invoicing/client mutations, plus technician read endpoint |
+| 6 | `plans/order-flow-vertical-slices/slice-6-orders-calendar-view.md` | Not started | Calendar display mode for active orders, with shared month-calendar component and dedicated calendar API |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -91,6 +93,7 @@ Before handing off to another agent:
 - Slice 3 depends on Slice 2 actor role info from auth/me.
 - Slice 4 depends on Slice 2 permissions and Slice 3 may already expose technician/clinic mode in UI.
 - Slice 5 should audit the final operation names/endpoints from Slices 2-4.
+- Slice 6 depends on Slice 4 order status/review behavior and should avoid assumptions that block the future lab-organization role refactor.
 
 ## Cross-Slice Discoveries / Course Corrections
 
@@ -106,6 +109,7 @@ Append dated notes here after each slice.
 - 2026-06-04: Post-slice UI polish extracted shared app chrome/topbar behavior to `Web/wwwroot/js/app-chrome.js` and `Web/wwwroot/css/app-chrome.css`, used by both `index.html` and `orders.html`. Product switcher and logout now live in the hamburger menu, with settings remaining as an invoicer-specific extra action.
 - 2026-06-04: Slice 5 complete. Added append-only `AuditEvents` table/repository and `Utilities` audit contracts. Scheduler create/update/cancel logs happen in `SchedulingOrderService` after persistence and explicitly include acting actor fields separate from target clinic metadata. Invoicing/client route handlers log client create/update/rename, invoice issue/correct, and non-dry-run import commit after successful mutation. Added technician-only `GET /api/invoicing/audit` for inspection.
 - 2026-06-04: Post-slice audit inspection polish added CLI support for `audit list [filters]`, with table or JSON output and filters for service, operation, entity, actor, date range, limit, and database path.
+- 2026-06-05: Added Slice 6 plan for an orders calendar display mode. Calendar mode should use a dedicated `/api/scheduling/orders/calendar` endpoint, exclude cancelled orders, default to calendar for technician/lab actors and list for clinic actors, persist view mode in `localStorage`, and extract a generic month-calendar component after first renaming the current delivery picker calendar classes to delivery-specific names.
 
 ## Verification Evidence
 
@@ -153,6 +157,7 @@ Scheduling:
 - `GET /api/scheduling/orders/{code}`
 - `PUT /api/scheduling/orders/{code}`
 - `DELETE /api/scheduling/orders/{code}` soft-cancels
+- `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` (planned Slice 6; active orders only, role-aware, delivery-date range)
 
 Invoicing/client after Slice 2:
 
@@ -214,6 +219,17 @@ Slice 5:
 - migrations
 - scheduling/invoicing/client services
 - tests
+
+Slice 6:
+
+- `Web/wwwroot/orders.html`
+- `Web/wwwroot/js/month-calendar.js` (planned)
+- `Web/wwwroot/css/month-calendar.css` (planned)
+- `Web/SchedulingApi.cs`
+- `Orders/Repositories.cs`
+- `Orders/SchedulingOrderService.cs`
+- `Database/SqliteOrderRepo.cs`
+- tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
 
 ## Open Questions to Resolve During Implementation
 
