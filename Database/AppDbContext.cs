@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.InvoiceSequenceEntity> InvoiceSequence { get; set; }
     public DbSet<Entities.SchedulingAuthSessionEntity> SchedulingAuthSessions { get; set; }
     public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
+    public DbSet<Entities.AuditEventEntity> AuditEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -69,6 +70,20 @@ public class AppDbContext : DbContext
             e.Property(x => x.ClinicCode).IsRequired();
             e.Property(x => x.CredentialId).IsRequired();
             e.Property(x => x.Shade).HasConversion<int>();
+        });
+
+        modelBuilder.Entity<Entities.AuditEventEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.OccurredAtUnixTimeMilliseconds);
+            e.HasIndex(x => new { x.EntityType, x.EntityId });
+            e.HasIndex(x => new { x.ActorClinicCode, x.OccurredAtUnixTimeMilliseconds });
+            e.HasIndex(x => new { x.ServiceName, x.Operation, x.OccurredAtUnixTimeMilliseconds });
+            e.Property(x => x.ServiceName).IsRequired();
+            e.Property(x => x.Operation).IsRequired();
+            e.Property(x => x.EntityType).IsRequired();
+            e.Property(x => x.EntityId).IsRequired();
+            e.Property(x => x.ActorRole).IsRequired();
         });
     }
 }

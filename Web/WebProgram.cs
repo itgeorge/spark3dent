@@ -65,6 +65,7 @@ builder.Services.AddSingleton<DateAvailabilityService>();
 builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
+builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
 builder.Services.AddScoped<SchedulingAuthService>();
 builder.Services.AddScoped<SchedulingOrderService>();
 

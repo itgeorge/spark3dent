@@ -238,18 +238,18 @@ Invoicing/client:
 
 ## Implementation Checklist
 
-- [ ] Review Slice 2 and Slice 4 completion notes before starting.
-- [ ] Choose audit project/boundary and document it in master plan.
-- [ ] Add audit domain/interface.
-- [ ] Add DB entity/repository/migration.
-- [ ] Register audit service in DI.
-- [ ] Make current actor available to services/handlers.
-- [ ] Add scheduler audit logging in service methods.
-- [ ] Add invoicing/client audit logging for mutations.
-- [ ] Add tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify DB audit entries.
-- [ ] Update `master-plan.md` with final status and any future audit enhancements.
+- [x] Review Slice 2 and Slice 4 completion notes before starting.
+- [x] Choose audit project/boundary and document it in master plan.
+- [x] Add audit domain/interface.
+- [x] Add DB entity/repository/migration.
+- [x] Register audit service in DI.
+- [x] Make current actor available to services/handlers.
+- [x] Add scheduler audit logging in service methods.
+- [x] Add invoicing/client audit logging for mutations.
+- [x] Add tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify DB audit entries.
+- [x] Update `master-plan.md` with final status and any future audit enhancements.
 
 ## Out of Scope
 
@@ -260,11 +260,43 @@ Invoicing/client:
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
+- Status: Complete (2026-06-04)
 - Files changed:
+  - `Utilities/AuditEvent.cs`
+  - `Database/Entities/AuditEventEntity.cs`
+  - `Database/SqliteAuditLog.cs`
+  - `Database/AppDbContext.cs`
+  - `Database/Migrations/20260604171331_AddAuditEvents.cs`
+  - `Database/Migrations/20260604171331_AddAuditEvents.Designer.cs`
+  - `Database/Migrations/AppDbContextModelSnapshot.cs`
+  - `Orders/SchedulingOrderService.cs`
+  - `Web/SchedulingApi.cs`
+  - `Web/Api.cs`
+  - `Web/WebProgram.cs`
+  - `Orders.Tests/SchedulingOrderServiceTest.cs`
+  - `Database.Tests/SqliteAuditLogTest.cs`
+  - `Web.Tests/AuditApiTests.cs`
+  - `Web.Tests/ApiTestFixture.cs`
+  - `plans/order-flow-vertical-slices/master-plan.md`
+  - `plans/order-flow-vertical-slices/slice-5-audit-log.md`
 - Tests run:
+  - `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` — passed, 53 tests.
+  - `dotnet test Database.Tests/Database.Tests.csproj --no-restore` — passed, 75 tests.
+  - `dotnet test Web.Tests/Web.Tests.csproj --no-restore` — passed, 91 tests.
+  - `dotnet test --no-restore` — passed: Configuration 10, Storage 41, Orders 53, Accounting 61, Database 75, Invoices 251, Web 91.
+  - `dotnet build Web/Web.csproj --no-restore` — passed.
 - Manual checks:
+  - Verified audit rows through automated DB inspection in `Web.Tests/AuditApiTests` after real authenticated HTTP mutations.
+  - Verified technician read path with `GET /api/invoicing/audit?entityType=Invoice&limit=10` returning issued/corrected invoice audit rows.
+  - Verified metadata assertions do not contain demo raw PINs (`123456`, `654321`).
 - Audit boundary chosen:
+  - `Utilities` owns small audit contracts (`AuditEvent`, `IAuditLog`, `NoOpAuditLog`) to avoid adding a new project.
+  - `Database` owns SQLite persistence (`AuditEventEntity`, `SqliteAuditLog`, migration).
+  - Scheduler audit writes are service-level in `SchedulingOrderService` after successful repository persistence.
+  - Invoicing/client audit writes are route-handler-level in `Web/Api.cs` after successful mutation, because the invoicing/client API currently coordinates repositories/services directly there.
 - Future audit enhancements:
+  - Add a dedicated invoicing/client application service layer and move route-handler audit calls into it.
+  - Add richer but still safe diffs for client/invoice corrections.
+  - Add pagination/cursoring and UI for audit browsing if needed.
+  - Consider tamper-evident hash chaining/signing for regulated deployments.
+  - Consider audit retention/export policies and filters by actor/session.

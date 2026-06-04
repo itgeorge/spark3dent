@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Utilities;
 
 namespace Orders;
@@ -9,6 +10,7 @@ public sealed class SchedulingOrderService
     private readonly DateAvailabilityService _availability;
     private readonly IOrderCodeGenerator _codeGenerator;
     private readonly IClock _clock;
+    private readonly IAuditLog _auditLog;
     private readonly int _maxOrderCodeAttempts;
 
     public SchedulingOrderService(
@@ -17,13 +19,15 @@ public sealed class SchedulingOrderService
         DateAvailabilityService availability,
         IOrderCodeGenerator codeGenerator,
         IClock clock,
-        int maxOrderCodeAttempts = 20)
+        int maxOrderCodeAttempts = 20,
+        IAuditLog? auditLog = null)
     {
         _configProvider = configProvider;
         _orders = orders;
         _availability = availability;
         _codeGenerator = codeGenerator;
         _clock = clock;
+        _auditLog = auditLog ?? NoOpAuditLog.Instance;
         _maxOrderCodeAttempts = maxOrderCodeAttempts;
     }
 
@@ -51,10 +55,30 @@ public sealed class SchedulingOrderService
 
         var targetClinic = ResolveTargetClinic(actor, targetClinicCode);
         var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent);
-        return await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
+        var created = await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
+        await AppendOrderAuditAsync(
+            actor,
+            "OrderCreated",
+            created,
+            ip,
+            userAgent,
+            new
+            {
+                orderCode = created.OrderCode,
+                targetClinicCode = created.ClinicCode,
+                targetClinicDisplayName = created.ClinicDisplayName,
+                caseName = created.CaseName,
+                requestedDeliveryDate = created.RequestedDeliveryDate,
+                status = created.Status.ToString()
+            },
+            ct);
+        return created;
     }
 
-    public async Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, CancellationToken ct = default)
+    public Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, CancellationToken ct = default) =>
+        UpdateOrderAsync(actor, orderCode, draft, ip: null, userAgent: null, ct);
+
+    public async Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, string? ip, string? userAgent, CancellationToken ct = default)
     {
         var existing = await GetAuthorizedOrderAsync(actor, orderCode, ct);
         if (existing.Status == OrderStatus.Cancelled)
@@ -80,15 +104,51 @@ public sealed class SchedulingOrderService
             Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
             UpdatedAt = _clock.UtcNow
         };
-        return await _orders.UpdateOrderAsync(updated, ct);
+        var saved = await _orders.UpdateOrderAsync(updated, ct);
+        await AppendOrderAuditAsync(
+            actor,
+            "OrderUpdated",
+            saved,
+            ip,
+            userAgent,
+            new
+            {
+                orderCode = saved.OrderCode,
+                targetClinicCode = saved.ClinicCode,
+                targetClinicDisplayName = saved.ClinicDisplayName,
+                changedFields = ChangedFields(existing, saved),
+                oldRequestedDeliveryDate = existing.RequestedDeliveryDate == saved.RequestedDeliveryDate ? (DateOnly?)null : existing.RequestedDeliveryDate,
+                newRequestedDeliveryDate = existing.RequestedDeliveryDate == saved.RequestedDeliveryDate ? (DateOnly?)null : saved.RequestedDeliveryDate
+            },
+            ct);
+        return saved;
     }
 
-    public async Task<OrderRecord> CancelOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct = default)
+    public Task<OrderRecord> CancelOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct = default) =>
+        CancelOrderAsync(actor, orderCode, ip: null, userAgent: null, ct);
+
+    public async Task<OrderRecord> CancelOrderAsync(AuthenticatedActor actor, string orderCode, string? ip, string? userAgent, CancellationToken ct = default)
     {
         var existing = await GetAuthorizedOrderAsync(actor, orderCode, ct);
         if (existing.Status == OrderStatus.Cancelled)
             throw new InvalidOperationException("Order is already cancelled.");
-        return await _orders.UpdateOrderAsync(existing with { Status = OrderStatus.Cancelled, UpdatedAt = _clock.UtcNow }, ct);
+        var cancelled = await _orders.UpdateOrderAsync(existing with { Status = OrderStatus.Cancelled, UpdatedAt = _clock.UtcNow }, ct);
+        await AppendOrderAuditAsync(
+            actor,
+            "OrderCancelled",
+            cancelled,
+            ip,
+            userAgent,
+            new
+            {
+                orderCode = cancelled.OrderCode,
+                targetClinicCode = cancelled.ClinicCode,
+                targetClinicDisplayName = cancelled.ClinicDisplayName,
+                previousStatus = existing.Status.ToString(),
+                newStatus = cancelled.Status.ToString()
+            },
+            ct);
+        return cancelled;
     }
 
     public Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default) => _orders.GetOrderByCodeAsync(orderCode, ct);
@@ -98,6 +158,43 @@ public sealed class SchedulingOrderService
 
     public Task<IReadOnlyList<OrderRecord>> ListOrdersForActorAsync(AuthenticatedActor actor, int limit = 100, CancellationToken ct = default) =>
         actor.IsTechnician ? ListOrdersAsync(limit, ct) : ListOrdersForClinicAsync(actor.ClinicCode, limit, ct);
+
+    private Task AppendOrderAuditAsync(AuthenticatedActor actor, string operation, OrderRecord order, string? ip, string? userAgent, object metadata, CancellationToken ct)
+    {
+        var auditEvent = new AuditEvent(
+            0,
+            "Scheduling",
+            operation,
+            "SchedulingOrder",
+            order.OrderCode,
+            order.CaseName,
+            actor.Role.ToString(),
+            actor.ClinicCode,
+            actor.CredentialId,
+            actor.CredentialLabel,
+            actor.SessionId,
+            _clock.UtcNow,
+            string.IsNullOrWhiteSpace(ip) ? null : ip,
+            string.IsNullOrWhiteSpace(userAgent) ? null : userAgent,
+            JsonSerializer.Serialize(metadata));
+        return _auditLog.AppendAsync(auditEvent, ct);
+    }
+
+    private static string[] ChangedFields(OrderRecord oldOrder, OrderRecord newOrder)
+    {
+        var changed = new List<string>();
+        if (oldOrder.CaseName != newOrder.CaseName) changed.Add(nameof(OrderRecord.CaseName));
+        if (oldOrder.ImpressionDate != newOrder.ImpressionDate) changed.Add(nameof(OrderRecord.ImpressionDate));
+        if (oldOrder.ProductCategory != newOrder.ProductCategory) changed.Add(nameof(OrderRecord.ProductCategory));
+        if (oldOrder.WorkType != newOrder.WorkType) changed.Add(nameof(OrderRecord.WorkType));
+        if (oldOrder.Material != newOrder.Material) changed.Add(nameof(OrderRecord.Material));
+        if (oldOrder.ConstructionType != newOrder.ConstructionType) changed.Add(nameof(OrderRecord.ConstructionType));
+        if (oldOrder.ToothStart != newOrder.ToothStart || oldOrder.ToothEnd != newOrder.ToothEnd) changed.Add("TeethRange");
+        if (oldOrder.RequestedDeliveryDate != newOrder.RequestedDeliveryDate) changed.Add(nameof(OrderRecord.RequestedDeliveryDate));
+        if (oldOrder.Shade != newOrder.Shade) changed.Add(nameof(OrderRecord.Shade));
+        if (oldOrder.Notes != newOrder.Notes) changed.Add(nameof(OrderRecord.Notes));
+        return changed.ToArray();
+    }
 
     private static void ValidateDraft(OrderDraft draft)
     {

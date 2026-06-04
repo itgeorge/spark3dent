@@ -49,6 +49,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _autoLoginAsTechnician = autoLoginAsTechnician;
     }
 
+    public string DbPath => _dbPath;
+
     public HttpClient Client
     {
         get

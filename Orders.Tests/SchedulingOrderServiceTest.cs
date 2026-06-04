@@ -1,10 +1,61 @@
 using Orders;
+using Utilities;
 
 namespace Orders.Tests;
 
 [Parallelizable(ParallelScope.All)]
 public class SchedulingOrderServiceTest
 {
+    [Test]
+    public async Task CreateOrderAsync_AppendsOrderCreatedAuditAfterPersistence()
+    {
+        var audit = new CapturingAuditLog();
+        var fixture = new Fixture(1, auditLog: audit);
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Audit create"), "127.0.0.1", "test-agent", "OTHER");
+
+        Assert.That(audit.Events, Has.Count.EqualTo(1));
+        var evt = audit.Events[0];
+        Assert.That(evt.Operation, Is.EqualTo("OrderCreated"));
+        Assert.That(evt.EntityType, Is.EqualTo("SchedulingOrder"));
+        Assert.That(evt.EntityId, Is.EqualTo(created.OrderCode));
+        Assert.That(evt.ActorRole, Is.EqualTo("Technician"));
+        Assert.That(evt.ActorClinicCode, Is.EqualTo(TestActors.Technician.ClinicCode));
+        Assert.That(evt.ActorCredentialId, Is.EqualTo(TestActors.Technician.CredentialId));
+        Assert.That(evt.Ip, Is.EqualTo("127.0.0.1"));
+        Assert.That(evt.UserAgent, Is.EqualTo("test-agent"));
+        Assert.That(evt.MetadataJson, Does.Contain("OTHER"));
+    }
+
+    [Test]
+    public async Task UpdateAndCancelOrderAsync_AppendsAuditEvents()
+    {
+        var audit = new CapturingAuditLog();
+        var fixture = new Fixture(1, auditLog: audit);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
+
+        await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Updated"), "10.0.0.1", "ua-edit");
+        await fixture.Service.CancelOrderAsync(TestActors.Demo, created.OrderCode, "10.0.0.2", "ua-cancel");
+
+        Assert.That(audit.Events.Select(e => e.Operation), Is.EqualTo(new[] { "OrderCreated", "OrderUpdated", "OrderCancelled" }));
+        Assert.That(audit.Events[1].MetadataJson, Does.Contain("CaseName"));
+        Assert.That(audit.Events[2].MetadataJson, Does.Contain("previousStatus"));
+    }
+
+    [Test]
+    public void FailedValidationOrAuthorization_DoesNotAppendMutationAuditEvent()
+    {
+        var audit = new CapturingAuditLog();
+        var fixture = new Fixture(1, auditLog: audit);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft(" "), "127.0.0.1", "test"));
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await fixture.Service.UpdateOrderAsync(TestActors.Demo, "missing", fixture.CreateOrderDraft("Nope")));
+
+        Assert.That(audit.Events, Is.Empty);
+    }
+
     [Test]
     public async Task UpdateOrderAsync_GivenClinicOwnOrder_UpdatesFields()
     {
@@ -175,23 +226,46 @@ public class SchedulingOrderServiceTest
         }
     }
 
+    private sealed class CapturingAuditLog : IAuditLog
+    {
+        private readonly object _gate = new();
+        private readonly List<AuditEvent> _events = new();
+
+        public IReadOnlyList<AuditEvent> Events
+        {
+            get
+            {
+                lock (_gate)
+                    return _events.ToList();
+            }
+        }
+
+        public Task AppendAsync(AuditEvent auditEvent, CancellationToken ct = default)
+        {
+            lock (_gate)
+                _events.Add(auditEvent);
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class Fixture
     {
         private readonly IList<string> _generatorCodes;
         public IList<string> GeneratorCodes => _generatorCodes;
         public IOrderRepository Repository { get; }
 
-        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20)
+        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null)
             : this(Enumerable
                 .Repeat("racecode", racingOrderCount) // race all on the first code, only 1st should win this code
                 .Concat(Enumerable.Range(2, racingOrderCount - 1) // generate unique code for each that didn't win 1st race
                     .Select(i => $"R{i:00}-XYZ")
                     .ToArray()).ToArray(),
-                maxOrderCodeAttempts)
+                maxOrderCodeAttempts,
+                auditLog)
         {
         }
 
-        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20)
+        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null)
         {
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
@@ -204,7 +278,8 @@ public class SchedulingOrderServiceTest
                 dateAvailabilityService,
                 orderCodeGenerator,
                 clock,
-                maxOrderCodeAttempts);
+                maxOrderCodeAttempts,
+                auditLog);
         }
 
         public SchedulingOrderService Service { get; }

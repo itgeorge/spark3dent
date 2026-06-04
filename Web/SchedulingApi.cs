@@ -152,7 +152,7 @@ public static class SchedulingApi
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var updated = await orders.UpdateOrderAsync(actor, code, ToDraft(body, body.RequestedDeliveryDate), ctx.RequestAborted);
+                var updated = await orders.UpdateOrderAsync(actor, code, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
                 return Results.Json(new { order = ToDto(updated) }, JsonOptions);
             }
             catch (KeyNotFoundException ex)
@@ -171,7 +171,7 @@ public static class SchedulingApi
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             try
             {
-                var cancelled = await orders.CancelOrderAsync(actor, code, ctx.RequestAborted);
+                var cancelled = await orders.CancelOrderAsync(actor, code, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
                 return Results.Json(new { order = ToDto(cancelled) }, JsonOptions);
             }
             catch (KeyNotFoundException ex)

@@ -47,6 +47,8 @@ Existing relevant files/routes:
 7. Cancelling an order uses `DELETE /api/scheduling/orders/{code}` as a soft delete: set status to `Cancelled`, do not physically delete.
 8. Technician create/edit flow needs a clinic selector because technicians can create/modify for any clinic.
 9. Audit logging is implemented after the main scheduler/invoicer auth and order modification flows are in place.
+10. Slice 5 audit boundary: audit contracts (`AuditEvent`, `IAuditLog`) live in `Utilities` to avoid a new project; SQLite persistence lives in `Database`; scheduler logs at service level; invoicing/client logs in route handlers until a fuller app-service layer exists.
+11. A simple technician-only audit read endpoint exists at `GET /api/invoicing/audit` for inspection/manual verification.
 
 ## Slice Index and Status
 
@@ -57,7 +59,7 @@ Existing relevant files/routes:
 | 2.5 | `plans/order-flow-vertical-slices/slice-2.5-read-only-order-review.md` | Complete | Existing orders can be opened from the list in a read-only review view |
 | 3 | `plans/order-flow-vertical-slices/slice-3-product-navigation.md` | Complete | Product switcher/topbars added and later extracted to shared AppChrome assets; `/` has technician login gate and redirects clinic users to Scheduler |
 | 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Complete | Edit/cancel orders with permissions; technician create supports target clinic selector |
-| 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Not started | Audit log for scheduling/invoicing/client operations |
+| 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Complete | Append-only DB audit log for scheduler create/update/cancel and invoicing/client mutations, plus technician read endpoint |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -101,6 +103,7 @@ Append dated notes here after each slice.
 - 2026-06-04: Slice 3 complete. `/` now uses a client-side scheduling-auth gate before initializing invoicing data; non-technician authenticated users are redirected to `/orders`. Product switchers own Scheduler/Invoicer navigation; settings no longer contains Scheduler.
 - 2026-06-04: Slice 4 complete. Added `Cancelled` status, `PUT /api/scheduling/orders/{code}`, `DELETE /api/scheduling/orders/{code}` soft-cancel, and technician-only `GET /api/scheduling/clinics`. Clinics can edit/cancel only own non-cancelled orders; non-owned direct access returns 404. Technicians can edit/cancel any order and create orders by selecting target clinic. Existing order clinic reassignment is not supported.
 - 2026-06-04: Post-slice UI polish extracted shared app chrome/topbar behavior to `Web/wwwroot/js/app-chrome.js` and `Web/wwwroot/css/app-chrome.css`, used by both `index.html` and `orders.html`. Product switcher and logout now live in the hamburger menu, with settings remaining as an invoicer-specific extra action.
+- 2026-06-04: Slice 5 complete. Added append-only `AuditEvents` table/repository and `Utilities` audit contracts. Scheduler create/update/cancel logs happen in `SchedulingOrderService` after persistence and explicitly include acting actor fields separate from target clinic metadata. Invoicing/client route handlers log client create/update/rename, invoice issue/correct, and non-dry-run import commit after successful mutation. Added technician-only `GET /api/invoicing/audit` for inspection.
 
 ## Verification Evidence
 
@@ -109,6 +112,7 @@ Append dated notes here after each slice.
 - 2026-06-03 Slice 2.5: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj` passed (87 tests); headless Chromium smoke passed for create order -> list -> View -> read-only review -> Back.
 - 2026-06-04 Slice 3: `dotnet build Web/Web.csproj` passed; `dotnet test Web.Tests/Web.Tests.csproj --no-build` passed (87 tests); `node --check` passed for extracted inline scripts from `index.html` and `orders.html`; headless Chromium smoke passed for unauthenticated `/` login prompt, technician `/` login/product switcher/API access, technician `/orders` switcher, clinic `/orders` without Invoicer switcher, and clinic direct `/` redirect to `/orders`.
 - 2026-06-04 Slice 4: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (50 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (73 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (88 tests); `dotnet build Web/Web.csproj --no-restore` passed; `node --check` passed for extracted `orders.html` inline script; headless Chromium smoke passed for clinic login, seeded order review, edit/save, cancel, and disabled cancelled actions.
+- 2026-06-04 Slice 5: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (53 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (75 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (91 tests); full `dotnet test --no-restore` passed (Configuration 10, Storage 41, Orders 53, Accounting 61, Database 75, Invoices 251, Web 91); `dotnet build Web/Web.csproj --no-restore` passed.
 
 ## Global Verification Commands
 
@@ -152,6 +156,7 @@ Invoicing/client after Slice 2:
 
 - Existing `/api/clients...` and `/api/invoices...` moved to `/api/invoicing/clients...` and `/api/invoicing/invoices...`; old paths now 404.
 - All `/api/invoicing/*` endpoints require technician auth.
+- `GET /api/invoicing/audit?entityType=&entityId=&limit=100` returns recent audit events for technician inspection.
 - Update `Web/wwwroot/index.html` fetch calls accordingly.
 
 ## Files Most Likely to Change by Slice
@@ -212,4 +217,4 @@ Slice 5:
 - Exact technician config shape remains a future cleanup: current implementation uses role-on-credential, with the demo technician credential under clinic `DEMO` and PIN `654321` as a walking-skeleton convention.
 - `/` access behavior is resolved for v1: client-side scheduling-auth gate shows login when unauthenticated and redirects clinic users to `/orders`; `/api/invoicing/*` remains the server-side security boundary.
 - Technician order creation target selection is resolved for v1: technician create uses the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
-- Whether audit log should be append-only DB table only or also file logging. Current preference: DB append-only; existing app logger can remain separate.
+- Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. A technician-only read endpoint exists for inspection, but no UI browser or tamper-proof hash chain is implemented.
