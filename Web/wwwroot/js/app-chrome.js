@@ -37,14 +37,13 @@
     host.classList.add("app-chrome-host");
     host.innerHTML = `
 <div class="app-chrome">
-  <div class="app-chrome-brand${brandClick ? " clickable" : ""}" id="appChromeBrand">
-    <img src="${logoSrc}" alt="" class="app-chrome-logo" aria-hidden="true">
+  <${brandClick ? "button type=\"button\"" : "div"} class="app-chrome-brand${brandClick ? " clickable" : ""}" id="appChromeBrand">
+    <img src="${logoSrc}" alt="" class="app-chrome-logo" aria-hidden="true" draggable="false">
     <div class="app-chrome-brand-text">
       <div class="app-chrome-name">Spark3Dent</div>
       <div class="app-chrome-product">${productMeta.label === "Scheduler / Orders" ? "Scheduler" : productMeta.label}</div>
     </div>
-  </div>
-  <div class="app-chrome-spacer"></div>
+  </${brandClick ? "button" : "div"}>
   <div class="app-chrome-actions">
     <div class="app-chrome-extra" data-app-chrome-extra-mount></div>
     <div class="app-menu-wrap${hideMenuWhenSignedOut ? " hidden" : ""}" id="appMenuWrap">
@@ -108,8 +107,6 @@
 
     if (brandTitle) refs.brand.setAttribute("title", brandTitle);
     if (brandClick) {
-      refs.brand.setAttribute("role", "button");
-      refs.brand.setAttribute("tabindex", "0");
       refs.brand.addEventListener("click", brandClick);
       refs.brand.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
