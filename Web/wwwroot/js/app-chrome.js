@@ -119,6 +119,15 @@
       });
     }
 
+    host.querySelectorAll(".app-menu-item[href]").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        if (!link.classList.contains("active") || !brandClick) return;
+        e.preventDefault();
+        closeMenu();
+        brandClick();
+      });
+    });
+
     refs.menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleMenu();

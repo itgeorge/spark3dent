@@ -314,7 +314,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!reviewCard.classLi
 extraNote.addEventListener('input',()=>{resetForwardProgress(4);updateSummary();if(step===4)renderOverview()});
 deadline.addEventListener('change',()=>{resetForwardProgress(3);updateSummary();updateSelectedDeliveryDisplay();if(step===3)loadDates()});
 window.addEventListener('scroll',hideDateReasonPop,{passive:true});
-const appChrome=AppChrome.mount($('appChromeMount'),{product:'scheduler',logoSrc:'/images/logo.png',menuButtonClass:'btn',hideMenuWhenSignedOut:true});
+const appChrome=AppChrome.mount($('appChromeMount'),{product:'scheduler',logoSrc:'/images/logo.png',menuButtonClass:'btn',hideMenuWhenSignedOut:true,brandClick:()=>{if(actor)showList()},brandTitle:'Back to orders'});
 appChrome.onLogout(async()=>{await api('/api/scheduling/auth/logout',{method:'POST',body:'{}'});actor=null;orders=[];showLogin()});
 renderShadeChoices();
 syncImpressionToday();
