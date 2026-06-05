@@ -51,6 +51,7 @@ Existing relevant files/routes:
 11. A simple technician-only audit read endpoint exists at `GET /api/invoicing/audit` for inspection/manual verification.
 12. A CLI audit listing command exists for operator inspection/export: `audit list [filters]`, including `--json` and filters such as `--service`, `--operation`, `--entity-type`, `--entity-id`, `--actor-role`, `--actor-clinic`, `--since`, `--until`, `--limit`, and `--db`.
 13. Orders calendar view is a display mode of the scheduler list. It defaults to calendar for technician/lab actors and list for clinic actors, persists the selected mode in `localStorage`, excludes cancelled orders, and uses a dedicated calendar API endpoint.
+14. Orders may contain multiple order work items on the same impression. Each work item has its own construction type and tooth/range; material and shade remain order-level for now. Slice 7 should prefer JSON serialization for the work-item list, keep existing single-selection fields as first/primary-item compatibility fields, validate non-overlap server-side, and calculate lead time by summing each work item's rule days.
 
 ## Slice Index and Status
 
@@ -63,6 +64,7 @@ Existing relevant files/routes:
 | 4 | `plans/order-flow-vertical-slices/slice-4-edit-cancel.md` | Complete | Edit/cancel orders with permissions; technician create supports target clinic selector |
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Complete | Append-only DB audit log for scheduler create/update/cancel and invoicing/client mutations, plus technician read endpoint |
 | 6 | `plans/order-flow-vertical-slices/slice-6-orders-calendar-view.md` | Complete | Calendar/list display mode with shared month-calendar component, dedicated active-orders calendar API, persisted mode preference, smart cell aggregation, and day popup |
+| 7 | `plans/order-flow-vertical-slices/slice-7-multiple-order-work-items.md` | Not started | Multiple crown/bridge/facet work items per order/impression with per-item construction/tooth selection and summed lead-time rules |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -94,6 +96,7 @@ Before handing off to another agent:
 - Slice 4 depends on Slice 2 permissions and Slice 3 may already expose technician/clinic mode in UI.
 - Slice 5 should audit the final operation names/endpoints from Slices 2-4.
 - Slice 6 depends on Slice 4 order status/review behavior and should avoid assumptions that block the future lab-organization role refactor.
+- Slice 7 depends on Slice 4 create/edit/review behavior, Slice 5 audit metadata, and Slice 6 list/calendar display surfaces.
 
 ## Cross-Slice Discoveries / Course Corrections
 
@@ -111,6 +114,7 @@ Append dated notes here after each slice.
 - 2026-06-04: Post-slice audit inspection polish added CLI support for `audit list [filters]`, with table or JSON output and filters for service, operation, entity, actor, date range, limit, and database path.
 - 2026-06-05: Added Slice 6 plan for an orders calendar display mode. Calendar mode should use a dedicated `/api/scheduling/orders/calendar` endpoint, exclude cancelled orders, default to calendar for technician/lab actors and list for clinic actors, persist view mode in `localStorage`, and extract a generic month-calendar component after first renaming the current delivery picker calendar classes to delivery-specific names.
 - 2026-06-05: Slice 6 complete. Added `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` before the `{code}` route, with auth, role scoping, active-only filtering, inclusive delivery-date range, and 93-day max range. `orders.html` now has persisted List/Calendar mode; technician defaults to calendar, clinic defaults to list; list still shows cancelled orders while calendar excludes them. Delivery picker now uses shared `MonthCalendar` assets with delivery-specific classes.
+- 2026-06-05: Added Slice 7 plan for multiple order work items per impression. The plan uses order-level material/shade, per-work-item construction and tooth range, JSON work-item serialization with legacy first-item fields retained, server-side no-overlap validation, summed per-item lead-time rules, and multi-item display updates across list/review/calendar/audit.
 
 ## Verification Evidence
 
@@ -233,9 +237,25 @@ Slice 6:
 - `Database/SqliteOrderRepo.cs`
 - tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
 
+Slice 7:
+
+- `Orders/OrderDraft.cs`
+- `Orders/OrderRecord.cs`
+- new `Orders/OrderWorkItem.cs` or equivalent
+- `Orders/ToothRange.cs`
+- `Orders/SchedulingOrderService.cs`
+- `Orders/DescriptiveOrderCodeGenerator.cs`
+- `Database/Entities/SchedulingOrderEntity.cs`
+- `Database/SqliteOrderRepo.cs`
+- `Database/Migrations/*`
+- `Web/SchedulingApi.cs`
+- `Web/wwwroot/orders.html`
+- tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
+
 ## Open Questions to Resolve During Implementation
 
 - Exact technician config shape remains a future cleanup: current implementation uses role-on-credential, with the demo technician credential under clinic `DEMO` and PIN `654321` as a walking-skeleton convention.
 - `/` access behavior is resolved for v1: client-side scheduling-auth gate shows login when unauthenticated and redirects clinic users to `/orders`; `/api/invoicing/*` remains the server-side security boundary.
 - Technician order creation target selection is resolved for v1: technician create uses the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
 - Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. A technician-only read endpoint exists for inspection, but no UI browser or tamper-proof hash chain is implemented.
+- Per-work-item material/shade is a known follow-up after Slice 7; Slice 7 keeps material and shade order-level while allowing multiple construction/tooth work items.
