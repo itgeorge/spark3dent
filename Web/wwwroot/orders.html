@@ -38,7 +38,7 @@
   </section>
 
   <section id="list" class="card hidden">
-    <div class="head"><div><b>Orders</b><div class="sub" id="ordersViewSub">—</div></div><div class="actions"><div class="view-toggle" role="group" aria-label="Orders view"><button class="btn" id="ordersListModeBtn" type="button">List</button><button class="btn" id="ordersCalendarModeBtn" type="button">Calendar</button></div><button class="btn circle-icon" id="reloadOrdersBtn" type="button" aria-label="Refresh">↻</button><button class="btn primary" id="newOrderBtn" type="button">+ New order</button></div></div>
+    <div class="head"><div><b>Orders</b></div><div class="actions"><div class="view-toggle" role="group" aria-label="Orders view"><button class="btn" id="ordersListModeBtn" type="button">List</button><button class="btn" id="ordersCalendarModeBtn" type="button">Calendar</button></div><button class="btn circle-icon" id="reloadOrdersBtn" type="button" aria-label="Refresh">↻</button><button class="btn primary" id="newOrderBtn" type="button">+ New order</button></div></div>
     <div class="body">
       <div id="ordersListWrap" class="orders-list-wrap" style="overflow:auto"><table class="review" aria-label="Orders"><thead><tr><th class="col-code">Code</th><th class="col-case">Case</th><th class="col-teeth">Teeth</th><th class="col-shade">Shade</th><th class="col-delivery">Delivery</th><th class="col-action" aria-label="Action"></th></tr></thead><tbody id="ordersBody"></tbody></table></div>
       <div id="ordersCalendarWrap" class="orders-calendar-wrap hidden"><div id="ordersCalendar" class="orders-calendar" aria-label="Orders calendar"></div></div>
@@ -56,7 +56,7 @@
 
   <section id="reviewCard" class="card hidden" aria-hidden="true">
     <div class="review-panel" role="region" aria-labelledby="reviewTitle">
-      <div class="head"><div><b id="reviewTitle">Order review</b><div class="sub" id="reviewSub">Read-only order details</div></div><button class="btn circle-back" id="reviewBackIconBtn" type="button" aria-label="Back">←</button></div>
+      <div class="head"><div><b id="reviewTitle">Order review</b><div class="sub" id="reviewSub">Read-only order details</div></div></div>
       <div class="body">
         <div class="overview">
           <div class="overview-body">
@@ -299,7 +299,7 @@ function removeWorkItem(){if(workItems.length<=1)return;clearErr();resetForwardP
 async function loadClinics(){if(!actor?.isTechnician)return;if(!clinics.length){const r=await api('/api/scheduling/clinics');const j=await r.json().catch(()=>({items:[]}));if(r.ok)clinics=j.items||[]}renderClinicChoices()}
 async function startCreateOrder(){resetOrderForm();if(actor?.isTechnician)await loadClinics();list.classList.add('hidden');reviewCard.classList.add('hidden');ordersDayPopup.classList.add('hidden');app.classList.remove('hidden');render()}
 async function backToList(){await showList()}
-function renderOrdersViewModeShell(){const calendar=ordersViewMode==='calendar';ordersListWrap.classList.toggle('hidden',calendar);ordersCalendarWrap.classList.toggle('hidden',!calendar);ordersListModeBtn.classList.toggle('active',!calendar);ordersCalendarModeBtn.classList.toggle('active',calendar);ordersListModeBtn.setAttribute('aria-pressed',calendar?'false':'true');ordersCalendarModeBtn.setAttribute('aria-pressed',calendar?'true':'false');ordersViewSub.textContent=calendar?'Calendar: active submitted orders only':'List: active and cancelled orders'}
+function renderOrdersViewModeShell(){const calendar=ordersViewMode==='calendar';ordersListWrap.classList.toggle('hidden',calendar);ordersCalendarWrap.classList.toggle('hidden',!calendar);ordersListModeBtn.classList.toggle('active',!calendar);ordersCalendarModeBtn.classList.toggle('active',calendar);ordersListModeBtn.setAttribute('aria-pressed',calendar?'false':'true');ordersCalendarModeBtn.setAttribute('aria-pressed',calendar?'true':'false')}
 async function setOrdersViewMode(mode){if(mode!==ordersViewMode){ordersViewMode=mode;saveOrdersViewMode(mode)}renderOrdersViewModeShell();await reloadCurrentOrdersView()}
 async function reloadCurrentOrdersView(){return ordersViewMode==='calendar'?loadOrdersCalendar():loadOrders()}
 async function loadOrders(){ordersMsg.classList.add('hidden');const r=await api('/api/scheduling/orders?limit=100');const j=await r.json().catch(()=>({error:'Could not load orders.'}));if(!r.ok){ordersMsg.textContent=j.error||'Could not load orders.';ordersMsg.classList.remove('hidden');return}orders=j.items||[];renderOrders()}
@@ -342,7 +342,6 @@ ordersCalendarModeBtn.onclick=()=>setOrdersViewMode('calendar');
 ordersBody.onclick=e=>{const b=e.target.closest('[data-review-code]');if(b)showReview(b.dataset.reviewCode)};
 cancelCreateBtn.onclick=backToList;
 reviewBackTopBtn.onclick=closeReview;
-reviewBackIconBtn.onclick=closeReview;
 reviewEditBtn.onclick=editReviewOrder;
 reviewCancelBtn.onclick=cancelReviewOrder;
 ordersDayPopupCloseBtn.onclick=closeOrdersDayPopup;
