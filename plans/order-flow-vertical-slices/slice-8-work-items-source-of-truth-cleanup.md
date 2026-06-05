@@ -1,0 +1,334 @@
+# Slice 8 Plan — Make Work Items the Sole Order Tooth/Construction Source of Truth
+
+*Created: 2026-06-05*
+
+## Goal
+
+Clean up the Slice 7 compatibility layer before there is production usage. Orders should rely entirely on the `WorkItems` list for tooth/construction selections.
+
+Remove order-level single-work-item compatibility fields and all abutment-related code. Also delete the old stepper prototype because `Web/wwwroot/orders.html` is now the real scheduler UI.
+
+## Product / Technical Decisions
+
+1. `OrderWorkItem` is the only source of truth for construction type and selected tooth/range.
+2. Order-level material and shade remain order-level for now.
+3. Order-level `WorkType` is removed from order/draft/API/persistence. Work type remains as an internal rule-classification enum used by scheduling rules and derived per work item.
+4. Order-level `ConstructionType`, `ToothStart`, and `ToothEnd` are removed from order/draft/API/persistence.
+5. Abutments are not useful for this order flow and should be removed from live domain/API/UI/tests/persistence mapping.
+6. It is acceptable to wipe scheduling/order rows during migration. Keep the DB and invoice/client data.
+7. API compatibility is not required; no external users exist.
+8. The old prototype `Web/wwwroot/order-prototypes/stepper.html` should be deleted.
+
+## Desired End State
+
+### Domain order shape
+
+Conceptually:
+
+```csharp
+OrderDraft
+  CaseName
+  ImpressionDate
+  ProductCategory
+  Material
+  WorkItems[]
+  RequestedDeliveryDate
+  Shade
+  Notes
+
+OrderRecord
+  Id
+  OrderCode
+  Clinic metadata
+  Credential/actor metadata
+  CaseName
+  ImpressionDate
+  ProductCategory
+  Material
+  WorkItems[]
+  RequestedDeliveryDate
+  Status
+  Shade
+  Notes
+  Created/Updated metadata
+```
+
+No order-level:
+
+- `WorkType`
+- `ConstructionType`
+- `ToothStart`
+- `ToothEnd`
+- `AbutmentTeeth`
+- `PrimaryWorkItem`
+
+### `WorkType` after cleanup
+
+Keep `WorkType` enum and `WorkRule` if they are still part of scheduling configuration. But do not expose/store `WorkType` on orders.
+
+Server derives per-work-item rule type internally, e.g.:
+
+```csharp
+WorkType WorkTypeFor(ProductCategory productCategory, Material material, ConstructionType constructionType)
+```
+
+This is used only for rule lookup.
+
+## Database / Migration Plan
+
+Do not wipe the whole DB. Preserve invoice/client data.
+
+Recommended migration behavior:
+
+1. Delete existing scheduling orders because no production order data needs preserving:
+
+```sql
+DELETE FROM SchedulingOrders;
+```
+
+2. Optionally delete stale scheduling order audit entries to avoid audit rows pointing at deleted order codes:
+
+```sql
+DELETE FROM AuditEvents WHERE EntityType = 'SchedulingOrder';
+```
+
+3. Drop from `SchedulingOrders`:
+
+- `WorkType`
+- `ConstructionType`
+- `ToothStart`
+- `ToothEnd`
+- `AbutmentTeeth`
+
+4. Keep and require `WorkItemsJson` as the persisted work-item payload. If SQLite/EF migration complexity makes non-null conversion awkward, nullable DB column is acceptable as long as repository create/update always writes valid JSON and domain/API validation rejects empty work items.
+
+5. Update `AppDbContextModelSnapshot`.
+
+### Historical migrations note
+
+Prefer a normal forward migration that drops the columns. Do not hand-edit old applied migrations unless the team explicitly chooses to reset/squash migration history. The goal is no abutment or legacy single-item usage in current live code/tests/API/model snapshot; old historical migration files may still describe past schema unless a separate migration-history cleanup is intentionally done.
+
+## Domain Changes
+
+### `OrderWorkItem`
+
+Keep:
+
+- construction type,
+- tooth range,
+- validation,
+- all-teeth helper.
+
+Remove:
+
+- `DefaultAbutments`,
+- `AbutmentsCsv`,
+- any abutment terminology.
+
+### `ToothRange`
+
+Remove:
+
+```csharp
+DefaultAbutments(...)
+```
+
+Keep tooth validation/range behavior.
+
+### `OrderDraft`
+
+Remove:
+
+- `WorkType`,
+- `ConstructionType`,
+- `TeethRange`,
+- `PrimaryWorkItem`,
+- legacy fallback normalization.
+
+Require:
+
+```csharp
+IReadOnlyList<OrderWorkItem> WorkItems
+```
+
+Validation should reject null/empty at service/API boundaries.
+
+### `OrderRecord`
+
+Remove:
+
+- `WorkType`,
+- `ConstructionType`,
+- `ToothStart`,
+- `ToothEnd`,
+- `AbutmentTeeth`,
+- `PrimaryWorkItem`,
+- legacy fallback normalization.
+
+Require typed `WorkItems` in the constructor/init path.
+
+## Service Changes
+
+Update `Orders/SchedulingOrderService.cs`:
+
+- all validation uses `draft.WorkItems`,
+- create/update builds records with `WorkItems`,
+- lead-time summing stays per work item,
+- changed-field detection compares only `WorkItems`, not legacy fields,
+- audit metadata includes `workItems` and total tooth count, but no `primaryWorkItem` unless a purely display-friendly summary is desired,
+- remove any abutment setting.
+
+## Order Code
+
+`Orders/DescriptiveOrderCodeGenerator.cs` already uses total selected teeth from work items. Keep that behavior, but update it to no longer rely on legacy fallback fields.
+
+## API Changes
+
+Update `Web/SchedulingApi.cs`:
+
+### Request shape
+
+Remove from `OrderShape`:
+
+- `WorkType WorkType`
+- `ConstructionType ConstructionType`
+- `int ToothStart`
+- `int ToothEnd`
+
+Require:
+
+```csharp
+IReadOnlyList<OrderWorkItemRequest> WorkItems
+```
+
+for date availability, create, and update.
+
+### Response DTO
+
+Remove:
+
+- `workType`,
+- `constructionType`,
+- `toothStart`,
+- `toothEnd`,
+- `abutmentTeeth`.
+
+Keep:
+
+- `workItems`.
+
+### Validation behavior
+
+- Missing/empty `workItems` returns `400` with a clear message.
+- Old single-field-only request bodies return `400` instead of being accepted.
+
+## UI Changes
+
+Update `Web/wwwroot/orders.html`:
+
+- remove `workType()` helper,
+- remove `backendConstruction()` if still present,
+- remove `primaryWorkItem()` compatibility helper,
+- `draft()` sends only `workItems` for tooth/construction selection,
+- all displays already using `workItems` should keep doing so,
+- ensure create/edit/date availability still work without legacy fields,
+- ensure technician target clinic behavior remains unchanged.
+
+## Prototype Cleanup
+
+Delete:
+
+- `Web/wwwroot/order-prototypes/stepper.html`
+
+Then search and update/remove stale references:
+
+```bash
+rg -n "order-prototypes|stepper.html|toothStart|toothEnd|constructionType|workType|abutment" Web Orders Database *.Tests plans -g '!bin' -g '!obj'
+```
+
+Expected: `ConstructionType` and `WorkType` still appear in `OrderWorkItem`, `WorkRule`, scheduling config/rules, and tests around rule derivation. `toothStart`/`toothEnd` still appear inside work-item DTOs/JSON/UI. They should not appear as order-level fields. Abutment should disappear from live domain/API/UI/tests/persistence mapping.
+
+## Tests to Add / Update
+
+### Orders.Tests
+
+- Update all `OrderDraft`/`OrderRecord` construction helpers to use required `WorkItems`.
+- Remove tests for legacy fallback single fields.
+- Add/keep tests for:
+  - missing/empty work items rejected,
+  - crown/bridge/facet per-item validation,
+  - overlap rejected,
+  - lead time summed per work item,
+  - order code counts total selected teeth,
+  - no abutment logic remains.
+- Add regression test proving request/order-level stale `WorkType` is impossible or ignored because it no longer exists.
+
+### Database.Tests
+
+- Update schema/persistence tests:
+  - `WorkItemsJson` persists and round-trips,
+  - repository create/update writes valid work items,
+  - list/calendar queries preserve work items,
+  - old legacy fallback test is removed.
+- Add a migration/schema assertion if practical:
+  - current model/table no longer has legacy columns or `AbutmentTeeth`.
+
+### Web.Tests
+
+- Update request payloads to use `workItems` only.
+- Add/keep tests:
+  - create with work items succeeds,
+  - create without work items returns `400`,
+  - update with work items succeeds,
+  - date availability with work items works,
+  - list/get/calendar DTOs include `workItems` and do not include legacy fields.
+
+## Manual / Smoke Verification
+
+Recommended headless/browser smoke:
+
+1. Login as clinic.
+2. Create a bridge+crown multi-work-item order.
+3. Confirm no legacy fields are needed in browser payloads.
+4. Confirm list, review, edit, and calendar still show all work items.
+5. Edit one work item and save.
+6. Confirm API responses have `workItems` and not legacy order-level fields.
+
+## Implementation Checklist
+
+- [ ] Delete `Web/wwwroot/order-prototypes/stepper.html` and stale prototype references.
+- [ ] Remove abutment helpers from `ToothRange` / `OrderWorkItem` and all live call sites.
+- [ ] Refactor `OrderDraft` to require `WorkItems` and drop legacy single-item fields.
+- [ ] Refactor `OrderRecord` to require `WorkItems` and drop legacy single-item fields.
+- [ ] Update `SchedulingOrderService` create/update/validation/audit/changed-fields logic.
+- [ ] Update `DescriptiveOrderCodeGenerator` if needed to use required work items directly.
+- [ ] Update `SchedulingOrderEntity` and `SqliteOrderRepo` mapping.
+- [ ] Add migration that deletes scheduling orders and drops legacy columns.
+- [ ] Optionally delete scheduling-order audit rows in the same migration.
+- [ ] Update `Web/SchedulingApi.cs` request/response shape and validation.
+- [ ] Update `Web/wwwroot/orders.html` payload generation and any legacy references.
+- [ ] Update tests across Orders/Database/Web.
+- [ ] Run targeted tests and full test suite if practical.
+- [ ] Run JS syntax checks for changed static/inline scripts.
+- [ ] Run browser smoke for create/review/edit/calendar.
+- [ ] Update master plan and this slice plan completion notes.
+
+## Out of Scope / Follow-Ups
+
+- Per-work-item material and shade.
+- Lab organization/IAM restructuring.
+- Full audit browser UI.
+- Reworking historical migration files for grep-clean history unless explicitly chosen.
+
+## Completion Notes
+
+Fill in after implementation.
+
+- Status:
+- Files changed:
+- Tests run:
+- Manual checks:
+- Migration/data deletion notes:
+- API contract notes:
+- Abutment cleanup notes:
+- Follow-up discoveries:

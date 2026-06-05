@@ -8,8 +8,8 @@ This master plan tracks the integration of the order stepper prototype into the 
 
 Existing relevant files/routes:
 
-- Prototype order stepper retained for reference: `Web/wwwroot/order-prototypes/stepper.html`
 - Real scheduler page: `Web/wwwroot/orders.html`, served at `/orders`.
+- The old order stepper prototype is obsolete and scheduled for deletion in Slice 8.
 - Invoicer home page/UI: `Web/wwwroot/index.html`, served at `/`.
 - Shared app topbar/menu assets:
   - `Web/wwwroot/js/app-chrome.js`
@@ -51,7 +51,8 @@ Existing relevant files/routes:
 11. A simple technician-only audit read endpoint exists at `GET /api/invoicing/audit` for inspection/manual verification.
 12. A CLI audit listing command exists for operator inspection/export: `audit list [filters]`, including `--json` and filters such as `--service`, `--operation`, `--entity-type`, `--entity-id`, `--actor-role`, `--actor-clinic`, `--since`, `--until`, `--limit`, and `--db`.
 13. Orders calendar view is a display mode of the scheduler list. It defaults to calendar for technician/lab actors and list for clinic actors, persists the selected mode in `localStorage`, excludes cancelled orders, and uses a dedicated calendar API endpoint.
-14. Orders may contain multiple order work items on the same impression. Each work item has its own construction type and tooth/range; material and shade remain order-level for now. Slice 7 should prefer JSON serialization for the work-item list, keep existing single-selection fields as first/primary-item compatibility fields, validate non-overlap server-side, and calculate lead time by summing each work item's rule days.
+14. Orders may contain multiple order work items on the same impression. Each work item has its own construction type and tooth/range; material and shade remain order-level for now. Slice 7 added JSON serialization and temporary single-selection compatibility fields.
+15. Slice 8 should make `WorkItems` the sole source of truth, remove order-level `WorkType`/`ConstructionType`/`ToothStart`/`ToothEnd`, remove all abutment-related live code, wipe scheduling order rows via migration while preserving invoice/client data, and delete the obsolete stepper prototype.
 
 ## Slice Index and Status
 
@@ -65,6 +66,7 @@ Existing relevant files/routes:
 | 5 | `plans/order-flow-vertical-slices/slice-5-audit-log.md` | Complete | Append-only DB audit log for scheduler create/update/cancel and invoicing/client mutations, plus technician read endpoint |
 | 6 | `plans/order-flow-vertical-slices/slice-6-orders-calendar-view.md` | Complete | Calendar/list display mode with shared month-calendar component, dedicated active-orders calendar API, persisted mode preference, smart cell aggregation, and day popup |
 | 7 | `plans/order-flow-vertical-slices/slice-7-multiple-order-work-items.md` | Complete | Multiple order work items per order/impression with JSON persistence, server validation, summed lead-time rules, API/display updates, and per-line tooth UI |
+| 8 | `plans/order-flow-vertical-slices/slice-8-work-items-source-of-truth-cleanup.md` | Not started | Remove legacy single-work-item order fields and abutment code; make `workItems` the sole tooth/construction API/domain/persistence source |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -97,6 +99,7 @@ Before handing off to another agent:
 - Slice 5 should audit the final operation names/endpoints from Slices 2-4.
 - Slice 6 depends on Slice 4 order status/review behavior and should avoid assumptions that block the future lab-organization role refactor.
 - Slice 7 depends on Slice 4 create/edit/review behavior, Slice 5 audit metadata, and Slice 6 list/calendar display surfaces.
+- Slice 8 depends on Slice 7 work-item support and should simplify before lab organization/IAM work adds more identity complexity.
 
 ## Cross-Slice Discoveries / Course Corrections
 
@@ -116,6 +119,7 @@ Append dated notes here after each slice.
 - 2026-06-05: Slice 6 complete. Added `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` before the `{code}` route, with auth, role scoping, active-only filtering, inclusive delivery-date range, and 93-day max range. `orders.html` now has persisted List/Calendar mode; technician defaults to calendar, clinic defaults to list; list still shows cancelled orders while calendar excludes them. Delivery picker now uses shared `MonthCalendar` assets with delivery-specific classes.
 - 2026-06-05: Added Slice 7 plan for multiple order work items per impression. The plan uses order-level material/shade, per-work-item construction and tooth range, JSON work-item serialization with legacy first-item fields retained, server-side no-overlap validation, summed per-item lead-time rules, and multi-item display updates across list/review/calendar/audit.
 - 2026-06-05: Slice 7 complete. Added `OrderWorkItem` domain support with JSON `SchedulingOrders.WorkItemsJson`, legacy primary compatibility columns, mandatory per-item/no-overlap validation, summed per-item lead time, total-tooth order code counts, `workItems` API DTOs, audit metadata, and multi-item create/edit/list/review/calendar UI. Existing sequence-based FDI normalization still means some ranges normalize to jaw order (for example `11-13` becomes `13-11` in compatibility fields). Headless browser smoke passed after implementation.
+- 2026-06-05: Added Slice 8 cleanup plan. Because there is no production order/API usage, Slice 8 should remove legacy single-work-item order fields, remove all live abutment-related code/tests, make `workItems` required in scheduling APIs, wipe scheduling order rows through migration while preserving invoice/client data, and delete the obsolete order stepper prototype.
 
 ## Verification Evidence
 
@@ -254,6 +258,22 @@ Slice 7:
 - `Web/wwwroot/orders.html`
 - tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
 
+Slice 8:
+
+- `Orders/OrderDraft.cs`
+- `Orders/OrderRecord.cs`
+- `Orders/OrderWorkItem.cs`
+- `Orders/ToothRange.cs`
+- `Orders/SchedulingOrderService.cs`
+- `Orders/DescriptiveOrderCodeGenerator.cs`
+- `Database/Entities/SchedulingOrderEntity.cs`
+- `Database/SqliteOrderRepo.cs`
+- `Database/Migrations/*`
+- `Web/SchedulingApi.cs`
+- `Web/wwwroot/orders.html`
+- delete `Web/wwwroot/order-prototypes/stepper.html`
+- tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
+
 ## Open Questions to Resolve During Implementation
 
 - Exact technician config shape remains a future cleanup: current implementation uses role-on-credential, with the demo technician credential under clinic `DEMO` and PIN `654321` as a walking-skeleton convention.
@@ -261,3 +281,4 @@ Slice 7:
 - Technician order creation target selection is resolved for v1: technician create uses the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
 - Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. A technician-only read endpoint exists for inspection, but no UI browser or tamper-proof hash chain is implemented.
 - Per-work-item material/shade is a known follow-up after Slice 7; Slice 7 keeps material and shade order-level while allowing multiple construction/tooth work items.
+- Abutment support is no longer desired in the order flow and should be removed from live code/tests/persistence mapping in Slice 8.
