@@ -26,11 +26,8 @@ public class SchedulingApiTests
           "caseName":"QA Crown",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "start":"2026-06-01",
           "end":"2026-06-10"
         }
@@ -44,11 +41,8 @@ public class SchedulingApiTests
           "caseName":"QA Crown",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "shade":"A3.5",
           "requestedDeliveryDate":"2026-06-05"
         }
@@ -94,11 +88,8 @@ public class SchedulingApiTests
           "caseName":"Clinic Case",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
@@ -120,11 +111,8 @@ public class SchedulingApiTests
           "caseName":"Tech Case",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
@@ -136,11 +124,8 @@ public class SchedulingApiTests
           "caseName":"Tech Case",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
@@ -158,11 +143,8 @@ public class SchedulingApiTests
           "caseName":"Original Case",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
@@ -174,11 +156,8 @@ public class SchedulingApiTests
           "caseName":"Updated Case",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":12,
-          "toothEnd":12,
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
           "requestedDeliveryDate":"2026-06-05",
           "notes":"updated"
         }
@@ -186,7 +165,9 @@ public class SchedulingApiTests
         Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var updatedOrder = JsonDocument.Parse(await update.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
         Assert.That(updatedOrder.GetProperty("caseName").GetString(), Is.EqualTo("Updated Case"));
-        Assert.That(updatedOrder.GetProperty("toothStart").GetInt32(), Is.EqualTo(12));
+        Assert.That(updatedOrder.GetProperty("workItems")[0].GetProperty("toothStart").GetInt32(), Is.EqualTo(12));
+        Assert.That(updatedOrder.TryGetProperty("toothStart", out _), Is.False);
+        Assert.That(updatedOrder.TryGetProperty("workType", out _), Is.False);
 
         var cancel = await client.DeleteAsync($"/api/scheduling/orders/{code}");
         Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -198,11 +179,8 @@ public class SchedulingApiTests
           "caseName":"Nope",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":12,
-          "toothEnd":12,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
@@ -286,11 +264,7 @@ public class SchedulingApiTests
           "caseName":"Multi Work Items",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"fullContourZirconia",
-          "constructionType":"bridge",
-          "toothStart":11,
-          "toothEnd":13,
           "workItems":[
             {"constructionType":"bridge","toothStart":11,"toothEnd":13},
             {"constructionType":"crown","toothStart":23,"toothEnd":23}
@@ -301,9 +275,10 @@ public class SchedulingApiTests
         Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
         var code = created.GetProperty("orderCode").GetString();
-        Assert.That(created.GetProperty("constructionType").GetString(), Is.EqualTo("bridge"));
-        Assert.That(created.GetProperty("toothStart").GetInt32(), Is.EqualTo(13));
         Assert.That(created.GetProperty("workItems").GetArrayLength(), Is.EqualTo(2));
+        Assert.That(created.TryGetProperty("constructionType", out _), Is.False);
+        Assert.That(created.TryGetProperty("toothStart", out _), Is.False);
+        Assert.That(created.TryGetProperty("abutmentTeeth", out _), Is.False);
 
         var get = await client.GetAsync($"/api/scheduling/orders/{code}");
         Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -322,11 +297,7 @@ public class SchedulingApiTests
           "caseName":"Updated Multi Work Items",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"fullContourZirconia",
-          "constructionType":"bridge",
-          "toothStart":11,
-          "toothEnd":13,
           "workItems":[
             {"constructionType":"bridge","toothStart":11,"toothEnd":13},
             {"constructionType":"crown","toothStart":24,"toothEnd":24}
@@ -351,11 +322,7 @@ public class SchedulingApiTests
           "caseName":"Overlap",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"fullContourZirconia",
-          "constructionType":"bridge",
-          "toothStart":11,
-          "toothEnd":13,
           "workItems":[
             {"constructionType":"bridge","toothStart":11,"toothEnd":13},
             {"constructionType":"crown","toothStart":12,"toothEnd":12}
@@ -372,17 +339,38 @@ public class SchedulingApiTests
           "caseName":"Empty",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
           "workItems":[],
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
         Assert.That(empty.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(await empty.Content.ReadAsStringAsync(), Does.Contain("At least one order work item"));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_OldSingleFieldOnlyRequest_Returns400()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Old Shape",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await create.Content.ReadAsStringAsync(), Does.Contain("At least one order work item"));
     }
 
     [Test]
@@ -397,11 +385,7 @@ public class SchedulingApiTests
           "caseName":"Multi dates",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"fullContourZirconia",
-          "constructionType":"bridge",
-          "toothStart":11,
-          "toothEnd":13,
           "workItems":[
             {"constructionType":"bridge","toothStart":11,"toothEnd":13},
             {"constructionType":"crown","toothStart":23,"toothEnd":23}
@@ -470,11 +454,8 @@ public class SchedulingApiTests
           "caseName":"Bad Date",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"2026-06-06"
         }
         """));
@@ -494,11 +475,8 @@ public class SchedulingApiTests
           "caseName":"Reordered Bridge",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"pfm",
-          "constructionType":"bridge",
-          "toothStart":22,
-          "toothEnd":12,
+          "workItems":[{"constructionType":"bridge","toothStart":22,"toothEnd":12}],
           "requestedDeliveryDate":"2026-06-09"
         }
         """));
@@ -508,9 +486,9 @@ public class SchedulingApiTests
         var orderElement = createDoc.RootElement.GetProperty("order");
         Assert.Multiple(() =>
         {
-            Assert.That(orderElement.GetProperty("toothStart").GetInt32(), Is.EqualTo(12));
-            Assert.That(orderElement.GetProperty("toothEnd").GetInt32(), Is.EqualTo(22));
-            Assert.That(orderElement.GetProperty("abutmentTeeth").GetString(), Is.EqualTo("12,22"));
+            Assert.That(orderElement.GetProperty("workItems")[0].GetProperty("toothStart").GetInt32(), Is.EqualTo(12));
+            Assert.That(orderElement.GetProperty("workItems")[0].GetProperty("toothEnd").GetInt32(), Is.EqualTo(22));
+            Assert.That(orderElement.TryGetProperty("abutmentTeeth", out _), Is.False);
         });
     }
 
@@ -526,11 +504,8 @@ public class SchedulingApiTests
           "caseName":"Bad Jaw Range",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"pfm",
-          "constructionType":"bridge",
-          "toothStart":28,
-          "toothEnd":31,
+          "workItems":[{"constructionType":"bridge","toothStart":28,"toothEnd":31}],
           "requestedDeliveryDate":"2026-06-09"
         }
         """));
@@ -551,11 +526,8 @@ public class SchedulingApiTests
           "caseName":"Bad Jaw Range",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"bridge",
           "material":"pfm",
-          "constructionType":"bridge",
-          "toothStart":28,
-          "toothEnd":31,
+          "workItems":[{"constructionType":"bridge","toothStart":28,"toothEnd":31}],
           "start":"2026-06-01",
           "end":"2026-06-10"
         }
@@ -593,11 +565,8 @@ public class SchedulingApiTests
           "caseName":"{{caseName}}",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
-          "workType":"crown",
           "material":"fullContourZirconia",
-          "constructionType":"crown",
-          "toothStart":11,
-          "toothEnd":11,
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"{{requestedDeliveryDate}}"
         }
         """));
@@ -622,12 +591,8 @@ public class SchedulingApiTests
             caseName,
             new DateOnly(2026, 6, 2),
             ProductCategory.Permanent,
-            WorkType.Crown,
             Material.FullContourZirconia,
-            ConstructionType.Crown,
-            11,
-            11,
-            "",
+            [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))],
             DateOnly.Parse(requestedDeliveryDate),
             OrderStatus.Created,
             Shade.Unspecified,

@@ -14,13 +14,8 @@ public class SchedulingOrderEntity
     public string CaseName { get; set; } = string.Empty;
     public DateOnly ImpressionDate { get; set; }
     public string ProductCategory { get; set; } = string.Empty;
-    public string WorkType { get; set; } = string.Empty;
     public string Material { get; set; } = string.Empty;
-    public string ConstructionType { get; set; } = string.Empty;
-    public int ToothStart { get; set; }
-    public int ToothEnd { get; set; }
-    public string AbutmentTeeth { get; set; } = string.Empty;
-    public string? WorkItemsJson { get; set; }
+    public string WorkItemsJson { get; set; } = string.Empty;
     public DateOnly RequestedDeliveryDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public Shade Shade { get; set; }

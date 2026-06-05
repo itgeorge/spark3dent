@@ -69,6 +69,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.OrderCode).IsRequired();
             e.Property(x => x.ClinicCode).IsRequired();
             e.Property(x => x.CredentialId).IsRequired();
+            e.Property(x => x.WorkItemsJson).IsRequired();
             e.Property(x => x.Shade).HasConversion<int>();
         });
 

@@ -35,7 +35,7 @@ For the follow-on integration of the stepper prototype into the normal app flow,
 11. **Technician impersonation for v1:** the technician should select clinic code + PIN and use the same flow a clinic will later use. Avoid a separate shortcut flow for order creation in this plan.
 12. **Order status:** only `Created` is required for the walking skeleton.
 13. **Case reference:** use `CaseName`, not `PatientName`.
-14. **Teeth selection:** the initial walking skeleton supported numeric tooth/range input; prototyping evolved this into a visual FDI tooth picker in `Web/wwwroot/order-prototypes/stepper.html`. Crown = single tooth. Non-crown = contiguous same-jaw range. Bridge abutments still default to the two range endpoints until explicit abutment selection is designed.
+14. **Teeth selection:** the initial walking skeleton supported numeric tooth/range input; prototyping evolved this into a visual FDI tooth picker that was later promoted to `/orders` and the obsolete prototype file was removed in Slice 8. Crown = single tooth. Non-crown = contiguous same-jaw range. Abutment support was later removed from the live order flow.
 15. **Delivery date selection:** user may select any valid date after/on the calculated minimum date, not only the earliest date.
 16. **Delivery availability plain-English rules:** a delivery date is selectable when it is on/after the minimum calculated date, not weekend, not a closed/holiday day, and not the first business day after a closed period.
 17. **Walking-skeleton date filtering:** implement at least a weekend-only filter in this plan so filtering is demonstrably active. Bulgarian holiday automation is a follow-up unless pulled into this plan later.
@@ -72,13 +72,13 @@ For the follow-on integration of the stepper prototype into the normal app flow,
   - impression/collection date,
   - product/work/material/construction selections,
   - teeth range,
-  - derived/default abutment teeth for bridges,
+  - historical derived/default abutment teeth for bridges (later removed in Slice 8),
   - requested delivery date,
   - status `Created`,
   - created/updated timestamps,
   - IP/user-agent audit metadata.
 - [x] Add validation tests for crown single-tooth and non-crown range behavior.
-- [x] Add validation tests for bridge default abutments = range endpoints.
+- [x] Add validation tests for bridge default abutments = range endpoints. (Historical; abutment logic was removed in Slice 8.)
 
 ---
 
@@ -192,7 +192,7 @@ For the follow-on integration of the stepper prototype into the normal app flow,
 - [x] Show order confirmation with large order code and instruction to write it on the impression/package.
 - [x] Add simple order list view for the technician/current organization.
 - [x] Add logout UI.
-- [x] Prototype a visual FDI tooth chart and stepper UX in `Web/wwwroot/order-prototypes/stepper.html`; promotion to the real `/orders` UI is a separate follow-up plan.
+- [x] Prototype a visual FDI tooth chart and stepper UX; this was later promoted to the real `/orders` UI and the obsolete prototype file was removed in Slice 8.
 
 ---
 
@@ -230,7 +230,7 @@ Before marking the walking skeleton complete, the coding agent must run a realis
 - [x] Log in through the normal clinic login form/API using clinic code + PIN; do not bypass auth through direct DB inserts.
 - [x] Create at least three representative orders:
   - crown with a single tooth,
-  - bridge with a tooth range and default endpoint abutments,
+  - bridge with a tooth range,
   - temporary crown/bridge or other configured temporary case.
 - [x] While creating orders, verify date filtering is visible and enforced:
   - weekend dates are unavailable,
@@ -259,7 +259,7 @@ Completed locally on 2026-05-31. Assumptions/decisions made during implementatio
 - Order-code generator uses descriptive codes behind `IOrderCodeGenerator`; final BG/Latin ambiguity research and normalization remain follow-ups.
 - SQLite order listing now sorts by a persisted `CreatedAtUnixTimeMilliseconds` column to avoid provider limitations around ordering by `DateTimeOffset`.
 - Shade is now a first-class order property (`Shade` enum) persisted through API/SQLite; UI includes `Unspecified` as an explicit option.
-- The preferred prototyping direction is the stepper flow in `Web/wwwroot/order-prototypes/stepper.html`; integrating it into `/orders` is intentionally deferred to a separate plan.
+- Historical note: the preferred prototype stepper flow was later integrated into the production `/orders` page; the obsolete prototype file was removed in Slice 8.
 
 Validation evidence:
 
@@ -275,11 +275,7 @@ Validation evidence:
 
 These are intentionally not detailed here. When the next detailed plan is created, copy these items forward, refine them based on what was learned during the walking skeleton, and keep any still-deferred items as follow-up TODOs in that next plan.
 
-- [ ] **Immediate next plan to create:** Stepper-to-real-orders UI integration plan.
-  - Promote the preferred `Web/wwwroot/order-prototypes/stepper.html` flow into the real `/orders` page.
-  - Preserve visual FDI tooth selection, shade choices including `Unspecified`, overview/confirmation steps, and descriptive shortened order codes.
-  - Decide whether older prototype pages should remain, be archived, or be removed.
-  - Carry all still-deferred TODOs from this section into that plan.
+- [x] **Stepper-to-real-orders UI integration plan:** Completed through the order-flow vertical slices; the real `/orders` page now owns the scheduler flow and the obsolete prototype was removed.
 - [ ] Calendar/holiday hardening plan.
   - Include Bulgarian public holiday provider behind `INonWorkingDayProvider` / `IHolidayCalendarProvider`.
   - Use an always-fetch-and-parse implementation for `https://xn--b1aekbb1acci5f.com/` for v1 unless research reveals a better source.
@@ -297,10 +293,8 @@ These are intentionally not detailed here. When the next detailed plan is create
   - Finalize explicit min-business-days config before v1 finalization.
   - Add UI filtering for allowed combinations.
   - Carry still-deferred TODOs into the next plan.
-- [ ] Teeth/abutment UX refinement plan.
-  - Confirm bridge abutment rules with the user before detailed implementation.
-  - Add UI for selecting exact abutment teeth within range.
-  - Finalize/polish the visual FDI tooth selector from the stepper prototype as production UI.
+- [ ] Teeth UX refinement plan.
+  - Continue polishing the visual FDI tooth selector in the production scheduler UI as needed.
   - Carry still-deferred TODOs into the next plan.
 - [ ] v1.5 preview-readiness plan.
   - Confirm the temporary config reload endpoint remains removed.

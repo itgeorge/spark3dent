@@ -81,7 +81,7 @@ Route should use actor clinic code, never accept clinic code from query in this 
 Create a new `Web/wwwroot/orders.html` scheduler page composed from:
 
 - auth/login behavior from the removed walking-skeleton `orders.html` if recovered from git history is useful,
-- stepper UX from `Web/wwwroot/order-prototypes/stepper.html`,
+- stepper UX from the historical prototype that was later removed in Slice 8,
 - list/card visual patterns from `Web/wwwroot/index.html`.
 
 Do not add invoicer navigation yet.
@@ -110,7 +110,7 @@ Recommended functions:
 
 ### Stepper integration notes
 
-`stepper.html` is a prototype and has create-only assumptions:
+Historical note: the prototype file used during this slice was removed in Slice 8. It had create-only assumptions:
 
 - it hides list/app state,
 - it calls `POST /api/scheduling/orders`,

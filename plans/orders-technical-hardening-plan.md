@@ -11,7 +11,7 @@ This plan hardens the orders/scheduling walking skeleton technically while inten
 3. **Repository interface is too broad:** `ISchedulingRepository` combines session persistence and order persistence. This makes tests and future DB changes less focused.
 4. **Order-code allocation is not atomic enough:** `SchedulingOrderService` checks `OrderCodeExistsAsync` before insert, then inserts later. Concurrent requests can both observe a free code and race at insert time. Unique DB index protects data but currently turns the race into a failed request instead of a retry.
 5. **No explicit duplicate-code exception:** persistence cannot communicate “retry with another code” without relying on provider-specific exceptions.
-6. **Order creation assembly is too large/nested in service:** validation, abutment derivation, audit snapshot, code allocation, and repository calls are all inline.
+6. **Order creation assembly is too large/nested in service:** validation, audit snapshot, code allocation, and repository calls are all inline.
 7. **SQLite order listing sorts in memory:** current EF provider cannot order by `DateTimeOffset`; instead of loading all rows, persist sortable timestamp text or a numeric sort column.
 8. **Config provider uses sync file IO and lives with domain models:** acceptable for skeleton, but should be isolated in its own file and made easier to test.
 9. **PIN hashing lives with domain model:** should be isolated as auth/security infrastructure in Orders.

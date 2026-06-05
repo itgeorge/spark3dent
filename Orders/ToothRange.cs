@@ -35,9 +35,6 @@ public sealed record ToothRange
             throw new InvalidOperationException("Bridge/facet orders must span at least two teeth.");
     }
 
-    public int[] DefaultAbutments(ConstructionType constructionType) =>
-        constructionType == ConstructionType.Bridge ? [Start, End] : [];
-
     public static bool IsValidFdiTooth(int tooth)
     {
         var q = tooth / 10;

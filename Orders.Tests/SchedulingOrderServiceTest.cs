@@ -63,7 +63,7 @@ public class SchedulingOrderServiceTest
         var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
         var draft = fixture.CreateOrderDraft("Updated case") with
         {
-            TeethRange = new ToothRange(12, 12),
+            WorkItems = [new OrderWorkItem(ConstructionType.Crown, new ToothRange(12, 12))],
             RequestedDeliveryDate = new DateOnly(2026, 6, 9),
             Notes = "updated note"
         };
@@ -72,7 +72,7 @@ public class SchedulingOrderServiceTest
 
         Assert.That(updated.OrderCode, Is.EqualTo(created.OrderCode));
         Assert.That(updated.CaseName, Is.EqualTo("Updated case"));
-        Assert.That(updated.ToothStart, Is.EqualTo(12));
+        Assert.That(updated.WorkItems.Single().ToothStart, Is.EqualTo(12));
         Assert.That(updated.Notes, Is.EqualTo("updated note"));
         Assert.That(updated.CreatedAt, Is.EqualTo(created.CreatedAt));
         Assert.That(updated.Status, Is.EqualTo(OrderStatus.Created));
@@ -176,7 +176,7 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
-    public async Task CreateOrderAsync_GivenMultipleOrderWorkItems_PersistsPrimaryCompatibilityFieldsAndAllItems()
+    public async Task CreateOrderAsync_GivenMultipleOrderWorkItems_PersistsAllItemsOnly()
     {
         var fixture = new Fixture(1);
         var draft = fixture.CreateOrderDraft("Multi") with
@@ -192,10 +192,9 @@ public class SchedulingOrderServiceTest
         var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test");
 
         Assert.That(created.WorkItems, Has.Count.EqualTo(2));
-        Assert.That(created.ConstructionType, Is.EqualTo(ConstructionType.Bridge));
-        Assert.That(created.ToothStart, Is.EqualTo(13));
-        Assert.That(created.ToothEnd, Is.EqualTo(11));
-        Assert.That(created.AbutmentTeeth, Is.EqualTo("13,11"));
+        Assert.That(created.WorkItems[0].ConstructionType, Is.EqualTo(ConstructionType.Bridge));
+        Assert.That(created.WorkItems[0].ToothStart, Is.EqualTo(13));
+        Assert.That(created.WorkItems[0].ToothEnd, Is.EqualTo(11));
     }
 
     [Test]
@@ -262,18 +261,6 @@ public class SchedulingOrderServiceTest
 
         Assert.That(audit.Events.Last().MetadataJson, Does.Contain("WorkItems"));
         Assert.That(audit.Events.Last().MetadataJson, Does.Contain("newWorkItems"));
-    }
-
-    [Test]
-    public async Task CreateOrderAsync_GivenLegacyDraft_ExposesOneOrderWorkItem()
-    {
-        var fixture = new Fixture(1);
-
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Legacy"), "127.0.0.1", "test");
-
-        Assert.That(created.WorkItems, Has.Count.EqualTo(1));
-        Assert.That(created.PrimaryWorkItem.ConstructionType, Is.EqualTo(ConstructionType.Crown));
-        Assert.That(created.PrimaryWorkItem.ToothStart, Is.EqualTo(11));
     }
 
     [Test]
@@ -421,10 +408,8 @@ public class SchedulingOrderServiceTest
                 caseName,
                 new DateOnly(2026, 6, 2),
                 ProductCategory.Permanent,
-                WorkType.Crown,
                 Material.FullContourZirconia,
-                ConstructionType.Crown,
-                new ToothRange(11, 11),
+                [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))],
                 new DateOnly(2026, 6, 5),
                 Shade.A3,
                 null);

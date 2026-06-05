@@ -100,15 +100,4 @@ public class ToothRangeTest
     {
         Assert.Throws<InvalidOperationException>(() => new ToothRange(tooth, tooth).Validate(ConstructionType.Crown));
     }
-
-    [Test]
-    public void DefaultAbutments_GivenBridge_ReturnsRangeEdgesInFdiJawOrder()
-    {
-        var range = new ToothRange(14, 16);
-        range.Validate(ConstructionType.Bridge);
-
-        var abutments = range.DefaultAbutments(ConstructionType.Bridge);
-
-        Assert.That(abutments, Is.EqualTo(new[] { 16, 14 }));
-    }
 }

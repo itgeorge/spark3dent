@@ -333,10 +333,6 @@ namespace Database.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("AbutmentTeeth")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("CaseName")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -346,10 +342,6 @@ namespace Database.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ClinicDisplayName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ConstructionType")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -407,19 +399,10 @@ namespace Database.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("ToothEnd")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ToothStart")
-                        .HasColumnType("INTEGER");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("WorkItemsJson")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkType")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

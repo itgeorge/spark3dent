@@ -34,7 +34,7 @@ public sealed class SchedulingOrderService
     public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default)
     {
         ValidateOrderWorkItems(draft);
-        var workItems = draft.ResolvedWorkItems;
+        var workItems = draft.WorkItems;
         var requiredBusinessDays = workItems.Sum(item =>
         {
             var workType = WorkTypeFor(draft.ProductCategory, draft.Material, item.ConstructionType);
@@ -76,7 +76,6 @@ public sealed class SchedulingOrderService
                 requestedDeliveryDate = created.RequestedDeliveryDate,
                 status = created.Status.ToString(),
                 workItems = WorkItemsAudit(created.WorkItems),
-                primaryWorkItem = WorkItemAudit(created.PrimaryWorkItem),
                 totalToothCount = OrderWorkItem.AllTeeth(created.WorkItems).Length
             },
             ct);
@@ -101,14 +100,9 @@ public sealed class SchedulingOrderService
             CaseName = draft.CaseName.Trim(),
             ImpressionDate = draft.ImpressionDate,
             ProductCategory = draft.ProductCategory,
-            WorkType = draft.WorkType,
             Material = draft.Material,
-            ConstructionType = draft.PrimaryWorkItem.ConstructionType,
-            ToothStart = draft.PrimaryWorkItem.ToothStart,
-            ToothEnd = draft.PrimaryWorkItem.ToothEnd,
-            AbutmentTeeth = OrderWorkItem.AbutmentsCsv(draft.ResolvedWorkItems),
+            WorkItems = draft.WorkItems,
             RequestedDeliveryDate = draft.RequestedDeliveryDate,
-            WorkItems = draft.ResolvedWorkItems,
             Shade = draft.Shade,
             Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
             UpdatedAt = _clock.UtcNow
@@ -204,10 +198,7 @@ public sealed class SchedulingOrderService
         if (oldOrder.CaseName != newOrder.CaseName) changed.Add(nameof(OrderRecord.CaseName));
         if (oldOrder.ImpressionDate != newOrder.ImpressionDate) changed.Add(nameof(OrderRecord.ImpressionDate));
         if (oldOrder.ProductCategory != newOrder.ProductCategory) changed.Add(nameof(OrderRecord.ProductCategory));
-        if (oldOrder.WorkType != newOrder.WorkType) changed.Add(nameof(OrderRecord.WorkType));
         if (oldOrder.Material != newOrder.Material) changed.Add(nameof(OrderRecord.Material));
-        if (oldOrder.ConstructionType != newOrder.ConstructionType) changed.Add(nameof(OrderRecord.ConstructionType));
-        if (oldOrder.ToothStart != newOrder.ToothStart || oldOrder.ToothEnd != newOrder.ToothEnd) changed.Add("TeethRange");
         if (!WorkItemsEqual(oldOrder.WorkItems, newOrder.WorkItems)) changed.Add(nameof(OrderRecord.WorkItems));
         if (oldOrder.RequestedDeliveryDate != newOrder.RequestedDeliveryDate) changed.Add(nameof(OrderRecord.RequestedDeliveryDate));
         if (oldOrder.Shade != newOrder.Shade) changed.Add(nameof(OrderRecord.Shade));
@@ -224,7 +215,9 @@ public sealed class SchedulingOrderService
 
     private static void ValidateOrderWorkItems(OrderDraft draft)
     {
-        OrderWorkItem.ValidateAll(draft.ResolvedWorkItems);
+        if (draft.WorkItems == null)
+            throw new InvalidOperationException("At least one order work item is required.");
+        OrderWorkItem.ValidateAll(draft.WorkItems);
     }
 
     private static WorkType WorkTypeFor(ProductCategory productCategory, Material material, ConstructionType constructionType)
@@ -286,12 +279,8 @@ public sealed class SchedulingOrderService
             draft.CaseName.Trim(),
             draft.ImpressionDate,
             draft.ProductCategory,
-            draft.WorkType,
             draft.Material,
-            draft.PrimaryWorkItem.ConstructionType,
-            draft.PrimaryWorkItem.ToothStart,
-            draft.PrimaryWorkItem.ToothEnd,
-            OrderWorkItem.AbutmentsCsv(draft.ResolvedWorkItems),
+            draft.WorkItems,
             draft.RequestedDeliveryDate,
             OrderStatus.Created,
             draft.Shade,
@@ -299,8 +288,7 @@ public sealed class SchedulingOrderService
             now,
             now,
             ip,
-            userAgent,
-            draft.ResolvedWorkItems);
+            userAgent);
     }
 
     private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, CancellationToken ct)

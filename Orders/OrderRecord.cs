@@ -11,12 +11,8 @@ public sealed record OrderRecord(
     string CaseName,
     DateOnly ImpressionDate,
     ProductCategory ProductCategory,
-    WorkType WorkType,
     Material Material,
-    ConstructionType ConstructionType,
-    int ToothStart,
-    int ToothEnd,
-    string AbutmentTeeth,
+    IReadOnlyList<OrderWorkItem> WorkItems,
     DateOnly RequestedDeliveryDate,
     OrderStatus Status,
     Shade Shade,
@@ -24,11 +20,4 @@ public sealed record OrderRecord(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string CreatedIp,
-    string CreatedUserAgent,
-    IReadOnlyList<OrderWorkItem>? WorkItems = null)
-{
-    public IReadOnlyList<OrderWorkItem> WorkItems { get; init; } =
-        OrderWorkItem.Normalize(WorkItems, ConstructionType, new ToothRange(ToothStart, ToothEnd));
-
-    public OrderWorkItem PrimaryWorkItem => WorkItems[0];
-}
+    string CreatedUserAgent);

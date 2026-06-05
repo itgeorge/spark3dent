@@ -168,10 +168,8 @@ public class DescriptiveOrderCodeGeneratorTest
             "Case 42",
             new DateOnly(2026, 6, 2),
             material == Material.Pmma ? ProductCategory.Temporary : ProductCategory.Permanent,
-            material == Material.Pmma ? WorkType.TemporaryCrownBridge : WorkType.Crown,
             material,
-            constructionType,
-            teethRange,
+            [new OrderWorkItem(constructionType, teethRange)],
             requestedDeliveryDate,
             Shade.A3,
             null);

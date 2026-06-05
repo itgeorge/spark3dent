@@ -226,21 +226,18 @@ public static class SchedulingApi
 
     private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate)
     {
-        var workItems = body.WorkItems == null
-            ? null
-            : body.WorkItems.Select(i => new OrderWorkItem(i.ConstructionType, new ToothRange(i.ToothStart, i.ToothEnd))).ToArray();
+        var workItems = body.WorkItems?
+            .Select(i => new OrderWorkItem(i.ConstructionType, new ToothRange(i.ToothStart, i.ToothEnd)))
+            .ToArray() ?? [];
         return new OrderDraft(
             body.CaseName ?? "",
             body.ImpressionDate,
             body.ProductCategory,
-            body.WorkType,
             body.Material,
-            workItems is { Length: > 0 } ? workItems[0].ConstructionType : body.ConstructionType,
-            workItems is { Length: > 0 } ? workItems[0].TeethRange : new ToothRange(body.ToothStart, body.ToothEnd),
+            workItems,
             deliveryDate,
             body.Shade,
-            body.Notes,
-            workItems);
+            body.Notes);
     }
 
     private static object ToDto(OrderRecord o) => new
@@ -255,12 +252,7 @@ public static class SchedulingApi
         o.CaseName,
         o.ImpressionDate,
         o.ProductCategory,
-        o.WorkType,
         o.Material,
-        o.ConstructionType,
-        o.ToothStart,
-        o.ToothEnd,
-        o.AbutmentTeeth,
         workItems = o.WorkItems.Select(ToWorkItemDto),
         o.RequestedDeliveryDate,
         o.Status,
@@ -290,11 +282,7 @@ public static class SchedulingApi
         public string? CaseName { get; init; }
         public DateOnly ImpressionDate { get; init; }
         public ProductCategory ProductCategory { get; init; }
-        public WorkType WorkType { get; init; }
         public Material Material { get; init; }
-        public ConstructionType ConstructionType { get; init; }
-        public int ToothStart { get; init; }
-        public int ToothEnd { get; init; }
         public IReadOnlyList<OrderWorkItemRequest>? WorkItems { get; init; }
         public Shade Shade { get; init; }
         public string? Notes { get; init; }

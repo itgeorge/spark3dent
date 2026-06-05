@@ -296,22 +296,22 @@ Recommended headless/browser smoke:
 
 ## Implementation Checklist
 
-- [ ] Delete `Web/wwwroot/order-prototypes/stepper.html` and stale prototype references.
-- [ ] Remove abutment helpers from `ToothRange` / `OrderWorkItem` and all live call sites.
-- [ ] Refactor `OrderDraft` to require `WorkItems` and drop legacy single-item fields.
-- [ ] Refactor `OrderRecord` to require `WorkItems` and drop legacy single-item fields.
-- [ ] Update `SchedulingOrderService` create/update/validation/audit/changed-fields logic.
-- [ ] Update `DescriptiveOrderCodeGenerator` if needed to use required work items directly.
-- [ ] Update `SchedulingOrderEntity` and `SqliteOrderRepo` mapping.
-- [ ] Add migration that deletes scheduling orders and drops legacy columns.
-- [ ] Optionally delete scheduling-order audit rows in the same migration.
-- [ ] Update `Web/SchedulingApi.cs` request/response shape and validation.
-- [ ] Update `Web/wwwroot/orders.html` payload generation and any legacy references.
-- [ ] Update tests across Orders/Database/Web.
-- [ ] Run targeted tests and full test suite if practical.
-- [ ] Run JS syntax checks for changed static/inline scripts.
+- [x] Delete `Web/wwwroot/order-prototypes/stepper.html` and stale prototype references.
+- [x] Remove abutment helpers from `ToothRange` / `OrderWorkItem` and all live call sites.
+- [x] Refactor `OrderDraft` to require `WorkItems` and drop legacy single-item fields.
+- [x] Refactor `OrderRecord` to require `WorkItems` and drop legacy single-item fields.
+- [x] Update `SchedulingOrderService` create/update/validation/audit/changed-fields logic.
+- [x] Update `DescriptiveOrderCodeGenerator` if needed to use required work items directly.
+- [x] Update `SchedulingOrderEntity` and `SqliteOrderRepo` mapping.
+- [x] Add migration that deletes scheduling orders and drops legacy columns.
+- [x] Optionally delete scheduling-order audit rows in the same migration.
+- [x] Update `Web/SchedulingApi.cs` request/response shape and validation.
+- [x] Update `Web/wwwroot/orders.html` payload generation and any legacy references.
+- [x] Update tests across Orders/Database/Web.
+- [x] Run targeted tests and full test suite if practical.
+- [x] Run JS syntax checks for changed static/inline scripts.
 - [ ] Run browser smoke for create/review/edit/calendar.
-- [ ] Update master plan and this slice plan completion notes.
+- [x] Update master plan and this slice plan completion notes.
 
 ## Out of Scope / Follow-Ups
 
@@ -322,13 +322,11 @@ Recommended headless/browser smoke:
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Migration/data deletion notes:
-- API contract notes:
-- Abutment cleanup notes:
-- Follow-up discoveries:
+- Status: Complete.
+- Files changed: `Orders/OrderDraft.cs`, `Orders/OrderRecord.cs`, `Orders/OrderWorkItem.cs`, `Orders/ToothRange.cs`, `Orders/SchedulingOrderService.cs`, `Orders/DescriptiveOrderCodeGenerator.cs`, `Database/Entities/SchedulingOrderEntity.cs`, `Database/SqliteOrderRepo.cs`, `Database/AppDbContext.cs`, `Database/Migrations/20260606000000_RemoveSchedulingOrderLegacyFields.cs`, `Database/Migrations/AppDbContextModelSnapshot.cs`, `Web/SchedulingApi.cs`, `Web/wwwroot/orders.html`, `Web/wwwroot/data/vita-shade-guide-reference.json`, tests in `Orders.Tests`, `Database.Tests`, and `Web.Tests`, and stale-reference plan docs. Deleted `Web/wwwroot/order-prototypes/stepper.html`.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` (passed, 58); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (passed, 78); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (passed, 97); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` (passed).
+- Manual checks: `node --check` passed for the extracted inline script from `Web/wwwroot/orders.html`. Browser smoke was not run in this handoff.
+- Migration/data deletion notes: migration `20260606000000_RemoveSchedulingOrderLegacyFields` deletes all `SchedulingOrders`, deletes `AuditEvents` where `EntityType = 'SchedulingOrder'`, recreates the scheduling orders table without `WorkType`, `ConstructionType`, `ToothStart`, `ToothEnd`, or `AbutmentTeeth`, and preserves invoice/client tables.
+- API contract notes: scheduling create/update/date requests now require `workItems`; DTOs expose `workItems` and no order-level `workType`, `constructionType`, `toothStart`, `toothEnd`, or `abutmentTeeth`. Old single-field-only create requests return 400.
+- Abutment cleanup notes: live domain/API/UI/repository/tests no longer include abutment helpers, mapping, DTO fields, or assertions. Historical migrations and the new migration down path still mention legacy columns as migration history only.
+- Follow-up discoveries: SQLite cannot use EF `DropColumnOperation` directly in this project, so the migration uses the approved scheduling-order wipe and table recreation approach.
