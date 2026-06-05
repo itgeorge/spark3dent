@@ -82,6 +82,27 @@ public class DescriptiveOrderCodeGeneratorTest
     }
 
     [Test]
+    public void Generate_GivenMultipleOrderWorkItems_UsesTotalSelectedToothCount()
+    {
+        var draft = CreateDraft(
+            Material.FullContourZirconia,
+            ConstructionType.Bridge,
+            new ToothRange(11, 13),
+            new DateOnly(2026, 11, 13)) with
+        {
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(23, 23))
+            ]
+        };
+
+        var code = _generator.Generate(draft);
+
+        AssertDescriptiveCode(code, "26-1311-Z4");
+    }
+
+    [Test]
     public void ToShortenedCode_GivenDescriptiveOrderCode_DropsYearPrefix()
     {
         var draft = CreateDraft(

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Database.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +9,12 @@ namespace Database;
 
 public sealed class SqliteOrderRepo : IOrderRepository
 {
+    private static readonly JsonSerializerOptions WorkItemsJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
+
     private readonly Func<AppDbContext> _contextFactory;
 
     public SqliteOrderRepo(Func<AppDbContext> contextFactory)
@@ -111,13 +119,16 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.CredentialPinHashFingerprint = order.CredentialPinHashFingerprint;
         entity.CaseName = order.CaseName;
         entity.ImpressionDate = order.ImpressionDate;
+        var workItems = ResolveWorkItemsForSave(order);
+        var primary = workItems[0];
         entity.ProductCategory = order.ProductCategory.ToString();
         entity.WorkType = order.WorkType.ToString();
         entity.Material = order.Material.ToString();
-        entity.ConstructionType = order.ConstructionType.ToString();
-        entity.ToothStart = order.ToothStart;
-        entity.ToothEnd = order.ToothEnd;
-        entity.AbutmentTeeth = order.AbutmentTeeth;
+        entity.ConstructionType = primary.ConstructionType.ToString();
+        entity.ToothStart = primary.ToothStart;
+        entity.ToothEnd = primary.ToothEnd;
+        entity.AbutmentTeeth = OrderWorkItem.AbutmentsCsv(workItems);
+        entity.WorkItemsJson = SerializeWorkItems(workItems);
         entity.RequestedDeliveryDate = order.RequestedDeliveryDate;
         entity.Status = order.Status.ToString();
         entity.Shade = order.Shade;
@@ -129,29 +140,64 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.CreatedUserAgent = order.CreatedUserAgent;
     }
 
-    private static OrderRecord ToDomain(SchedulingOrderEntity e) => new(
-        e.Id,
-        e.OrderCode,
-        e.ClinicCode,
-        e.ClinicDisplayName,
-        e.CredentialId,
-        e.CredentialLabel,
-        e.CredentialPinHashFingerprint,
-        e.CaseName,
-        e.ImpressionDate,
-        Enum.Parse<ProductCategory>(e.ProductCategory),
-        Enum.Parse<WorkType>(e.WorkType),
-        Enum.Parse<Material>(e.Material),
-        Enum.Parse<ConstructionType>(e.ConstructionType),
-        e.ToothStart,
-        e.ToothEnd,
-        e.AbutmentTeeth,
-        e.RequestedDeliveryDate,
-        Enum.Parse<OrderStatus>(e.Status),
-        e.Shade,
-        e.Notes,
-        e.CreatedAt,
-        e.UpdatedAt,
-        e.CreatedIp,
-        e.CreatedUserAgent);
+    private static OrderRecord ToDomain(SchedulingOrderEntity e)
+    {
+        var constructionType = Enum.Parse<ConstructionType>(e.ConstructionType);
+        return new OrderRecord(
+            e.Id,
+            e.OrderCode,
+            e.ClinicCode,
+            e.ClinicDisplayName,
+            e.CredentialId,
+            e.CredentialLabel,
+            e.CredentialPinHashFingerprint,
+            e.CaseName,
+            e.ImpressionDate,
+            Enum.Parse<ProductCategory>(e.ProductCategory),
+            Enum.Parse<WorkType>(e.WorkType),
+            Enum.Parse<Material>(e.Material),
+            constructionType,
+            e.ToothStart,
+            e.ToothEnd,
+            e.AbutmentTeeth,
+            e.RequestedDeliveryDate,
+            Enum.Parse<OrderStatus>(e.Status),
+            e.Shade,
+            e.Notes,
+            e.CreatedAt,
+            e.UpdatedAt,
+            e.CreatedIp,
+            e.CreatedUserAgent,
+            DeserializeWorkItems(e.WorkItemsJson, constructionType, e.ToothStart, e.ToothEnd));
+    }
+
+    private static IReadOnlyList<OrderWorkItem> ResolveWorkItemsForSave(OrderRecord order)
+    {
+        var legacy = new OrderWorkItem(order.ConstructionType, new ToothRange(order.ToothStart, order.ToothEnd));
+        if (order.WorkItems.Count == 0)
+            return [legacy];
+        if (order.WorkItems.Count == 1)
+        {
+            var only = order.WorkItems[0];
+            if (only.ConstructionType != legacy.ConstructionType || only.ToothStart != legacy.ToothStart || only.ToothEnd != legacy.ToothEnd)
+                return [legacy];
+        }
+        return order.WorkItems;
+    }
+
+    private static string SerializeWorkItems(IReadOnlyList<OrderWorkItem> items) =>
+        JsonSerializer.Serialize(items.Select(i => new WorkItemJson(i.ConstructionType, i.ToothStart, i.ToothEnd)), WorkItemsJsonOptions);
+
+    private static IReadOnlyList<OrderWorkItem> DeserializeWorkItems(string? json, ConstructionType legacyConstructionType, int legacyToothStart, int legacyToothEnd)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [new OrderWorkItem(legacyConstructionType, new ToothRange(legacyToothStart, legacyToothEnd))];
+
+        var items = JsonSerializer.Deserialize<List<WorkItemJson>>(json, WorkItemsJsonOptions) ?? [];
+        return items.Count == 0
+            ? [new OrderWorkItem(legacyConstructionType, new ToothRange(legacyToothStart, legacyToothEnd))]
+            : items.Select(i => new OrderWorkItem(i.ConstructionType, new ToothRange(i.ToothStart, i.ToothEnd))).ToArray();
+    }
+
+    private sealed record WorkItemJson(ConstructionType ConstructionType, int ToothStart, int ToothEnd);
 }

@@ -224,17 +224,24 @@ public static class SchedulingApi
         catch (JsonException) { return default; }
     }
 
-    private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate) => new(
-        body.CaseName ?? "",
-        body.ImpressionDate,
-        body.ProductCategory,
-        body.WorkType,
-        body.Material,
-        body.ConstructionType,
-        new ToothRange(body.ToothStart, body.ToothEnd),
-        deliveryDate,
-        body.Shade,
-        body.Notes);
+    private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate)
+    {
+        var workItems = body.WorkItems == null
+            ? null
+            : body.WorkItems.Select(i => new OrderWorkItem(i.ConstructionType, new ToothRange(i.ToothStart, i.ToothEnd))).ToArray();
+        return new OrderDraft(
+            body.CaseName ?? "",
+            body.ImpressionDate,
+            body.ProductCategory,
+            body.WorkType,
+            body.Material,
+            workItems is { Length: > 0 } ? workItems[0].ConstructionType : body.ConstructionType,
+            workItems is { Length: > 0 } ? workItems[0].TeethRange : new ToothRange(body.ToothStart, body.ToothEnd),
+            deliveryDate,
+            body.Shade,
+            body.Notes,
+            workItems);
+    }
 
     private static object ToDto(OrderRecord o) => new
     {
@@ -254,6 +261,7 @@ public static class SchedulingApi
         o.ToothStart,
         o.ToothEnd,
         o.AbutmentTeeth,
+        workItems = o.WorkItems.Select(ToWorkItemDto),
         o.RequestedDeliveryDate,
         o.Status,
         o.Shade,
@@ -262,10 +270,20 @@ public static class SchedulingApi
         o.UpdatedAt
     };
 
+    private static object ToWorkItemDto(OrderWorkItem item) => new
+    {
+        item.ConstructionType,
+        toothStart = item.ToothStart,
+        toothEnd = item.ToothEnd,
+        teeth = item.Teeth
+    };
+
     private static string RemoteIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private static string UserAgent(HttpContext ctx) => ctx.Request.Headers.UserAgent.ToString();
 
     public sealed record LoginRequest(string? ClinicCode, string? Pin);
+
+    public sealed record OrderWorkItemRequest(ConstructionType ConstructionType, int ToothStart, int ToothEnd);
 
     public abstract record OrderShape
     {
@@ -277,6 +295,7 @@ public static class SchedulingApi
         public ConstructionType ConstructionType { get; init; }
         public int ToothStart { get; init; }
         public int ToothEnd { get; init; }
+        public IReadOnlyList<OrderWorkItemRequest>? WorkItems { get; init; }
         public Shade Shade { get; init; }
         public string? Notes { get; init; }
     }

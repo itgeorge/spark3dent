@@ -24,4 +24,11 @@ public sealed record OrderRecord(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string CreatedIp,
-    string CreatedUserAgent);
+    string CreatedUserAgent,
+    IReadOnlyList<OrderWorkItem>? WorkItems = null)
+{
+    public IReadOnlyList<OrderWorkItem> WorkItems { get; init; } =
+        OrderWorkItem.Normalize(WorkItems, ConstructionType, new ToothRange(ToothStart, ToothEnd));
+
+    public OrderWorkItem PrimaryWorkItem => WorkItems[0];
+}

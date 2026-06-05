@@ -24,12 +24,12 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
     public SchedulingConfigSnapshot Current { get; private set; }
     public Task<SchedulingConfigSnapshot> ReloadAsync(CancellationToken ct = default) => Task.FromResult(Current);
 
-    public static TestSchedulingConfigProvider Create(string? credentialHash = null, ActorRole credentialRole = ActorRole.Clinic) => new(new SchedulingConfigSnapshot(new SchedulingOptions
+    public static TestSchedulingConfigProvider Create(string? credentialHash = null, ActorRole credentialRole = ActorRole.Clinic, List<WorkRule>? workRules = null) => new(new SchedulingConfigSnapshot(new SchedulingOptions
     {
         SessionSlidingDays = 30,
         SessionAbsoluteDays = 180,
         DefaultMinBusinessDays = 3,
-        WorkRules =
+        WorkRules = workRules ??
         [
             new WorkRule(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.Crown, 3)
         ],

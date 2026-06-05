@@ -399,26 +399,26 @@ Recommended headless smoke:
 
 ## Implementation Checklist
 
-- [ ] Add `OrderWorkItem` domain type and validation helpers.
-- [ ] Extend `OrderDraft` with work items and legacy single-item compatibility.
-- [ ] Extend `OrderRecord` with typed work items.
-- [ ] Add `WorkItemsJson` persistence and migration/backfill mapping.
-- [ ] Update repository mapping to persist/read work items and primary legacy fields.
-- [ ] Update service validation for per-item and cross-item overlap.
-- [ ] Update lead-time calculation to sum per-work-item rules.
-- [ ] Update order code tooth count to total selected teeth.
-- [ ] Update API request parsing and DTO output for `workItems`.
-- [ ] Update audit metadata/changed fields for work items.
-- [ ] Replace separate construction buttons with per-work-item construction cycle button in `orders.html`.
-- [ ] Add `+` / `-` work-item controls and active/locked item behavior.
-- [ ] Prevent active selection overlap with previous work items in chart clicks and tooth nudges.
-- [ ] Reduce mobile tooth-number readout width/padding only.
-- [ ] Update create/edit/review/list/calendar/confirmation displays.
-- [ ] Add/update domain, database, and web tests.
-- [ ] Run affected tests and full test suite if practical.
-- [ ] Run JS syntax checks for changed static scripts/inline script extraction.
-- [ ] Perform browser smoke for multi-item create/review/edit/calendar.
-- [ ] Update master plan and this slice plan with completion notes.
+- [x] Add `OrderWorkItem` domain type and validation helpers.
+- [x] Extend `OrderDraft` with work items and legacy single-item compatibility.
+- [x] Extend `OrderRecord` with typed work items.
+- [x] Add `WorkItemsJson` persistence and migration/backfill mapping.
+- [x] Update repository mapping to persist/read work items and primary legacy fields.
+- [x] Update service validation for per-item and cross-item overlap.
+- [x] Update lead-time calculation to sum per-work-item rules.
+- [x] Update order code tooth count to total selected teeth.
+- [x] Update API request parsing and DTO output for `workItems`.
+- [x] Update audit metadata/changed fields for work items.
+- [x] Replace separate construction buttons with per-work-item construction cycle button in `orders.html`.
+- [x] Add `+` / `-` work-item controls and active/locked item behavior.
+- [x] Prevent active selection overlap with previous work items in chart clicks and tooth nudges.
+- [x] Reduce mobile tooth-number readout width/padding only.
+- [x] Update create/edit/review/list/calendar/confirmation displays.
+- [x] Add/update domain, database, and web tests.
+- [x] Run affected tests and full test suite if practical.
+- [x] Run JS syntax checks for changed static scripts/inline script extraction.
+- [x] Perform browser smoke for multi-item create/review/edit/calendar.
+- [x] Update master plan and this slice plan with completion notes.
 
 ## Out of Scope / Follow-Ups
 
@@ -430,13 +430,11 @@ Recommended headless smoke:
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Serialization choice:
-- Lead-time calculation notes:
-- UI decisions:
-- Follow-up discoveries:
+- Status: Complete.
+- Files changed: `Orders/OrderWorkItem.cs`, `Orders/OrderDraft.cs`, `Orders/OrderRecord.cs`, `Orders/SchedulingOrderService.cs`, `Orders/DescriptiveOrderCodeGenerator.cs`, order tests; `Database/Entities/SchedulingOrderEntity.cs`, `Database/SqliteOrderRepo.cs`, migration `20260605005926_AddSchedulingOrderWorkItems`, database tests; `Web/SchedulingApi.cs`, `Web/wwwroot/orders.html`, web API tests.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore`; `dotnet test Database.Tests/Database.Tests.csproj --no-restore`; `dotnet test Web.Tests/Web.Tests.csproj --no-restore`; `dotnet build Web/Web.csproj --no-restore`; `node --check` on extracted `orders.html` inline script.
+- Manual checks: Headless Chromium/CDP smoke passed on a temp DB at `http://127.0.0.1:61247`: clinic login, multi-item bridge+crown create, locked-tooth reuse prevention, overview/confirmation/list/review union displays, edit latest work item from tooth 23 to 24, calendar chip/day popup, and review opened from calendar popup.
+- Serialization choice: JSON via `SchedulingOrders.WorkItemsJson` using camelCase string construction types. Empty/null JSON falls back to legacy first-item fields. Primary compatibility columns are populated from the first order work item on save.
+- Lead-time calculation notes: Server derives work type per order work item (`pmma`/temporary => temporary crown/bridge, bridge => bridge, crown/facet => crown) and sums each matched rule's minimum business days before date availability.
+- UI decisions: `orders.html` now uses per-order-work-item construction cycle buttons in the tooth readout, `+`/`-` controls, locked previous lines, active latest-item editing, muted locked tooth highlights, and overlap prevention for active tooth clicks/nudges. Mobile compacting only narrows tooth-number readouts.
+- Follow-up discoveries: Existing FDI `ToothRange` normalization remains sequence-based, so upper anterior ranges such as `11-13` persist/display as normalized `13-11` in compatibility fields.

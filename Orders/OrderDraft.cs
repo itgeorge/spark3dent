@@ -10,4 +10,11 @@ public sealed record OrderDraft(
     ToothRange TeethRange,
     DateOnly RequestedDeliveryDate,
     Shade Shade,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<OrderWorkItem>? WorkItems = null)
+{
+    public IReadOnlyList<OrderWorkItem> ResolvedWorkItems =>
+        OrderWorkItem.Normalize(WorkItems, ConstructionType, TeethRange);
+
+    public OrderWorkItem PrimaryWorkItem => ResolvedWorkItems[0];
+}

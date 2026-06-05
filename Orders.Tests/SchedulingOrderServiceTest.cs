@@ -176,6 +176,107 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_GivenMultipleOrderWorkItems_PersistsPrimaryCompatibilityFieldsAndAllItems()
+    {
+        var fixture = new Fixture(1);
+        var draft = fixture.CreateOrderDraft("Multi") with
+        {
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(23, 23))
+            ],
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        };
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test");
+
+        Assert.That(created.WorkItems, Has.Count.EqualTo(2));
+        Assert.That(created.ConstructionType, Is.EqualTo(ConstructionType.Bridge));
+        Assert.That(created.ToothStart, Is.EqualTo(13));
+        Assert.That(created.ToothEnd, Is.EqualTo(11));
+        Assert.That(created.AbutmentTeeth, Is.EqualTo("13,11"));
+    }
+
+    [Test]
+    public void CreateOrderAsync_GivenInvalidOrderWorkItems_Rejects()
+    {
+        var fixture = new Fixture(["A", "B", "C", "D", "E"]);
+        var cases = new[]
+        {
+            fixture.CreateOrderDraft("empty") with { WorkItems = [] },
+            fixture.CreateOrderDraft("crown range") with { WorkItems = [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 12))] },
+            fixture.CreateOrderDraft("bridge single") with { WorkItems = [new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 11))] },
+            fixture.CreateOrderDraft("cross jaw") with { WorkItems = [new OrderWorkItem(ConstructionType.Facet, new ToothRange(28, 31))] },
+            fixture.CreateOrderDraft("overlap") with { WorkItems = [new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)), new OrderWorkItem(ConstructionType.Crown, new ToothRange(12, 12))] }
+        };
+
+        foreach (var draft in cases)
+        {
+            Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test"));
+        }
+    }
+
+    [Test]
+    public async Task CalculateMinimumDeliveryDateAsync_SumsLeadTimeAcrossOrderWorkItemsUsingDerivedWorkTypes()
+    {
+        var rules = new List<WorkRule>
+        {
+            new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.Crown, 2),
+            new(ProductCategory.Permanent, WorkType.Bridge, Material.FullContourZirconia, ConstructionType.Bridge, 4),
+            new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.Facet, 3)
+        };
+        var fixture = new Fixture(["A"], configProvider: TestSchedulingConfigProvider.Create(workRules: rules));
+        var draft = fixture.CreateOrderDraft("Lead") with
+        {
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(23, 23)),
+                new OrderWorkItem(ConstructionType.Facet, new ToothRange(31, 32))
+            ]
+        };
+
+        var minimum = await fixture.Service.CalculateMinimumDeliveryDateAsync(draft);
+
+        Assert.That(minimum, Is.EqualTo(new DateOnly(2026, 6, 15)));
+    }
+
+    [Test]
+    public async Task UpdateOrderAsync_GivenWorkItemChange_MarksAuditWorkItemsChanged()
+    {
+        var audit = new CapturingAuditLog();
+        var fixture = new Fixture(2, auditLog: audit);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
+
+        await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Original") with
+        {
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(12, 12))
+            ],
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        });
+
+        Assert.That(audit.Events.Last().MetadataJson, Does.Contain("WorkItems"));
+        Assert.That(audit.Events.Last().MetadataJson, Does.Contain("newWorkItems"));
+    }
+
+    [Test]
+    public async Task CreateOrderAsync_GivenLegacyDraft_ExposesOneOrderWorkItem()
+    {
+        var fixture = new Fixture(1);
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Legacy"), "127.0.0.1", "test");
+
+        Assert.That(created.WorkItems, Has.Count.EqualTo(1));
+        Assert.That(created.PrimaryWorkItem.ConstructionType, Is.EqualTo(ConstructionType.Crown));
+        Assert.That(created.PrimaryWorkItem.ToothStart, Is.EqualTo(11));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_WhenManyConcurrentRequestsReceiveSameFirstOrderCode_RetriesAndAllSucceed()
     {
         const int racingOrderCount = 20;
@@ -296,7 +397,7 @@ public class SchedulingOrderServiceTest
         {
         }
 
-        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null)
+        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, TestSchedulingConfigProvider? configProvider = null)
         {
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
@@ -304,7 +405,7 @@ public class SchedulingOrderServiceTest
             var orderCodeGenerator = new SequenceOrderCodeGenerator(_generatorCodes.ToArray());
             var clock = new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
             Service = new SchedulingOrderService(
-                TestSchedulingConfigProvider.Create(),
+                configProvider ?? TestSchedulingConfigProvider.Create(),
                 Repository,
                 dateAvailabilityService,
                 orderCodeGenerator,

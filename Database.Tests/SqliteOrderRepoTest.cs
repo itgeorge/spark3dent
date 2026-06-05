@@ -226,6 +226,89 @@ public class SqliteOrderRepoTest
         Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "CCC-234", "AAA-234" }));
     }
 
+    [Test]
+    public async Task CreateOrderAsync_PersistsWorkItemsJsonAndRoundTripsThroughQueries()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        var order = BuildOrder("WRK-234", "work items", DateTimeOffset.Parse("2026-05-31T10:00:00Z")) with
+        {
+            ConstructionType = ConstructionType.Bridge,
+            ToothStart = 11,
+            ToothEnd = 13,
+            AbutmentTeeth = "11,13",
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(23, 23))
+            ]
+        };
+
+        await repo.CreateOrderAsync(order);
+
+        await using (var ctx = _contextFactory())
+        {
+            var entity = await ctx.SchedulingOrders.SingleAsync(o => o.OrderCode == "WRK-234");
+            Assert.That(entity.WorkItemsJson, Does.Contain("bridge"));
+            Assert.That(entity.WorkItemsJson, Does.Contain("23"));
+            Assert.That(entity.ConstructionType, Is.EqualTo(nameof(ConstructionType.Bridge)));
+            Assert.That(entity.ToothStart, Is.EqualTo(13));
+            Assert.That(entity.ToothEnd, Is.EqualTo(11));
+        }
+
+        var byCode = await repo.GetOrderByCodeAsync("WRK-234");
+        var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "WRK-234");
+        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "WRK-234");
+
+        Assert.That(byCode!.WorkItems.Select(i => i.ToothStart), Is.EqualTo(new[] { 13, 23 }));
+        Assert.That(fromList.WorkItems, Has.Count.EqualTo(2));
+        Assert.That(fromCalendar.WorkItems, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task GetOrderByCodeAsync_GivenOldRowWithoutWorkItemsJson_MapsLegacyFieldsToOneWorkItem()
+    {
+        await using (var ctx = _contextFactory())
+        {
+            ctx.SchedulingOrders.Add(new Database.Entities.SchedulingOrderEntity
+            {
+                OrderCode = "OLD-234",
+                ClinicCode = "DEMO",
+                ClinicDisplayName = "Demo Clinic",
+                CredentialId = "cred-1",
+                CredentialLabel = "Credential 1",
+                CredentialPinHashFingerprint = "fingerprint",
+                CaseName = "old row",
+                ImpressionDate = new DateOnly(2026, 5, 31),
+                ProductCategory = nameof(ProductCategory.Permanent),
+                WorkType = nameof(WorkType.Bridge),
+                Material = nameof(Material.FullContourZirconia),
+                ConstructionType = nameof(ConstructionType.Bridge),
+                ToothStart = 11,
+                ToothEnd = 13,
+                AbutmentTeeth = "11,13",
+                WorkItemsJson = null,
+                RequestedDeliveryDate = new DateOnly(2026, 6, 5),
+                Status = nameof(OrderStatus.Created),
+                Shade = Shade.A3,
+                CreatedAt = DateTimeOffset.Parse("2026-05-31T10:00:00Z"),
+                CreatedAtUnixTimeMilliseconds = DateTimeOffset.Parse("2026-05-31T10:00:00Z").ToUnixTimeMilliseconds(),
+                UpdatedAt = DateTimeOffset.Parse("2026-05-31T10:00:00Z"),
+                CreatedIp = "127.0.0.1",
+                CreatedUserAgent = "test"
+            });
+            await ctx.SaveChangesAsync();
+        }
+        var repo = new SqliteOrderRepo(_contextFactory);
+
+        var order = await repo.GetOrderByCodeAsync("OLD-234");
+
+        Assert.That(order, Is.Not.Null);
+        Assert.That(order!.WorkItems, Has.Count.EqualTo(1));
+        Assert.That(order.PrimaryWorkItem.ConstructionType, Is.EqualTo(ConstructionType.Bridge));
+        Assert.That(order.PrimaryWorkItem.ToothStart, Is.EqualTo(13));
+        Assert.That(order.PrimaryWorkItem.ToothEnd, Is.EqualTo(11));
+    }
+
     private static async Task<CreateOutcome[]> RaceCreateSameOrderCodeAsync(SqliteOrderRepo repo, int racingOrderCount, string sharedOrderCode)
     {
         using var startBarrier = new Barrier(racingOrderCount);

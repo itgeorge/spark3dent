@@ -33,9 +33,14 @@ public sealed class SchedulingOrderService
 
     public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default)
     {
-        ValidateTeethRange(draft);
-        var rule = _configProvider.Current.FindWorkRule(draft.ProductCategory, draft.WorkType, draft.Material, draft.ConstructionType);
-        return await _availability.CalculateMinimumDateAsync(draft.ImpressionDate, rule.MinBusinessDays, ct);
+        ValidateOrderWorkItems(draft);
+        var workItems = draft.ResolvedWorkItems;
+        var requiredBusinessDays = workItems.Sum(item =>
+        {
+            var workType = WorkTypeFor(draft.ProductCategory, draft.Material, item.ConstructionType);
+            return _configProvider.Current.FindWorkRule(draft.ProductCategory, workType, draft.Material, item.ConstructionType).MinBusinessDays;
+        });
+        return await _availability.CalculateMinimumDateAsync(draft.ImpressionDate, requiredBusinessDays, ct);
     }
 
     public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default)
@@ -69,7 +74,10 @@ public sealed class SchedulingOrderService
                 targetClinicDisplayName = created.ClinicDisplayName,
                 caseName = created.CaseName,
                 requestedDeliveryDate = created.RequestedDeliveryDate,
-                status = created.Status.ToString()
+                status = created.Status.ToString(),
+                workItems = WorkItemsAudit(created.WorkItems),
+                primaryWorkItem = WorkItemAudit(created.PrimaryWorkItem),
+                totalToothCount = OrderWorkItem.AllTeeth(created.WorkItems).Length
             },
             ct);
         return created;
@@ -95,11 +103,12 @@ public sealed class SchedulingOrderService
             ProductCategory = draft.ProductCategory,
             WorkType = draft.WorkType,
             Material = draft.Material,
-            ConstructionType = draft.ConstructionType,
-            ToothStart = draft.TeethRange.Start,
-            ToothEnd = draft.TeethRange.End,
-            AbutmentTeeth = string.Join(",", draft.TeethRange.DefaultAbutments(draft.ConstructionType)),
+            ConstructionType = draft.PrimaryWorkItem.ConstructionType,
+            ToothStart = draft.PrimaryWorkItem.ToothStart,
+            ToothEnd = draft.PrimaryWorkItem.ToothEnd,
+            AbutmentTeeth = OrderWorkItem.AbutmentsCsv(draft.ResolvedWorkItems),
             RequestedDeliveryDate = draft.RequestedDeliveryDate,
+            WorkItems = draft.ResolvedWorkItems,
             Shade = draft.Shade,
             Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
             UpdatedAt = _clock.UtcNow
@@ -118,7 +127,9 @@ public sealed class SchedulingOrderService
                 targetClinicDisplayName = saved.ClinicDisplayName,
                 changedFields = ChangedFields(existing, saved),
                 oldRequestedDeliveryDate = existing.RequestedDeliveryDate == saved.RequestedDeliveryDate ? (DateOnly?)null : existing.RequestedDeliveryDate,
-                newRequestedDeliveryDate = existing.RequestedDeliveryDate == saved.RequestedDeliveryDate ? (DateOnly?)null : saved.RequestedDeliveryDate
+                newRequestedDeliveryDate = existing.RequestedDeliveryDate == saved.RequestedDeliveryDate ? (DateOnly?)null : saved.RequestedDeliveryDate,
+                oldWorkItems = WorkItemsEqual(existing.WorkItems, saved.WorkItems) ? null : WorkItemsAudit(existing.WorkItems),
+                newWorkItems = WorkItemsEqual(existing.WorkItems, saved.WorkItems) ? null : WorkItemsAudit(saved.WorkItems)
             },
             ct);
         return saved;
@@ -197,6 +208,7 @@ public sealed class SchedulingOrderService
         if (oldOrder.Material != newOrder.Material) changed.Add(nameof(OrderRecord.Material));
         if (oldOrder.ConstructionType != newOrder.ConstructionType) changed.Add(nameof(OrderRecord.ConstructionType));
         if (oldOrder.ToothStart != newOrder.ToothStart || oldOrder.ToothEnd != newOrder.ToothEnd) changed.Add("TeethRange");
+        if (!WorkItemsEqual(oldOrder.WorkItems, newOrder.WorkItems)) changed.Add(nameof(OrderRecord.WorkItems));
         if (oldOrder.RequestedDeliveryDate != newOrder.RequestedDeliveryDate) changed.Add(nameof(OrderRecord.RequestedDeliveryDate));
         if (oldOrder.Shade != newOrder.Shade) changed.Add(nameof(OrderRecord.Shade));
         if (oldOrder.Notes != newOrder.Notes) changed.Add(nameof(OrderRecord.Notes));
@@ -207,13 +219,36 @@ public sealed class SchedulingOrderService
     {
         if (string.IsNullOrWhiteSpace(draft.CaseName))
             throw new InvalidOperationException("Case name is required.");
-        ValidateTeethRange(draft);
+        ValidateOrderWorkItems(draft);
     }
 
-    private static void ValidateTeethRange(OrderDraft draft)
+    private static void ValidateOrderWorkItems(OrderDraft draft)
     {
-        draft.TeethRange.Validate(draft.ConstructionType);
+        OrderWorkItem.ValidateAll(draft.ResolvedWorkItems);
     }
+
+    private static WorkType WorkTypeFor(ProductCategory productCategory, Material material, ConstructionType constructionType)
+    {
+        if (material == Material.Pmma || productCategory == ProductCategory.Temporary)
+            return WorkType.TemporaryCrownBridge;
+        return constructionType == ConstructionType.Bridge ? WorkType.Bridge : WorkType.Crown;
+    }
+
+    private static bool WorkItemsEqual(IReadOnlyList<OrderWorkItem> left, IReadOnlyList<OrderWorkItem> right) =>
+        left.Count == right.Count && left.Zip(right).All(pair =>
+            pair.First.ConstructionType == pair.Second.ConstructionType &&
+            pair.First.ToothStart == pair.Second.ToothStart &&
+            pair.First.ToothEnd == pair.Second.ToothEnd);
+
+    private static object[] WorkItemsAudit(IReadOnlyList<OrderWorkItem> items) => items.Select(WorkItemAudit).ToArray();
+
+    private static object WorkItemAudit(OrderWorkItem item) => new
+    {
+        constructionType = item.ConstructionType.ToString(),
+        toothStart = item.ToothStart,
+        toothEnd = item.ToothEnd,
+        teeth = item.Teeth
+    };
 
     private ClinicConfig ResolveTargetClinic(AuthenticatedActor actor, string? targetClinicCode)
     {
@@ -253,10 +288,10 @@ public sealed class SchedulingOrderService
             draft.ProductCategory,
             draft.WorkType,
             draft.Material,
-            draft.ConstructionType,
-            draft.TeethRange.Start,
-            draft.TeethRange.End,
-            string.Join(",", draft.TeethRange.DefaultAbutments(draft.ConstructionType)),
+            draft.PrimaryWorkItem.ConstructionType,
+            draft.PrimaryWorkItem.ToothStart,
+            draft.PrimaryWorkItem.ToothEnd,
+            OrderWorkItem.AbutmentsCsv(draft.ResolvedWorkItems),
             draft.RequestedDeliveryDate,
             OrderStatus.Created,
             draft.Shade,
@@ -264,7 +299,8 @@ public sealed class SchedulingOrderService
             now,
             now,
             ip,
-            userAgent);
+            userAgent,
+            draft.ResolvedWorkItems);
     }
 
     private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, CancellationToken ct)

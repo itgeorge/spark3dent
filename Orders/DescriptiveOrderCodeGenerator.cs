@@ -21,7 +21,7 @@ public sealed class DescriptiveOrderCodeGenerator : IOrderCodeGenerator
         var yearPrefix = (delivery.Year % 100).ToString("00");
         var datePart = delivery.ToString("ddMM");
         var materialCode = MaterialCode(draft.Material);
-        var toothCount = draft.TeethRange.Teeth.Length;
+        var toothCount = OrderWorkItem.AllTeeth(draft.ResolvedWorkItems).Length;
         var toothCountPart = toothCount > 9 ? toothCount.ToString("00") : toothCount.ToString();
         return $"{yearPrefix}-{datePart}-{materialCode}{toothCountPart}";
     }

@@ -61,6 +61,7 @@ public class SchedulingApiTests
         Assert.That(code, Is.Not.Null.And.Contains("-"));
         Assert.That(shortenedCode, Is.EqualTo(code![3..]));
         Assert.That(orderElement.GetProperty("shade").GetString(), Is.EqualTo("A3.5"));
+        Assert.That(orderElement.GetProperty("workItems").GetArrayLength(), Is.EqualTo(1));
 
         var list = await client.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -271,6 +272,148 @@ public class SchedulingApiTests
         var list = await clinicClient.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain(demoEndCancelled));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_CreateUpdateListGetCalendar_WithOrderWorkItems()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Multi Work Items",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"bridge",
+          "material":"fullContourZirconia",
+          "constructionType":"bridge",
+          "toothStart":11,
+          "toothEnd":13,
+          "workItems":[
+            {"constructionType":"bridge","toothStart":11,"toothEnd":13},
+            {"constructionType":"crown","toothStart":23,"toothEnd":23}
+          ],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var created = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        var code = created.GetProperty("orderCode").GetString();
+        Assert.That(created.GetProperty("constructionType").GetString(), Is.EqualTo("bridge"));
+        Assert.That(created.GetProperty("toothStart").GetInt32(), Is.EqualTo(13));
+        Assert.That(created.GetProperty("workItems").GetArrayLength(), Is.EqualTo(2));
+
+        var get = await client.GetAsync($"/api/scheduling/orders/{code}");
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await get.Content.ReadAsStringAsync(), Does.Contain("workItems"));
+
+        var list = await client.GetAsync("/api/scheduling/orders");
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain("workItems"));
+
+        var calendar = await client.GetAsync("/api/scheduling/orders/calendar?start=2026-06-10&end=2026-06-10");
+        Assert.That(calendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await calendar.Content.ReadAsStringAsync(), Does.Contain("workItems"));
+
+        var update = await client.PutAsync($"/api/scheduling/orders/{code}", Json("""
+        {
+          "caseName":"Updated Multi Work Items",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"bridge",
+          "material":"fullContourZirconia",
+          "constructionType":"bridge",
+          "toothStart":11,
+          "toothEnd":13,
+          "workItems":[
+            {"constructionType":"bridge","toothStart":11,"toothEnd":13},
+            {"constructionType":"crown","toothStart":24,"toothEnd":24}
+          ],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var updated = JsonDocument.Parse(await update.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(updated.GetProperty("workItems")[1].GetProperty("toothStart").GetInt32(), Is.EqualTo(24));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_InvalidOverlappingOrderWorkItems_Returns400()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Overlap",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"bridge",
+          "material":"fullContourZirconia",
+          "constructionType":"bridge",
+          "toothStart":11,
+          "toothEnd":13,
+          "workItems":[
+            {"constructionType":"bridge","toothStart":11,"toothEnd":13},
+            {"constructionType":"crown","toothStart":12,"toothEnd":12}
+          ],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await create.Content.ReadAsStringAsync(), Does.Contain("overlap"));
+
+        var empty = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Empty",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"crown",
+          "material":"fullContourZirconia",
+          "constructionType":"crown",
+          "toothStart":11,
+          "toothEnd":11,
+          "workItems":[],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(empty.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await empty.Content.ReadAsStringAsync(), Does.Contain("At least one order work item"));
+    }
+
+    [Test]
+    public async Task SchedulingDates_GivenMultipleOrderWorkItems_UsesSummedLeadTime()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Multi dates",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "workType":"bridge",
+          "material":"fullContourZirconia",
+          "constructionType":"bridge",
+          "toothStart":11,
+          "toothEnd":13,
+          "workItems":[
+            {"constructionType":"bridge","toothStart":11,"toothEnd":13},
+            {"constructionType":"crown","toothStart":23,"toothEnd":23}
+          ],
+          "start":"2026-06-01",
+          "end":"2026-06-15"
+        }
+        """));
+
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-10"));
     }
 
     [Test]

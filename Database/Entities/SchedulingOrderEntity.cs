@@ -20,6 +20,7 @@ public class SchedulingOrderEntity
     public int ToothStart { get; set; }
     public int ToothEnd { get; set; }
     public string AbutmentTeeth { get; set; } = string.Empty;
+    public string? WorkItemsJson { get; set; }
     public DateOnly RequestedDeliveryDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public Shade Shade { get; set; }
