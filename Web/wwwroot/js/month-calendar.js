@@ -42,9 +42,9 @@
       if (options.className) this.root.classList.add(options.className);
       this.root.innerHTML = `
         <div class="month-calendar-head">
-          <button class="btn month-calendar-nav" type="button" data-month-calendar-prev aria-label="Previous month">‹</button>
+          <button class="btn month-calendar-nav" type="button" data-month-calendar-prev aria-label="Previous month"><svg class="month-calendar-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
           <div class="month-calendar-title" data-month-calendar-title>—</div>
-          <button class="btn month-calendar-nav" type="button" data-month-calendar-next aria-label="Next month">›</button>
+          <button class="btn month-calendar-nav" type="button" data-month-calendar-next aria-label="Next month"><svg class="month-calendar-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
         </div>
         <div class="month-calendar-grid" data-month-calendar-grid></div>`;
       this.titleEl = this.root.querySelector('[data-month-calendar-title]');

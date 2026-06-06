@@ -1,7 +1,8 @@
 .month-calendar{margin:0;border:1px solid var(--border,#e2e8f0);border-radius:16px;overflow:hidden;background:var(--panel,#fff)}
 .month-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border,#e2e8f0);background:#fff}
 .month-calendar-title{font-size:18px;font-weight:950;text-align:center}
-.month-calendar-nav{width:38px;height:38px;padding:0;border-radius:999px;font-size:25px;line-height:1;display:grid;place-items:center}
+.month-calendar-nav{width:38px;height:38px;min-width:38px;padding:0;border-radius:999px;line-height:1;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+.month-calendar-nav-icon{display:block;width:18px;height:18px;flex:0 0 auto}
 .month-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--border,#e2e8f0)}
 .month-calendar-weekday{padding:9px 4px;background:#f8fafc;color:#475569;text-align:center;font-size:clamp(9px,1.4vw,11px);font-weight:900}
 .month-calendar-cell{position:relative;min-height:96px;min-width:0;display:flex;flex-direction:column;background:white;color:var(--text,#0f172a)}
