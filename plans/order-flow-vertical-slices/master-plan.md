@@ -52,7 +52,8 @@ Existing relevant files/routes:
 12. A CLI audit listing command exists for operator inspection/export: `audit list [filters]`, including `--json` and filters such as `--service`, `--operation`, `--entity-type`, `--entity-id`, `--actor-role`, `--actor-clinic`, `--since`, `--until`, `--limit`, and `--db`.
 13. Orders calendar view is a display mode of the scheduler list. It defaults to calendar for technician/lab actors and list for clinic actors, persists the selected mode in `localStorage`, excludes cancelled orders, and uses a dedicated calendar API endpoint.
 14. Orders may contain multiple order work items on the same impression. Each work item has its own construction type and tooth/range; material and shade remain order-level for now. Slice 7 added JSON serialization and temporary single-selection compatibility fields.
-15. Slice 8 should make `WorkItems` the sole source of truth, remove order-level `WorkType`/`ConstructionType`/`ToothStart`/`ToothEnd`, remove all abutment-related live code, wipe scheduling order rows via migration while preserving invoice/client data, and delete the obsolete stepper prototype.
+15. Slice 8 made `WorkItems` the sole source of truth, removed order-level `WorkType`/`ConstructionType`/`ToothStart`/`ToothEnd`, removed all abutment-related live code, wiped scheduling order rows via migration while preserving invoice/client data, and deleted the obsolete stepper prototype.
+16. Slice 9 should add cursor paging to the orders list view and a server-backed Find-by-code flow that navigates list/calendar context before opening the order review.
 
 ## Slice Index and Status
 
@@ -67,6 +68,7 @@ Existing relevant files/routes:
 | 6 | `plans/order-flow-vertical-slices/slice-6-orders-calendar-view.md` | Complete | Calendar/list display mode with shared month-calendar component, dedicated active-orders calendar API, persisted mode preference, smart cell aggregation, and day popup |
 | 7 | `plans/order-flow-vertical-slices/slice-7-multiple-order-work-items.md` | Complete | Multiple order work items per order/impression with JSON persistence, server validation, summed lead-time rules, API/display updates, and per-line tooth UI |
 | 8 | `plans/order-flow-vertical-slices/slice-8-work-items-source-of-truth-cleanup.md` | Complete | `workItems` is now the sole order tooth/construction source across domain/API/persistence/UI; legacy single fields and live abutment code removed; scheduling rows/audits wiped by migration; obsolete prototype deleted |
+| 9 | `plans/order-flow-vertical-slices/slice-9-orders-list-paging-and-find.md` | Not started | Cursor-paged orders list plus server-backed Find-by-code navigation into list/calendar context and review |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -100,6 +102,7 @@ Before handing off to another agent:
 - Slice 6 depends on Slice 4 order status/review behavior and should avoid assumptions that block the future lab-organization role refactor.
 - Slice 7 depends on Slice 4 create/edit/review behavior, Slice 5 audit metadata, and Slice 6 list/calendar display surfaces.
 - Slice 8 depends on Slice 7 work-item support and should simplify before lab organization/IAM work adds more identity complexity.
+- Slice 9 depends on Slice 6 calendar/list modes and Slice 8's simplified work-item-only order DTOs.
 
 ## Cross-Slice Discoveries / Course Corrections
 
@@ -121,6 +124,7 @@ Append dated notes here after each slice.
 - 2026-06-05: Slice 7 complete. Added `OrderWorkItem` domain support with JSON `SchedulingOrders.WorkItemsJson`, legacy primary compatibility columns, mandatory per-item/no-overlap validation, summed per-item lead time, total-tooth order code counts, `workItems` API DTOs, audit metadata, and multi-item create/edit/list/review/calendar UI. Existing sequence-based FDI normalization still means some ranges normalize to jaw order (for example `11-13` becomes `13-11` in compatibility fields). Headless browser smoke passed after implementation.
 - 2026-06-05: Added Slice 8 cleanup plan. Because there is no production order/API usage, Slice 8 should remove legacy single-work-item order fields, remove all live abutment-related code/tests, make `workItems` required in scheduling APIs, wipe scheduling order rows through migration while preserving invoice/client data, and delete the obsolete order stepper prototype.
 - 2026-06-06: Slice 8 complete. `OrderDraft`/`OrderRecord` require work items and no longer carry order-level `WorkType`, `ConstructionType`, tooth range, abutments, or primary compatibility fields. Scheduling APIs require `workItems` and reject old single-field-only payloads with 400. SQLite migration `20260606000000_RemoveSchedulingOrderLegacyFields` deletes scheduling orders and scheduling-order audit rows, then recreates `SchedulingOrders` without legacy columns while preserving invoice/client data. The old `Web/wwwroot/order-prototypes/stepper.html` prototype was deleted.
+- 2026-06-06: Added Slice 9 plan for orders list cursor paging and Find-by-code navigation. The plan keeps list view active+cancelled and calendar active-only, extends the list API with opaque cursors, and adds a dedicated find endpoint/context so the UI can navigate to the order's list or calendar position before opening review.
 
 ## Verification Evidence
 
@@ -166,12 +170,13 @@ Scheduling:
 - `GET /api/scheduling/auth/me`
 - `POST /api/scheduling/dates`
 - `GET /api/scheduling/clinics` (technician-only active clinic list for target selection)
-- `GET /api/scheduling/orders` (clinic actors see own clinic; technician actors see all)
+- `GET /api/scheduling/orders?limit=&cursor=` (clinic actors see own clinic; technician actors see all; Slice 9 target includes cursor-paged response)
 - `POST /api/scheduling/orders`
 - `GET /api/scheduling/orders/{code}`
 - `PUT /api/scheduling/orders/{code}`
 - `DELETE /api/scheduling/orders/{code}` soft-cancels
 - `GET /api/scheduling/orders/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` (active orders only, role-aware, inclusive delivery-date range, 93-day max range)
+- Slice 9 target: `GET /api/scheduling/orders/find?code=&limit=` or equivalent dedicated find/context endpoint
 
 Invoicing/client after Slice 2:
 
@@ -274,6 +279,16 @@ Slice 8:
 - `Web/SchedulingApi.cs`
 - `Web/wwwroot/orders.html`
 - delete `Web/wwwroot/order-prototypes/stepper.html`
+- tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
+
+Slice 9:
+
+- `Orders/Repositories.cs`
+- `Orders/SchedulingOrderService.cs`
+- optional new order paging/cursor records in `Orders/*`
+- `Database/SqliteOrderRepo.cs`
+- `Web/SchedulingApi.cs`
+- `Web/wwwroot/orders.html`
 - tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
 
 ## Open Questions to Resolve During Implementation
