@@ -10,6 +10,9 @@ public sealed class SchedulingOrderService
     private readonly DateAvailabilityService _availability;
     private readonly IOrderCodeGenerator _codeGenerator;
     private readonly IClock _clock;
+    private const int DefaultPageLimit = 50;
+    private const int MaxPageLimit = 100;
+
     private readonly IAuditLog _auditLog;
     private readonly int _maxOrderCodeAttempts;
 
@@ -164,12 +167,59 @@ public sealed class SchedulingOrderService
     public Task<IReadOnlyList<OrderRecord>> ListOrdersForActorAsync(AuthenticatedActor actor, int limit = 100, CancellationToken ct = default) =>
         actor.IsTechnician ? ListOrdersAsync(limit, ct) : ListOrdersForClinicAsync(actor.ClinicCode, limit, ct);
 
+    public Task<OrderPage> ListOrdersPageForActorAsync(AuthenticatedActor actor, int? limit = null, string? cursor = null, CancellationToken ct = default)
+    {
+        var decoded = OrderCursorCodec.Decode(cursor);
+        return _orders.ListOrdersPageAsync(actor.IsTechnician ? null : actor.ClinicCode, ClampPageLimit(limit), decoded, ct);
+    }
+
+    public async Task<OrderFindResult> FindOrderContextForActorAsync(AuthenticatedActor actor, string code, int? limit = null, CancellationToken ct = default)
+    {
+        var normalized = NormalizeOrderCodeInput(code);
+        if (normalized.Length == 0)
+            throw new KeyNotFoundException("Order not found.");
+
+        var order = await _orders.GetOrderByCodeAsync(normalized, ct);
+        if (order != null)
+        {
+            if (!CanActorSeeOrder(actor, order))
+                throw new KeyNotFoundException("Order not found.");
+        }
+        else if (CanSearchShortenedCode(normalized))
+        {
+            var matches = await _orders.FindOrdersByCodeSuffixAsync(actor.IsTechnician ? null : actor.ClinicCode, normalized, 2, ct);
+            if (matches.Count > 1)
+                throw new AmbiguousOrderCodeException("Multiple orders match this code; enter the full order code.");
+            order = matches.SingleOrDefault();
+        }
+
+        if (order == null)
+            throw new KeyNotFoundException("Order not found.");
+
+        var page = await _orders.ListOrdersPageContainingOrderAsync(actor.IsTechnician ? null : actor.ClinicCode, order, ClampPageLimit(limit), ct);
+        var listRecommended = order.Status == OrderStatus.Cancelled;
+        return new OrderFindResult(
+            order,
+            page,
+            listRecommended,
+            listRecommended ? "Cancelled orders are only visible in list view." : null);
+    }
+
     public Task<IReadOnlyList<OrderRecord>> ListCalendarOrdersAsync(AuthenticatedActor actor, DateOnly start, DateOnly end, CancellationToken ct = default)
     {
         if (start > end)
             throw new InvalidOperationException("Calendar start date must be before or equal to end date.");
         return _orders.ListActiveOrdersForCalendarAsync(actor.IsTechnician ? null : actor.ClinicCode, start, end, ct);
     }
+
+    private static int ClampPageLimit(int? limit) => Math.Clamp(limit ?? DefaultPageLimit, 1, MaxPageLimit);
+
+    private static string NormalizeOrderCodeInput(string? code) => (code ?? string.Empty).Trim().ToUpperInvariant();
+
+    private static bool CanSearchShortenedCode(string code) => !(code.Length >= 3 && char.IsDigit(code[0]) && char.IsDigit(code[1]) && code[2] == '-');
+
+    private static bool CanActorSeeOrder(AuthenticatedActor actor, OrderRecord order) =>
+        actor.IsTechnician || string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase);
 
     private Task AppendOrderAuditAsync(AuthenticatedActor actor, string operation, OrderRecord order, string? ip, string? userAgent, object metadata, CancellationToken ct)
     {
@@ -260,7 +310,7 @@ public sealed class SchedulingOrderService
     private async Task<OrderRecord> GetAuthorizedOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct)
     {
         var order = await _orders.GetOrderByCodeAsync(orderCode, ct);
-        if (order == null || (!actor.IsTechnician && !string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase)))
+        if (order == null || !CanActorSeeOrder(actor, order))
             throw new KeyNotFoundException("Order not found.");
         return order;
     }

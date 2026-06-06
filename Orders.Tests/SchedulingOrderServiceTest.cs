@@ -145,6 +145,60 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task ListOrdersPageForActorAsync_ReturnsPagedActorScopedOrders()
+    {
+        var fixture = new Fixture(["A-1", "A-2", "A-3", "B-1"]);
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("old") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 5)
+        }, "127.0.0.1", "test");
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("new") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 9)
+        }, "127.0.0.1", "test");
+        await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("other") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test", "OTHER");
+
+        var first = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 1);
+        var second = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 1, first.NextCursor);
+        var tech = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Technician, 10);
+
+        Assert.That(first.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "A-2" }));
+        Assert.That(first.HasMore, Is.True);
+        Assert.That(second.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "A-1" }));
+        Assert.That(tech.Items.Select(o => o.OrderCode), Does.Contain("A-3"));
+    }
+
+    [Test]
+    public async Task FindOrderContextForActorAsync_RespectsScopeShortCodesAndCancelledListRecommendation()
+    {
+        var fixture = new Fixture(["26-0605-Z1AA", "27-0605-Z1AA", "26-0606-Z1BB"]);
+        var own = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("own"), "127.0.0.1", "test");
+        await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("other same short") with
+        {
+            RequestedDeliveryDate = new DateOnly(2027, 6, 8)
+        }, "127.0.0.1", "test", "OTHER");
+        var cancelled = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("cancelled") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test");
+        await fixture.Service.CancelOrderAsync(TestActors.Demo, cancelled.OrderCode);
+
+        var ownByShort = await fixture.Service.FindOrderContextForActorAsync(TestActors.Demo, own.OrderCode[3..], 2);
+        var cancelledResult = await fixture.Service.FindOrderContextForActorAsync(TestActors.Demo, cancelled.OrderCode, 2);
+
+        Assert.That(ownByShort.Order.OrderCode, Is.EqualTo(own.OrderCode));
+        Assert.That(ownByShort.ListPage.Items.Select(o => o.OrderCode), Does.Contain(own.OrderCode));
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await fixture.Service.FindOrderContextForActorAsync(TestActors.Demo, "27-0605-Z1AA", 2));
+        Assert.ThrowsAsync<AmbiguousOrderCodeException>(async () =>
+            await fixture.Service.FindOrderContextForActorAsync(TestActors.Technician, own.OrderCode[3..], 2));
+        Assert.That(cancelledResult.ListModeRecommended, Is.True);
+    }
+
+    [Test]
     public async Task ListCalendarOrdersAsync_AppliesActorScopeRangeAndExcludesCancelled()
     {
         var fixture = new Fixture(4);
@@ -469,14 +523,65 @@ public class SchedulingOrderServiceTest
             public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default)
             {
                 lock (_gate)
-                    return Task.FromResult<IReadOnlyList<OrderRecord>>(_ordersByCode.Values.ToList());
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(null).Take(limit).ToList());
             }
 
             public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default)
             {
                 lock (_gate)
-                    return Task.FromResult<IReadOnlyList<OrderRecord>>(
-                        _ordersByCode.Values.Where(o => string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase)).ToList());
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(clinicCode).Take(limit).ToList());
+            }
+
+            public Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default)
+            {
+                lock (_gate)
+                {
+                    var query = OrderedScoped(clinicCode);
+                    if (cursor != null)
+                    {
+                        query = query.Where(o =>
+                            o.RequestedDeliveryDate < cursor.RequestedDeliveryDate
+                            || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAt.ToUnixTimeMilliseconds() < cursor.CreatedAtUnixTimeMilliseconds)
+                            || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAt.ToUnixTimeMilliseconds() == cursor.CreatedAtUnixTimeMilliseconds && o.Id < cursor.Id));
+                    }
+                    return Task.FromResult(MakePage(query, limit));
+                }
+            }
+
+            public Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default)
+            {
+                lock (_gate)
+                {
+                    var query = OrderedScoped(clinicCode).ToList();
+                    var index = query.FindIndex(o => o.Id == target.Id);
+                    var start = index < 0 ? 0 : index / Math.Max(1, limit) * Math.Max(1, limit);
+                    return Task.FromResult(MakePage(query.Skip(start), limit));
+                }
+            }
+
+            public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default)
+            {
+                lock (_gate)
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(clinicCode)
+                        .Where(o => o.OrderCode.EndsWith(codeSuffix, StringComparison.OrdinalIgnoreCase))
+                        .Take(Math.Clamp(limit, 1, 20))
+                        .ToList());
+            }
+
+            private IEnumerable<OrderRecord> OrderedScoped(string? clinicCode) => _ordersByCode.Values
+                .Where(o => clinicCode == null || string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(o => o.RequestedDeliveryDate)
+                .ThenByDescending(o => o.CreatedAt.ToUnixTimeMilliseconds())
+                .ThenByDescending(o => o.Id);
+
+            private static OrderPage MakePage(IEnumerable<OrderRecord> source, int limit)
+            {
+                var safeLimit = Math.Clamp(limit, 1, 100);
+                var rows = source.Take(safeLimit + 1).ToList();
+                var hasMore = rows.Count > safeLimit;
+                var items = hasMore ? rows.Take(safeLimit).ToList() : rows;
+                var nextCursor = hasMore && items.Count > 0 ? OrderCursorCodec.Encode(OrderCursor.FromOrder(items[^1])) : null;
+                return new OrderPage(items, nextCursor, hasMore);
             }
 
             public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default)

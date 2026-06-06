@@ -126,12 +126,46 @@ public static class SchedulingApi
             }
         });
 
-        app.MapGet("/api/scheduling/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, int? limit) =>
+        app.MapGet("/api/scheduling/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, int? limit, string? cursor) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            var items = await orders.ListOrdersForActorAsync(actor, limit ?? 100, ctx.RequestAborted);
-            return Results.Json(new { items = items.Select(ToDto) }, JsonOptions);
+            try
+            {
+                var page = await orders.ListOrdersPageForActorAsync(actor, limit, cursor, ctx.RequestAborted);
+                return Results.Json(ToPageDto(page), JsonOptions);
+            }
+            catch (FormatException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapGet("/api/scheduling/orders/find", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, string? code, int? limit) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (string.IsNullOrWhiteSpace(code))
+                return Results.Json(new { error = "Order code is required." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var result = await orders.FindOrderContextForActorAsync(actor, code, limit, ctx.RequestAborted);
+                return Results.Json(new
+                {
+                    order = ToDto(result.Order),
+                    listPage = ToPageDto(result.ListPage),
+                    result.ListModeRecommended,
+                    result.Reason
+                }, JsonOptions);
+            }
+            catch (AmbiguousOrderCodeException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 409, options: JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
         });
 
         app.MapGet("/api/scheduling/orders/calendar", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, DateOnly? start, DateOnly? end) =>
@@ -239,6 +273,13 @@ public static class SchedulingApi
             body.Shade,
             body.Notes);
     }
+
+    private static object ToPageDto(OrderPage page) => new
+    {
+        items = page.Items.Select(ToDto),
+        page.NextCursor,
+        page.HasMore
+    };
 
     private static object ToDto(OrderRecord o) => new
     {

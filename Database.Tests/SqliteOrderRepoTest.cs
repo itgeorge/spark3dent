@@ -226,6 +226,51 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task ListOrdersPageAsync_ReturnsCursorPagesWithoutDuplicatesAndWithClinicScope()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("OLD-234", "old", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        await repo.CreateOrderAsync(BuildOrder("MID-234", "mid", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+        await repo.CreateOrderAsync(BuildOrder("NEW-234", "new", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 7)));
+        await repo.CreateOrderAsync(BuildOrder("OTH-234", "other", DateTimeOffset.Parse("2026-05-31T13:00:00Z"), clinicCode: "OTHER", requestedDeliveryDate: new DateOnly(2026, 6, 8)));
+
+        var first = await repo.ListOrdersPageAsync("DEMO", 2, null);
+        var second = await repo.ListOrdersPageAsync("DEMO", 2, OrderCursorCodec.Decode(first.NextCursor));
+        var tech = await repo.ListOrdersPageAsync(null, 10, null);
+
+        Assert.That(first.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "NEW-234", "MID-234" }));
+        Assert.That(first.HasMore, Is.True);
+        Assert.That(first.NextCursor, Is.Not.Null);
+        Assert.That(second.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "OLD-234" }));
+        Assert.That(second.HasMore, Is.False);
+        Assert.That(first.Items.Concat(second.Items).Select(o => o.OrderCode), Is.Unique);
+        Assert.That(tech.Items.Select(o => o.OrderCode), Does.Contain("OTH-234"));
+    }
+
+    [Test]
+    public async Task ListOrdersPageContainingOrderAsync_ReturnsPageContainingTargetAndFindSuffixRespectsScope()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("26-0605-Z1AA", "old", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        var target = await repo.CreateOrderAsync(BuildOrder("26-0606-Z1BB", "target", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+        await repo.CreateOrderAsync(BuildOrder("27-0605-Z1AA", "other", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), clinicCode: "OTHER", requestedDeliveryDate: new DateOnly(2027, 6, 5)));
+
+        var page = await repo.ListOrdersPageContainingOrderAsync("DEMO", target, 1);
+        var demoShortMatches = await repo.FindOrdersByCodeSuffixAsync("DEMO", "0605-Z1AA", 2);
+        var techShortMatches = await repo.FindOrdersByCodeSuffixAsync(null, "0605-Z1AA", 2);
+
+        Assert.That(page.Items.Select(o => o.OrderCode), Does.Contain(target.OrderCode));
+        Assert.That(demoShortMatches.Select(o => o.OrderCode), Is.EqualTo(new[] { "26-0605-Z1AA" }));
+        Assert.That(techShortMatches, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void OrderCursorCodec_InvalidCursorThrowsFormatException()
+    {
+        Assert.Throws<FormatException>(() => OrderCursorCodec.Decode("not-a-cursor"));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_PersistsWorkItemsJsonAndRoundTripsThroughQueries()
     {
         var repo = new SqliteOrderRepo(_contextFactory);

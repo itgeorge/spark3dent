@@ -538,6 +538,68 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingOrdersListEndpoint_ReturnsCursorPageAndRejectsInvalidCursor()
+    {
+        using var fixture = new ApiTestFixture();
+        await SeedOrderAsync(fixture.DbPath, "PG1-234", "Page old", "DEMO", "2026-06-05");
+        await SeedOrderAsync(fixture.DbPath, "PG2-234", "Page mid", "DEMO", "2026-06-06");
+        await SeedOrderAsync(fixture.DbPath, "PG3-234", "Page new", "DEMO", "2026-06-07");
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var first = await client.GetAsync("/api/scheduling/orders?limit=2");
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var firstDoc = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
+        Assert.That(firstDoc.RootElement.GetProperty("items").GetArrayLength(), Is.EqualTo(2));
+        Assert.That(firstDoc.RootElement.GetProperty("hasMore").GetBoolean(), Is.True);
+        var cursor = firstDoc.RootElement.GetProperty("nextCursor").GetString();
+        Assert.That(cursor, Is.Not.Null.And.Not.Empty);
+
+        var second = await client.GetAsync($"/api/scheduling/orders?limit=2&cursor={Uri.EscapeDataString(cursor!)}");
+        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var secondDoc = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        Assert.That(secondDoc.RootElement.GetProperty("items").EnumerateArray().Select(e => e.GetProperty("orderCode").GetString()), Does.Contain("PG1-234"));
+
+        var invalid = await client.GetAsync("/api/scheduling/orders?cursor=bad-cursor");
+        Assert.That(invalid.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task SchedulingOrdersFindEndpoint_ReturnsContextAndEnforcesVisibility()
+    {
+        using var fixture = new ApiTestFixture();
+        await SeedOrderAsync(fixture.DbPath, "26-0605-Z1AA", "Find demo", "DEMO", "2026-06-05");
+        var cancelledCode = await SeedOrderAsync(fixture.DbPath, "26-0606-Z1BB", "Find cancelled", "DEMO", "2026-06-06");
+        await SeedOrderAsync(fixture.DbPath, "27-0605-Z1AA", "Find other", "OTHER", "2027-06-05");
+
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+        var cancel = await clinicClient.DeleteAsync($"/api/scheduling/orders/{cancelledCode}");
+        Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var findShort = await clinicClient.GetAsync("/api/scheduling/orders/find?code=0605-Z1AA&limit=2");
+        Assert.That(findShort.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var findDoc = JsonDocument.Parse(await findShort.Content.ReadAsStringAsync());
+        Assert.That(findDoc.RootElement.GetProperty("order").GetProperty("orderCode").GetString(), Is.EqualTo("26-0605-Z1AA"));
+        Assert.That(findDoc.RootElement.GetProperty("listPage").GetProperty("items").EnumerateArray().Select(e => e.GetProperty("orderCode").GetString()), Does.Contain("26-0605-Z1AA"));
+
+        var otherFull = await clinicClient.GetAsync("/api/scheduling/orders/find?code=27-0605-Z1AA");
+        Assert.That(otherFull.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var cancelled = await clinicClient.GetAsync($"/api/scheduling/orders/find?code={cancelledCode}");
+        Assert.That(cancelled.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var cancelledDoc = JsonDocument.Parse(await cancelled.Content.ReadAsStringAsync());
+        Assert.That(cancelledDoc.RootElement.GetProperty("listModeRecommended").GetBoolean(), Is.True);
+
+        using var techClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsTechnicianAsync(techClient);
+        var techFind = await techClient.GetAsync("/api/scheduling/orders/find?code=27-0605-Z1AA");
+        Assert.That(techFind.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var ambiguousShort = await techClient.GetAsync("/api/scheduling/orders/find?code=0605-Z1AA");
+        Assert.That(ambiguousShort.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [Test]
     public async Task SchedulingConfigReloadEndpoint_IsRemoved()
     {
         using var fixture = new ApiTestFixture();
@@ -579,6 +641,8 @@ public class SchedulingApiTests
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlite($"Data Source={dbPath}")
             .Options;
+        await using (var ctx = new AppDbContext(options))
+            await ctx.Database.MigrateAsync();
         var repo = new SqliteOrderRepo(() => new AppDbContext(options));
         await repo.CreateOrderAsync(new OrderRecord(
             0,

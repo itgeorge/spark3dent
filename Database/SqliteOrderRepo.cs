@@ -72,6 +72,46 @@ public sealed class SqliteOrderRepo : IOrderRepository
         return items.Select(ToDomain).ToList();
     }
 
+    public async Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var query = ScopedOrders(ctx, clinicCode);
+        if (cursor != null)
+            query = query.Where(o =>
+                o.RequestedDeliveryDate < cursor.RequestedDeliveryDate
+                || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds < cursor.CreatedAtUnixTimeMilliseconds)
+                || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds == cursor.CreatedAtUnixTimeMilliseconds && o.Id < cursor.Id));
+
+        return await MaterializePageAsync(query, limit, ct);
+    }
+
+    public async Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var query = ScopedOrders(ctx, clinicCode);
+        var targetCreatedMs = target.CreatedAt.ToUnixTimeMilliseconds();
+        var beforeCount = await query.CountAsync(o =>
+            o.RequestedDeliveryDate > target.RequestedDeliveryDate
+            || (o.RequestedDeliveryDate == target.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds > targetCreatedMs)
+            || (o.RequestedDeliveryDate == target.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds == targetCreatedMs && o.Id > target.Id), ct);
+        var pageStart = beforeCount / limit * limit;
+        return await MaterializePageAsync(query, limit, ct, pageStart);
+    }
+
+    public async Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var normalized = codeSuffix.Trim().ToUpperInvariant();
+        if (normalized.Length == 0)
+            return [];
+
+        var items = await Ordered(ScopedOrders(ctx, clinicCode))
+            .Where(o => o.OrderCode.EndsWith(normalized))
+            .Take(Math.Clamp(limit, 1, 20))
+            .ToListAsync(ct);
+        return items.Select(ToDomain).ToList();
+    }
+
     public async Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
@@ -91,12 +131,33 @@ public sealed class SqliteOrderRepo : IOrderRepository
         return items.Select(ToDomain).ToList();
     }
 
+    private static IQueryable<SchedulingOrderEntity> ScopedOrders(AppDbContext ctx, string? clinicCode)
+    {
+        var query = ctx.SchedulingOrders.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(clinicCode))
+            query = query.Where(o => o.ClinicCode == clinicCode);
+        return query;
+    }
+
+    private static async Task<OrderPage> MaterializePageAsync(IQueryable<SchedulingOrderEntity> query, int limit, CancellationToken ct, int skip = 0)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 500);
+        var rows = await Ordered(query).Skip(skip).Take(safeLimit + 1).ToListAsync(ct);
+        var hasMore = rows.Count > safeLimit;
+        var pageRows = hasMore ? rows.Take(safeLimit).ToList() : rows;
+        var items = pageRows.Select(ToDomain).ToList();
+        var nextCursor = hasMore && items.Count > 0 ? OrderCursorCodec.Encode(OrderCursor.FromOrder(items[^1])) : null;
+        return new OrderPage(items, nextCursor, hasMore);
+    }
+
     private static IQueryable<SchedulingOrderEntity> OrderedLimited(IQueryable<SchedulingOrderEntity> query, int limit) =>
+        Ordered(query).Take(Math.Clamp(limit, 1, 500));
+
+    private static IOrderedQueryable<SchedulingOrderEntity> Ordered(IQueryable<SchedulingOrderEntity> query) =>
         query
             .OrderByDescending(o => o.RequestedDeliveryDate)
             .ThenByDescending(o => o.CreatedAtUnixTimeMilliseconds)
-            .ThenByDescending(o => o.Id)
-            .Take(Math.Clamp(limit, 1, 500));
+            .ThenByDescending(o => o.Id);
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is SqliteException { SqliteErrorCode: 19 } sqliteEx &&
