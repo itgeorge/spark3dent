@@ -41,11 +41,11 @@ Existing relevant files/routes:
 1. `/orders` is the standalone scheduler URL.
 2. Initially no UI navigation is added; scheduler is reached directly at `/orders`.
 3. The scheduler list shows both active and cancelled orders with a simple status text.
-4. Technician accounts can view all orders; clinic accounts can view only their own orders.
-5. Invoicing/client routes should move from generic `/api/...` to `/api/invoicing/...` and be technician-only.
-6. Non-technician users should not see the invoicer product in app navigation.
+4. Current implementation uses technician accounts for all-order access, but Slices 10-11 should replace this with lab organization members. Clinic members can view only their own orders.
+5. Invoicing/client routes moved from generic `/api/...` to `/api/invoicing/...` and currently require technician access; Slices 10-11 should make this lab-only access.
+6. Non-lab users should not see the invoicer product in app navigation.
 7. Cancelling an order uses `DELETE /api/scheduling/orders/{code}` as a soft delete: set status to `Cancelled`, do not physically delete.
-8. Technician create/edit flow needs a clinic selector because technicians can create/modify for any clinic.
+8. Lab create/edit flow needs a clinic selector because lab members can create/modify for any clinic.
 9. Audit logging is implemented after the main scheduler/invoicer auth and order modification flows are in place.
 10. Slice 5 audit boundary: audit contracts (`AuditEvent`, `IAuditLog`) live in `Utilities` to avoid a new project; SQLite persistence lives in `Database`; scheduler logs at service level; invoicing/client logs in route handlers until a fuller app-service layer exists.
 11. A simple technician-only audit read endpoint exists at `GET /api/invoicing/audit` for inspection/manual verification.
@@ -54,6 +54,10 @@ Existing relevant files/routes:
 14. Orders may contain multiple order work items on the same impression. Each work item has its own construction type and tooth/range; material and shade remain order-level for now. Slice 7 added JSON serialization and temporary single-selection compatibility fields.
 15. Slice 8 made `WorkItems` the sole source of truth, removed order-level `WorkType`/`ConstructionType`/`ToothStart`/`ToothEnd`, removed all abutment-related live code, wiped scheduling order rows via migration while preserving invoice/client data, and deleted the obsolete stepper prototype.
 16. Slice 9 added cursor paging to the orders list view and a server-backed Find-by-code flow that navigates list/calendar context before opening the order review.
+17. The current `Technician`-under-clinic auth model is a temporary walking-skeleton shortcut. It should be replaced with DB-backed identity where the lab is a separate singleton-like entity from clinic organizations.
+18. Lab-specific data should live on a separate lab entity/table, not on a clinic organization row. Clinic organizations keep clinic-specific fields such as linked invoicing client nickname and display color.
+19. Organization/member deletes should be soft deletes/deactivation so order, session, and audit history remains understandable.
+20. IAM should be introduced vertically: first DB-backed lab/clinic/member auth with no UI, then lab terminology cleanup, then a lab-only read-only IAM page. Mutation/onboarding/PIN-management slices should be planned after those shapes are implemented and reviewed.
 
 ## Slice Index and Status
 
@@ -69,6 +73,9 @@ Existing relevant files/routes:
 | 7 | `plans/order-flow-vertical-slices/slice-7-multiple-order-work-items.md` | Complete | Multiple order work items per order/impression with JSON persistence, server validation, summed lead-time rules, API/display updates, and per-line tooth UI |
 | 8 | `plans/order-flow-vertical-slices/slice-8-work-items-source-of-truth-cleanup.md` | Complete | `workItems` is now the sole order tooth/construction source across domain/API/persistence/UI; legacy single fields and live abutment code removed; scheduling rows/audits wiped by migration; obsolete prototype deleted |
 | 9 | `plans/order-flow-vertical-slices/slice-9-orders-list-paging-and-find.md` | Complete | Cursor-paged scheduler list (`items`/`nextCursor`/`hasMore`) plus server-backed find-by-code/short-code context navigation into list/calendar review |
+| 10 | `plans/order-flow-vertical-slices/slice-10-db-backed-org-member-auth.md` | Not started | DB-backed singleton Lab, clinic organizations, members, and auth sessions; no IAM UI |
+| 11 | `plans/order-flow-vertical-slices/slice-11-lab-permissions-terminology.md` | Not started | Replace temporary technician terminology with lab-vs-clinic permissions in code/API/UI/tests |
+| 12 | `plans/order-flow-vertical-slices/slice-12-iam-readonly-page.md` | Not started | Lab-only read-only IAM page and APIs for lab/clinic/member inspection |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -103,6 +110,9 @@ Before handing off to another agent:
 - Slice 7 depends on Slice 4 create/edit/review behavior, Slice 5 audit metadata, and Slice 6 list/calendar display surfaces.
 - Slice 8 depends on Slice 7 work-item support and should simplify before lab organization/IAM work adds more identity complexity.
 - Slice 9 depends on Slice 6 calendar/list modes and Slice 8's simplified work-item-only order DTOs.
+- Slice 10 depends on the current auth/session/audit behavior through Slice 9 and should preserve scheduler/invoicer user-visible behavior while replacing the identity source of truth.
+- Slice 11 depends on Slice 10's actual actor/entity names and should clean up terminology without changing permissions.
+- Slice 12 depends on Slices 10-11 and should add read-only IAM only after lab-vs-clinic auth semantics are stable.
 
 ## Cross-Slice Discoveries / Course Corrections
 
@@ -126,6 +136,7 @@ Append dated notes here after each slice.
 - 2026-06-06: Slice 8 complete. `OrderDraft`/`OrderRecord` require work items and no longer carry order-level `WorkType`, `ConstructionType`, tooth range, abutments, or primary compatibility fields. Scheduling APIs require `workItems` and reject old single-field-only payloads with 400. SQLite migration `20260606000000_RemoveSchedulingOrderLegacyFields` deletes scheduling orders and scheduling-order audit rows, then recreates `SchedulingOrders` without legacy columns while preserving invoice/client data. The old `Web/wwwroot/order-prototypes/stepper.html` prototype was deleted.
 - 2026-06-06: Added Slice 9 plan for orders list cursor paging and Find-by-code navigation. The plan keeps list view active+cancelled and calendar active-only, extends the list API with opaque cursors, and adds a dedicated find endpoint/context so the UI can navigate to the order's list or calendar position before opening review.
 - 2026-06-06: Slice 9 complete. `GET /api/scheduling/orders?limit=&cursor=` now returns cursor pages with opaque base64url JSON cursors over requested delivery date, created-at milliseconds, and id; invalid cursors return 400. Added `GET /api/scheduling/orders/find?code=&limit=` with actor scoping, full-code lookup, shortened-code suffix lookup, 409 for ambiguous shortened matches, and cancelled-order list-mode recommendation. `orders.html` now uses first-page/Load-more list loading and find navigation that preserves the loaded list/calendar context after review closes.
+- 2026-06-07: Added Slices 10-12 plans for DB-backed lab/clinic/member auth, lab terminology cleanup, and a lab-only read-only IAM page. The lab should be a separate singleton-like entity from clinics so lab-only settings such as future capacity configuration do not pollute clinic organization data.
 
 ## Verification Evidence
 
@@ -171,7 +182,7 @@ Scheduling:
 - `POST /api/scheduling/auth/logout`
 - `GET /api/scheduling/auth/me`
 - `POST /api/scheduling/dates`
-- `GET /api/scheduling/clinics` (technician-only active clinic list for target selection)
+- `GET /api/scheduling/clinics` (currently technician-only active clinic list for target selection; Slices 10-11 should make this lab-only)
 - `GET /api/scheduling/orders?limit=&cursor=` (clinic actors see own clinic; technician actors see all; returns cursor-paged response)
 - `POST /api/scheduling/orders`
 - `GET /api/scheduling/orders/{code}`
@@ -183,10 +194,18 @@ Scheduling:
 Invoicing/client after Slice 2:
 
 - Existing `/api/clients...` and `/api/invoices...` moved to `/api/invoicing/clients...` and `/api/invoicing/invoices...`; old paths now 404.
-- All `/api/invoicing/*` endpoints require technician auth.
-- `GET /api/invoicing/audit?entityType=&entityId=&limit=100` returns recent audit events for technician inspection.
+- All `/api/invoicing/*` endpoints currently require technician auth; Slice 11 should rename this to lab auth.
+- `GET /api/invoicing/audit?entityType=&entityId=&limit=100` returns recent audit events for technician/lab inspection.
 - CLI: `audit list [filters]` lists audit events newest-first for operator inspection/export; use `--json` for machine-readable output.
 - Update `Web/wwwroot/index.html` fetch calls accordingly.
+
+IAM target after Slices 10-12:
+
+- `GET /iam` lab-only IAM page.
+- `GET /api/iam/lab` lab-only lab profile/member detail.
+- `GET /api/iam/organizations?includeInactive=` lab-only clinic organization list.
+- `GET /api/iam/organizations/{code}` lab-only clinic organization detail and members.
+- Optional `GET /api/iam/clients?query=&limit=` lab-only client search/list for future organization prefill.
 
 ## Files Most Likely to Change by Slice
 
@@ -293,11 +312,53 @@ Slice 9:
 - `Web/wwwroot/orders.html`
 - tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
 
+Slice 10:
+
+- `Orders/AuthenticatedActor.cs`
+- `Orders/AuthSession.cs`
+- `Orders/SchedulingAuthService.cs`
+- `Orders/Repositories.cs`
+- new/reworked lab, clinic organization, and member domain/repository types
+- `Database/Entities/SchedulingAuthSessionEntity.cs`
+- new lab/clinic/member DB entities and repositories
+- `Database/AppDbContext.cs`
+- `Database/Migrations/*`
+- `Web/SchedulingEndpointAuth.cs`
+- `Web/SchedulingApi.cs`
+- `Web/Api.cs`
+- `Web/WebProgram.cs`
+- audit contracts/entities if actor organization fields are added
+- tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
+
+Slice 11:
+
+- `Orders/AuthenticatedActor.cs`
+- `Orders/SchedulingOrderService.cs`
+- `Web/SchedulingEndpointAuth.cs`
+- `Web/SchedulingApi.cs`
+- `Web/Api.cs`
+- `Web/wwwroot/index.html`
+- `Web/wwwroot/orders.html`
+- `Web/wwwroot/js/app-chrome.js`
+- audit API/CLI output if terminology changes
+- tests and docs/plans
+
+Slice 12:
+
+- new `Web/wwwroot/iam.html`
+- `Web/Web.csproj`
+- `Web/WebProgram.cs`
+- new `Web/IamApi.cs` or equivalent
+- `Web/wwwroot/js/app-chrome.js`
+- IAM CSS/JS if split out
+- lab/clinic/member repositories from Slice 10
+- optional client listing integration with `Accounting/Client.cs` / client repo
+- `Web.Tests/*`
+
 ## Open Questions to Resolve During Implementation
 
-- Exact technician config shape remains a future cleanup: current implementation uses role-on-credential, with the demo technician credential under clinic `DEMO` and PIN `654321` as a walking-skeleton convention.
+- The temporary technician-under-clinic auth shape is now scheduled for replacement in Slices 10-11. Slice 10 should move auth/org/member data into DB with a separate singleton-like Lab entity and clinic organization entities. Slice 11 should rename permissions/API/UI from Technician to Lab.
 - `/` access behavior is resolved for v1: client-side scheduling-auth gate shows login when unauthenticated and redirects clinic users to `/orders`; `/api/invoicing/*` remains the server-side security boundary.
-- Technician order creation target selection is resolved for v1: technician create uses the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
-- Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. A technician-only read endpoint exists for inspection, but no UI browser or tamper-proof hash chain is implemented.
+- Lab/technician order creation target selection is resolved for v1: privileged actors create using the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
+- Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. Slice 10/11 may need to add actor organization/member fields or compatibility aliases as the auth model changes.
 - Per-work-item material/shade is a known follow-up after Slice 7; Slice 7 keeps material and shade order-level while allowing multiple construction/tooth work items.
-- Abutment support is no longer desired in the order flow and should be removed from live code/tests/persistence mapping in Slice 8.
