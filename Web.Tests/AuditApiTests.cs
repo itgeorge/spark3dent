@@ -11,9 +11,9 @@ namespace Web.Tests;
 public class AuditApiTests
 {
     [Test]
-    public async Task ClientAndInvoiceMutations_AppendAuditRowsWithTechnicianActor()
+    public async Task ClientAndInvoiceMutations_AppendAuditRowsWithLabActor()
     {
-        using var fixture = new ApiTestFixture(autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(autoLoginAsLab: true);
         var client = fixture.Client;
 
         var createClient = new
@@ -40,8 +40,8 @@ public class AuditApiTests
 
         var rows = await LoadAuditRowsAsync(fixture.DbPath);
         Assert.That(rows.Select(r => r.Operation), Is.SupersetOf(new[] { "ClientCreated", "ClientUpdated", "InvoiceIssued", "InvoiceCorrected" }));
-        Assert.That(rows.Where(r => r.Operation is "ClientCreated" or "ClientUpdated" or "InvoiceIssued" or "InvoiceCorrected").Select(r => r.ActorRole), Is.All.EqualTo("Technician"));
-        Assert.That(rows.Single(r => r.Operation == "InvoiceIssued").ActorCredentialId, Is.EqualTo("technician-1"));
+        Assert.That(rows.Where(r => r.Operation is "ClientCreated" or "ClientUpdated" or "InvoiceIssued" or "InvoiceCorrected").Select(r => r.ActorOrganizationType), Is.All.EqualTo("Lab"));
+        Assert.That(rows.Single(r => r.Operation == "InvoiceIssued").ActorMemberId, Is.EqualTo("lab-1"));
         Assert.That(rows.Single(r => r.Operation == "ClientCreated").MetadataJson, Does.Not.Contain("123456").And.Not.Contain("654321"));
 
         var auditResponse = await client.GetAsync("/api/invoicing/audit?entityType=Invoice&limit=10");
@@ -61,7 +61,7 @@ public class AuditApiTests
         using var fixture = new ApiTestFixture(
             openAiKey: "sk-dummy",
             invoiceImporterOverride: fakeImporter,
-            autoLoginAsTechnician: true);
+            autoLoginAsLab: true);
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>(), dryRun = false };
         var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/commit", JsonContent(body));
@@ -71,14 +71,14 @@ public class AuditApiTests
         var audit = rows.Single(r => r.Operation == "InvoiceImportCommitted");
         Assert.That(audit.ServiceName, Is.EqualTo("Invoicing"));
         Assert.That(audit.EntityType, Is.EqualTo("InvoiceImport"));
-        Assert.That(audit.ActorRole, Is.EqualTo("Technician"));
+        Assert.That(audit.ActorOrganizationType, Is.EqualTo("Lab"));
         Assert.That(audit.MetadataJson, Does.Contain("\"imported\":1"));
     }
 
     [Test]
     public async Task FailedInvoicingValidation_DoesNotAppendAuditRow()
     {
-        using var fixture = new ApiTestFixture(autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(autoLoginAsLab: true);
         var response = await fixture.Client.PostAsync("/api/invoicing/clients", JsonContent(new { nickname = "bad" }));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));

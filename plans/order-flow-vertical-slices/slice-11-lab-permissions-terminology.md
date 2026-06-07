@@ -162,27 +162,25 @@ Likely:
 
 ## Implementation Checklist
 
-- [ ] Read Slice 10 completion notes and confirm actual actor/org/member names.
-- [ ] Replace `ActorRole.Technician`/`IsTechnician` with lab organization permissions.
-- [ ] Rename centralized auth filters/helpers to lab terminology.
-- [ ] Update auth/me and login DTOs to expose org/member/lab fields.
-- [ ] Update scheduler/invoicing API checks and error messages.
-- [ ] Update app chrome/product switcher to use `isLab`.
-- [ ] Update UI labels from Technician to Lab.
-- [ ] Update audit API/CLI output names where applicable.
-- [ ] Update tests.
-- [ ] Run repo-wide stale terminology searches and document intentional leftovers.
-- [ ] Run relevant tests/build.
-- [ ] Update master plan and Slice 12 with final terminology.
+- [x] Read Slice 10 completion notes and confirm actual actor/org/member names.
+- [x] Replace `ActorRole.Technician`/`IsTechnician` with lab organization permissions.
+- [x] Rename centralized auth filters/helpers to lab terminology.
+- [x] Update auth/me and login DTOs to expose org/member/lab fields.
+- [x] Update scheduler/invoicing API checks and error messages.
+- [x] Update app chrome/product switcher to use `isLab`.
+- [x] Update UI labels from Technician to Lab.
+- [x] Update audit API/CLI output names where applicable.
+- [x] Update tests.
+- [x] Run repo-wide stale terminology searches and document intentional leftovers.
+- [x] Run relevant tests/build.
+- [x] Update master plan and Slice 12 with final terminology.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Final auth DTO shape:
-- Remaining compatibility aliases/debt:
-- Discoveries affecting Slice 12:
+- Status: Complete
+- Files changed: `Orders/AuthenticatedActor.cs`, `Orders/SchedulingAuthService.cs`, `Orders/SchedulingOrderService.cs`, `Web/SchedulingEndpointAuth.cs`, `Web/SchedulingApi.cs`, `Web/Api.cs`, `Web/wwwroot/index.html`, `Web/wwwroot/orders.html`, `Web/wwwroot/js/app-chrome.js`, `Cli/CliProgram.cs`, related tests, and planning docs
+- Tests run: `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test --no-restore -p:UseSharedCompilation=false`
+- Manual checks: Headless Chromium browser verification passed on `2026-06-07`. Verified lab browser surfaces show Scheduler/Invoicer/IAM, clinic browser surface shows Scheduler only, clinic direct `/` redirects to `/orders`, clinic direct `/iam` redirects to `/orders`, and clinic browser fetches to lab-only `/api/invoicing/*` / `/api/iam/*` return 403 with lab-only permissions enforced.
+- Final auth DTO shape: login/auth-me now return `organizationType`, `organizationCode`, `organizationName`, `memberId`, `memberLabel`, `isLab`, `isClinic`
+- Remaining compatibility aliases/debt: login still accepts legacy `clinicCode` request input; EF mappings still target legacy DB column names such as `CredentialId` and `ActorRole`; one intentionally retired legacy route test still references `/api/scheduling/technician/orders`
+- Discoveries affecting Slice 12: IAM product visibility is now driven by `actor.isLab`, so `/iam` and `/api/iam/*` can rely on the same lab-only semantics without additional role translation

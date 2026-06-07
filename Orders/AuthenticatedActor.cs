@@ -1,19 +1,20 @@
 namespace Orders;
 
-public enum ActorRole
+public enum OrganizationType
 {
     Clinic,
-    Technician
+    Lab
 }
 
 public sealed record AuthenticatedActor(
-    string ClinicCode,
-    string ClinicDisplayName,
-    string CredentialId,
-    string CredentialLabel,
-    string CredentialPinHashFingerprint,
-    string SessionId,
-    ActorRole Role = ActorRole.Clinic)
+    OrganizationType OrganizationType,
+    string OrganizationCode,
+    string OrganizationName,
+    string MemberId,
+    string MemberLabel,
+    string MemberPinHashFingerprint,
+    string SessionId)
 {
-    public bool IsTechnician => Role == ActorRole.Technician;
+    public bool IsLab => OrganizationType == OrganizationType.Lab;
+    public bool IsClinic => OrganizationType == OrganizationType.Clinic;
 }

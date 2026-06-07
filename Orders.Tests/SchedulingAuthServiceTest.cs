@@ -5,48 +5,56 @@ namespace Orders.Tests;
 public class SchedulingAuthServiceTest
 {
     [Test]
-    public async Task LoginAsync_GivenTechnicianCredential_ReturnsTechnicianActor()
+    public async Task LoginAsync_GivenLabMember_ReturnsLabActor()
     {
         var hasher = new PinHasher();
-        var credentialHash = hasher.Hash("654321", iterations: 10_000);
-        var config = TestSchedulingConfigProvider.Create(credentialHash, ActorRole.Technician);
+        var members = new[]
+        {
+            new SchedulingMember(OrganizationType.Lab, "LAB", "lab-1", "Lab Member 1", hasher.Hash("654321", iterations: 10_000), true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        };
+        var identities = new InMemorySchedulingIdentityRepository(members: members);
         var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
         var repo = new InMemoryAuthSessionRepository();
-        var service = new SchedulingAuthService(config, repo, hasher, clock);
+        var service = new SchedulingAuthService(TestSchedulingConfigProvider.Create(), identities, repo, hasher, clock);
 
-        var result = await service.LoginAsync("DEMO", "654321", "127.0.0.1", "test");
+        var result = await service.LoginAsync("LAB", "654321", "127.0.0.1", "test");
 
-        Assert.That(result.Actor.Role, Is.EqualTo(ActorRole.Technician));
-        Assert.That(result.Actor.IsTechnician, Is.True);
+        Assert.That(result.Actor.OrganizationType, Is.EqualTo(OrganizationType.Lab));
+        Assert.That(result.Actor.IsLab, Is.True);
     }
 
     [Test]
-    public async Task LoginAsync_GivenCredentialWithoutExplicitRole_DefaultsToClinicActor()
+    public async Task LoginAsync_GivenClinicMember_ReturnsClinicActor()
     {
         var hasher = new PinHasher();
-        var credentialHash = hasher.Hash("123456", iterations: 10_000);
-        var config = TestSchedulingConfigProvider.Create(credentialHash);
+        var members = new[]
+        {
+            new SchedulingMember(OrganizationType.Clinic, "DEMO", "cred-1", "Cred 1", hasher.Hash("123456", iterations: 10_000), true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        };
+        var identities = new InMemorySchedulingIdentityRepository(members: members);
         var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
         var repo = new InMemoryAuthSessionRepository();
-        var service = new SchedulingAuthService(config, repo, hasher, clock);
+        var service = new SchedulingAuthService(TestSchedulingConfigProvider.Create(), identities, repo, hasher, clock);
 
         var result = await service.LoginAsync("DEMO", "123456", "127.0.0.1", "test");
 
-        Assert.That(result.Actor.Role, Is.EqualTo(ActorRole.Clinic));
-        Assert.That(result.Actor.IsTechnician, Is.False);
+        Assert.That(result.Actor.OrganizationType, Is.EqualTo(OrganizationType.Clinic));
+        Assert.That(result.Actor.IsClinic, Is.True);
     }
 
     [Test]
     public async Task AuthenticateAsync_GivenValidSession_RefreshesSlidingExpiry()
     {
         var hasher = new PinHasher();
-        var credentialHash = hasher.Hash("123456", iterations: 10_000);
-        var config = TestSchedulingConfigProvider.Create(credentialHash);
+        var identities = new InMemorySchedulingIdentityRepository(members:
+        [
+            new SchedulingMember(OrganizationType.Clinic, "DEMO", "cred-1", "Cred 1", hasher.Hash("123456", iterations: 10_000), true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        ]);
         var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
         var repo = new InMemoryAuthSessionRepository();
         var token = "test-token";
         await repo.AddSessionAsync(BuildSession(token, clock.UtcNow, expiresAt: clock.UtcNow.AddMinutes(5)));
-        var service = new SchedulingAuthService(config, repo, hasher, clock);
+        var service = new SchedulingAuthService(TestSchedulingConfigProvider.Create(), identities, repo, hasher, clock);
 
         var actor = await service.AuthenticateAsync(token);
 
@@ -58,13 +66,15 @@ public class SchedulingAuthServiceTest
     public async Task AuthenticateAsync_GivenExpiredSession_ReturnsNullWithoutRefresh()
     {
         var hasher = new PinHasher();
-        var credentialHash = hasher.Hash("123456", iterations: 10_000);
-        var config = TestSchedulingConfigProvider.Create(credentialHash);
+        var identities = new InMemorySchedulingIdentityRepository(members:
+        [
+            new SchedulingMember(OrganizationType.Clinic, "DEMO", "cred-1", "Cred 1", hasher.Hash("123456", iterations: 10_000), true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        ]);
         var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
         var repo = new InMemoryAuthSessionRepository();
         var token = "test-token";
         await repo.AddSessionAsync(BuildSession(token, clock.UtcNow, expiresAt: clock.UtcNow.AddMinutes(-1)));
-        var service = new SchedulingAuthService(config, repo, hasher, clock);
+        var service = new SchedulingAuthService(TestSchedulingConfigProvider.Create(), identities, repo, hasher, clock);
 
         var actor = await service.AuthenticateAsync(token);
 
@@ -74,6 +84,7 @@ public class SchedulingAuthServiceTest
 
     private static AuthSession BuildSession(string token, DateTimeOffset now, DateTimeOffset expiresAt) => new(
         "session-1",
+        OrganizationType.Clinic,
         "DEMO",
         "cred-1",
         SchedulingAuthService.HashToken(token),
@@ -109,7 +120,7 @@ public class SchedulingAuthServiceTest
         }
 
         public Task RevokeSessionAsync(string sessionId, DateTimeOffset revokedAt, CancellationToken ct = default) => Task.CompletedTask;
-        public Task RevokeClinicSessionsAsync(string clinicCode, DateTimeOffset revokedAt, CancellationToken ct = default) => Task.CompletedTask;
-        public Task RevokeCredentialSessionsAsync(string clinicCode, string credentialId, DateTimeOffset revokedAt, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeOrganizationSessionsAsync(OrganizationType organizationType, string organizationCode, DateTimeOffset revokedAt, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeMemberSessionsAsync(OrganizationType organizationType, string organizationCode, string memberId, DateTimeOffset revokedAt, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

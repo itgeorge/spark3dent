@@ -1,10 +1,13 @@
+using Orders;
+
 namespace Database.Entities;
 
 public class SchedulingAuthSessionEntity
 {
     public string Id { get; set; } = string.Empty;
-    public string ClinicCode { get; set; } = string.Empty;
-    public string CredentialId { get; set; } = string.Empty;
+    public OrganizationType OrganizationType { get; set; }
+    public string OrganizationCode { get; set; } = string.Empty;
+    public string MemberId { get; set; } = string.Empty;
     public string TokenHash { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }

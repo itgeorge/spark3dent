@@ -1,21 +1,21 @@
 (function (global) {
   const PRODUCTS = {
-    invoicer: { label: "Invoicer", href: "/", icon: "&#128179;" },
-    scheduler: { label: "Scheduler / Orders", href: "/orders", icon: "&#128197;" }
+    invoicer: { label: "Invoicer", href: "/", icon: "&#128179;", visibility: "lab" },
+    scheduler: { label: "Scheduler / Orders", href: "/orders", icon: "&#128197;", visibility: "all" },
+    iam: { label: "IAM", href: "/iam", icon: "&#128101;", visibility: "lab" }
   };
 
   function actorLabel(actor) {
     if (!actor) return "";
-    const role = actor.isTechnician ? "Technician" : "Clinic";
-    return `${actor.clinicName || actor.clinicCode} / ${actor.credentialLabel} (${role})`;
+    const role = actor.isLab ? "Lab" : "Clinic";
+    return `${actor.organizationName || actor.organizationCode} / ${actor.memberLabel} (${role})`;
   }
 
   function productMenuHtml(activeProduct) {
     return Object.entries(PRODUCTS).map(([key, p]) => {
       const active = key === activeProduct ? " active" : "";
       const current = key === activeProduct ? ' aria-current="page"' : "";
-      const hidden = key === "invoicer" ? ' id="appMenuInvoicer"' : "";
-      return `<a href="${p.href}" class="app-menu-item${active}" role="menuitem"${current}${hidden}><span>${p.icon}</span><span>${p.label}</span></a>`;
+      return `<a href="${p.href}" class="app-menu-item app-product-link${active}" role="menuitem" data-product="${key}"${current}><span>${p.icon}</span><span>${p.label}</span></a>`;
     }).join("");
   }
 
@@ -72,7 +72,7 @@
       account: host.querySelector("#appChromeAccount"),
       actor: host.querySelector("#appChromeActor"),
       logoutBtn: host.querySelector("#appChromeLogoutBtn"),
-      invoicerLink: host.querySelector("#appMenuInvoicer")
+      productLinks: host.querySelectorAll(".app-product-link")
     };
 
     let logoutHandler = null;
@@ -94,7 +94,12 @@
       refs.actor.textContent = actorLabel(actor);
       refs.account.classList.toggle("hidden", !signedIn);
       if (hideMenuWhenSignedOut) refs.menuWrap.classList.toggle("hidden", !signedIn);
-      if (refs.invoicerLink) refs.invoicerLink.classList.toggle("hidden", !actor?.isTechnician);
+      refs.productLinks.forEach((link) => {
+        const productKey = link.getAttribute("data-product");
+        const meta = PRODUCTS[productKey];
+        const visible = !signedIn ? meta.visibility === "all" : meta.visibility === "all" || !!actor?.isLab;
+        link.classList.toggle("hidden", !visible);
+      });
     }
 
     function onLogout(handler) {

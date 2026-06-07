@@ -18,20 +18,14 @@ public static class SchedulingApi
         app.MapPost("/api/scheduling/auth/login", async (HttpContext ctx, SchedulingAuthService auth) =>
         {
             var body = await ReadJson<LoginRequest>(ctx);
-            if (body == null || string.IsNullOrWhiteSpace(body.ClinicCode) || string.IsNullOrWhiteSpace(body.Pin))
+            var organizationCode = body?.OrganizationCode ?? body?.ClinicCode;
+            if (string.IsNullOrWhiteSpace(organizationCode) || string.IsNullOrWhiteSpace(body?.Pin))
                 return Results.Json(new { error = "Credentials are required." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var result = await auth.LoginAsync(body.ClinicCode, body.Pin, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
+                var result = await auth.LoginAsync(organizationCode, body.Pin, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
                 ctx.Response.Cookies.Append(SchedulingEndpointAuth.AuthCookieName, result.CookieToken, BuildCookieOptions(result.ExpiresAt, ctx));
-                return Results.Json(new
-                {
-                    clinicCode = result.Actor.ClinicCode,
-                    clinicName = result.Actor.ClinicDisplayName,
-                    credentialLabel = result.Actor.CredentialLabel,
-                    role = result.Actor.Role,
-                    isTechnician = result.Actor.IsTechnician
-                }, JsonOptions);
+                return Results.Json(ToActorDto(result.Actor), JsonOptions);
             }
             catch (Exception ex) when (ex is InvalidOperationException or FormatException)
             {
@@ -52,15 +46,7 @@ public static class SchedulingApi
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            return Results.Json(new
-            {
-                clinicCode = actor.ClinicCode,
-                clinicName = actor.ClinicDisplayName,
-                credentialId = actor.CredentialId,
-                credentialLabel = actor.CredentialLabel,
-                role = actor.Role,
-                isTechnician = actor.IsTechnician
-            }, JsonOptions);
+            return Results.Json(ToActorDto(actor), JsonOptions);
         });
 
         app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
@@ -78,13 +64,12 @@ public static class SchedulingApi
             return Results.Json(new { rules, defaultMinBusinessDays = provider.Current.Options.DefaultMinBusinessDays }, JsonOptions);
         });
 
-        app.MapGet("/api/scheduling/clinics", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
+        app.MapGet("/api/scheduling/clinics", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingIdentityRepository identities) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            if (!actor.IsTechnician) return Results.Json(new { error = "Technician access required." }, statusCode: 403, options: JsonOptions);
-            var clinics = provider.Current.Options.Clinics
-                .Where(c => c.IsActive)
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var clinics = (await identities.ListClinicsAsync(includeInactive: false, ctx.RequestAborted))
                 .OrderBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .Select(c => new { clinicCode = c.Code, clinicDisplayName = c.DisplayName });
             return Results.Json(new { items = clinics }, JsonOptions);
@@ -192,7 +177,7 @@ public static class SchedulingApi
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
-            if (order == null || (!actor.IsTechnician && !string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase)))
+            if (order == null || (!actor.IsLab && !string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase)))
                 return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
             return Results.Json(new { order = ToDto(order) }, JsonOptions);
         });
@@ -288,8 +273,8 @@ public static class SchedulingApi
         shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
         o.ClinicCode,
         o.ClinicDisplayName,
-        o.CredentialId,
-        o.CredentialLabel,
+        o.MemberId,
+        o.MemberLabel,
         o.CaseName,
         o.ImpressionDate,
         o.ProductCategory,
@@ -311,10 +296,21 @@ public static class SchedulingApi
         teeth = item.Teeth
     };
 
+    private static object ToActorDto(AuthenticatedActor actor) => new
+    {
+        organizationType = actor.OrganizationType.ToString().ToLowerInvariant(),
+        organizationCode = actor.OrganizationCode,
+        organizationName = actor.OrganizationName,
+        memberId = actor.MemberId,
+        memberLabel = actor.MemberLabel,
+        isLab = actor.IsLab,
+        isClinic = actor.IsClinic
+    };
+
     private static string RemoteIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private static string UserAgent(HttpContext ctx) => ctx.Request.Headers.UserAgent.ToString();
 
-    public sealed record LoginRequest(string? ClinicCode, string? Pin);
+    public sealed record LoginRequest(string? OrganizationCode, string? ClinicCode, string? Pin);
 
     public sealed record OrderWorkItemRequest(ConstructionType ConstructionType, int ToothStart, int ToothEnd);
 

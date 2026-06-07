@@ -14,7 +14,7 @@ public class InvoiceApiTests
     [SetUp]
     public void SetUp()
     {
-        _fixture = new ApiTestFixture(autoLoginAsTechnician: true);
+        _fixture = new ApiTestFixture(autoLoginAsLab: true);
         _client = _fixture.Client;
     }
 

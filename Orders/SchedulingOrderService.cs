@@ -6,6 +6,7 @@ namespace Orders;
 public sealed class SchedulingOrderService
 {
     private readonly ISchedulingConfigProvider _configProvider;
+    private readonly ISchedulingIdentityRepository _identities;
     private readonly IOrderRepository _orders;
     private readonly DateAvailabilityService _availability;
     private readonly IOrderCodeGenerator _codeGenerator;
@@ -18,6 +19,7 @@ public sealed class SchedulingOrderService
 
     public SchedulingOrderService(
         ISchedulingConfigProvider configProvider,
+        ISchedulingIdentityRepository identities,
         IOrderRepository orders,
         DateAvailabilityService availability,
         IOrderCodeGenerator codeGenerator,
@@ -26,6 +28,7 @@ public sealed class SchedulingOrderService
         IAuditLog? auditLog = null)
     {
         _configProvider = configProvider;
+        _identities = identities;
         _orders = orders;
         _availability = availability;
         _codeGenerator = codeGenerator;
@@ -61,7 +64,7 @@ public sealed class SchedulingOrderService
         var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
         await _availability.ValidateDeliveryDateAsync(draft.RequestedDeliveryDate, minimum, ct);
 
-        var targetClinic = ResolveTargetClinic(actor, targetClinicCode);
+        var targetClinic = await ResolveTargetClinicAsync(actor, targetClinicCode, ct);
         var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent);
         var created = await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
         await AppendOrderAuditAsync(
@@ -165,12 +168,12 @@ public sealed class SchedulingOrderService
         _orders.ListOrdersForClinicAsync(clinicCode, limit, ct);
 
     public Task<IReadOnlyList<OrderRecord>> ListOrdersForActorAsync(AuthenticatedActor actor, int limit = 100, CancellationToken ct = default) =>
-        actor.IsTechnician ? ListOrdersAsync(limit, ct) : ListOrdersForClinicAsync(actor.ClinicCode, limit, ct);
+        actor.IsLab ? ListOrdersAsync(limit, ct) : ListOrdersForClinicAsync(actor.OrganizationCode, limit, ct);
 
     public Task<OrderPage> ListOrdersPageForActorAsync(AuthenticatedActor actor, int? limit = null, string? cursor = null, CancellationToken ct = default)
     {
         var decoded = OrderCursorCodec.Decode(cursor);
-        return _orders.ListOrdersPageAsync(actor.IsTechnician ? null : actor.ClinicCode, ClampPageLimit(limit), decoded, ct);
+        return _orders.ListOrdersPageAsync(actor.IsLab ? null : actor.OrganizationCode, ClampPageLimit(limit), decoded, ct);
     }
 
     public async Task<OrderFindResult> FindOrderContextForActorAsync(AuthenticatedActor actor, string code, int? limit = null, CancellationToken ct = default)
@@ -187,7 +190,7 @@ public sealed class SchedulingOrderService
         }
         else if (CanSearchShortenedCode(normalized))
         {
-            var matches = await _orders.FindOrdersByCodeSuffixAsync(actor.IsTechnician ? null : actor.ClinicCode, normalized, 2, ct);
+            var matches = await _orders.FindOrdersByCodeSuffixAsync(actor.IsLab ? null : actor.OrganizationCode, normalized, 2, ct);
             if (matches.Count > 1)
                 throw new AmbiguousOrderCodeException("Multiple orders match this code; enter the full order code.");
             order = matches.SingleOrDefault();
@@ -196,7 +199,7 @@ public sealed class SchedulingOrderService
         if (order == null)
             throw new KeyNotFoundException("Order not found.");
 
-        var page = await _orders.ListOrdersPageContainingOrderAsync(actor.IsTechnician ? null : actor.ClinicCode, order, ClampPageLimit(limit), ct);
+        var page = await _orders.ListOrdersPageContainingOrderAsync(actor.IsLab ? null : actor.OrganizationCode, order, ClampPageLimit(limit), ct);
         var listRecommended = order.Status == OrderStatus.Cancelled;
         return new OrderFindResult(
             order,
@@ -209,7 +212,7 @@ public sealed class SchedulingOrderService
     {
         if (start > end)
             throw new InvalidOperationException("Calendar start date must be before or equal to end date.");
-        return _orders.ListActiveOrdersForCalendarAsync(actor.IsTechnician ? null : actor.ClinicCode, start, end, ct);
+        return _orders.ListActiveOrdersForCalendarAsync(actor.IsLab ? null : actor.OrganizationCode, start, end, ct);
     }
 
     private static int ClampPageLimit(int? limit) => Math.Clamp(limit ?? DefaultPageLimit, 1, MaxPageLimit);
@@ -219,7 +222,7 @@ public sealed class SchedulingOrderService
     private static bool CanSearchShortenedCode(string code) => !(code.Length >= 3 && char.IsDigit(code[0]) && char.IsDigit(code[1]) && code[2] == '-');
 
     private static bool CanActorSeeOrder(AuthenticatedActor actor, OrderRecord order) =>
-        actor.IsTechnician || string.Equals(order.ClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase);
+        actor.IsLab || string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase);
 
     private Task AppendOrderAuditAsync(AuthenticatedActor actor, string operation, OrderRecord order, string? ip, string? userAgent, object metadata, CancellationToken ct)
     {
@@ -230,10 +233,10 @@ public sealed class SchedulingOrderService
             "SchedulingOrder",
             order.OrderCode,
             order.CaseName,
-            actor.Role.ToString(),
-            actor.ClinicCode,
-            actor.CredentialId,
-            actor.CredentialLabel,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
             actor.SessionId,
             _clock.UtcNow,
             string.IsNullOrWhiteSpace(ip) ? null : ip,
@@ -293,18 +296,18 @@ public sealed class SchedulingOrderService
         teeth = item.Teeth
     };
 
-    private ClinicConfig ResolveTargetClinic(AuthenticatedActor actor, string? targetClinicCode)
+    private async Task<SchedulingClinic> ResolveTargetClinicAsync(AuthenticatedActor actor, string? targetClinicCode, CancellationToken ct)
     {
-        if (!actor.IsTechnician)
+        if (!actor.IsLab)
         {
-            if (!string.IsNullOrWhiteSpace(targetClinicCode) && !string.Equals(targetClinicCode, actor.ClinicCode, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(targetClinicCode) && !string.Equals(targetClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Clinic users cannot create orders for another clinic.");
-            return _configProvider.Current.GetClinic(actor.ClinicCode);
+            return await RequireActiveClinicAsync(actor.OrganizationCode, ct);
         }
 
         if (string.IsNullOrWhiteSpace(targetClinicCode))
-            throw new InvalidOperationException("Target clinic is required for technician order creation.");
-        return _configProvider.Current.GetClinic(targetClinicCode.Trim());
+            throw new InvalidOperationException("Target clinic is required for lab order creation.");
+        return await RequireActiveClinicAsync(targetClinicCode.Trim(), ct);
     }
 
     private async Task<OrderRecord> GetAuthorizedOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct)
@@ -315,7 +318,7 @@ public sealed class SchedulingOrderService
         return order;
     }
 
-    private OrderRecord BuildOrder(AuthenticatedActor actor, ClinicConfig targetClinic, OrderDraft draft, string ip, string userAgent)
+    private OrderRecord BuildOrder(AuthenticatedActor actor, SchedulingClinic targetClinic, OrderDraft draft, string ip, string userAgent)
     {
         var now = _clock.UtcNow;
         return new OrderRecord(
@@ -323,9 +326,9 @@ public sealed class SchedulingOrderService
             "",
             targetClinic.Code,
             targetClinic.DisplayName,
-            actor.CredentialId,
-            actor.CredentialLabel,
-            actor.CredentialPinHashFingerprint,
+            actor.MemberId,
+            actor.MemberLabel,
+            actor.MemberPinHashFingerprint,
             draft.CaseName.Trim(),
             draft.ImpressionDate,
             draft.ProductCategory,
@@ -357,5 +360,11 @@ public sealed class SchedulingOrderService
         }
 
         throw new InvalidOperationException("Could not allocate a unique order code.");
+    }
+
+    private async Task<SchedulingClinic> RequireActiveClinicAsync(string clinicCode, CancellationToken ct)
+    {
+        var clinic = await _identities.GetClinicAsync(clinicCode, includeInactive: false, ct);
+        return clinic ?? throw new InvalidOperationException("Clinic not found or inactive.");
     }
 }

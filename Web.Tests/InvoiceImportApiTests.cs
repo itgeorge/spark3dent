@@ -34,7 +34,7 @@ public class InvoiceImportApiTests
     public async Task PostImportAnalyze_WhenOpenAiKeyNotConfigured_Returns500AndLogsOpenAiError()
     {
         var capturingLogger = new CapturingLogger();
-        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger, autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger, autoLoginAsLab: true);
         var client = fixture.Client;
 
         var content = new MultipartFormDataContent();
@@ -51,7 +51,7 @@ public class InvoiceImportApiTests
     public async Task PostImportCommit_WhenOpenAiKeyNotConfigured_Returns500AndLogsOpenAiError()
     {
         var capturingLogger = new CapturingLogger();
-        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger, autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger, autoLoginAsLab: true);
         var client = fixture.Client;
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>() };
@@ -68,7 +68,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WhenOpenAiKeyConfigured_DoesNotReturn500ForMissingKey()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-test-dummy-key", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-test-dummy-key", autoLoginAsLab: true);
         var client = fixture.Client;
 
         var content = new MultipartFormDataContent();
@@ -81,7 +81,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportCommit_WhenOpenAiKeyConfigured_DoesNotReturn500ForMissingKey()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var client = fixture.Client;
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>() };
@@ -94,7 +94,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithInvalidMultipartForm_Returns422WithDevFriendlyMessage()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         // Empty MultipartFormDataContent produces invalid multipart body (no valid Content-Disposition).
         var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
@@ -110,7 +110,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithNonPdfFile_Returns400WithError()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("not a pdf"));
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
@@ -135,7 +135,7 @@ public class InvoiceImportApiTests
             return;
         }
 
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(pdfPath));
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
@@ -170,7 +170,7 @@ public class InvoiceImportApiTests
         using var fixture = new ApiTestFixture(
             openAiKey: "sk-dummy",
             invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit),
-            autoLoginAsTechnician: true);
+            autoLoginAsLab: true);
 
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(pdfPath));
@@ -187,7 +187,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportCommit_WithInvalidJson_Returns400()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/json");
         var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/commit", content);
 
@@ -198,7 +198,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportCommit_WithValidPayload_Returns200WithExpectedShape()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>(), dryRun = false };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
         var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/commit", content);
@@ -225,7 +225,7 @@ public class InvoiceImportApiTests
         using var fixture = new ApiTestFixture(
             openAiKey: "sk-dummy",
             invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit),
-            autoLoginAsTechnician: true);
+            autoLoginAsLab: true);
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>(), dryRun = false };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
@@ -242,7 +242,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithTooManyFiles_Returns400()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var pdfPath = MinimalPdfPath;
         if (!File.Exists(pdfPath))
         {
@@ -268,7 +268,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithFileTooLarge_Returns400()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         var oversized = new byte[1024 * 1024 + 1]; // 1MB + 1 byte
         new Random(42).NextBytes(oversized);

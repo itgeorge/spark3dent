@@ -12,16 +12,16 @@ public class SchedulingOrderServiceTest
         var audit = new CapturingAuditLog();
         var fixture = new Fixture(1, auditLog: audit);
 
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Audit create"), "127.0.0.1", "test-agent", "OTHER");
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Audit create"), "127.0.0.1", "test-agent", "OTHER");
 
         Assert.That(audit.Events, Has.Count.EqualTo(1));
         var evt = audit.Events[0];
         Assert.That(evt.Operation, Is.EqualTo("OrderCreated"));
         Assert.That(evt.EntityType, Is.EqualTo("SchedulingOrder"));
         Assert.That(evt.EntityId, Is.EqualTo(created.OrderCode));
-        Assert.That(evt.ActorRole, Is.EqualTo("Technician"));
-        Assert.That(evt.ActorClinicCode, Is.EqualTo(TestActors.Technician.ClinicCode));
-        Assert.That(evt.ActorCredentialId, Is.EqualTo(TestActors.Technician.CredentialId));
+        Assert.That(evt.ActorOrganizationType, Is.EqualTo("Lab"));
+        Assert.That(evt.ActorOrganizationCode, Is.EqualTo(TestActors.Lab.OrganizationCode));
+        Assert.That(evt.ActorMemberId, Is.EqualTo(TestActors.Lab.MemberId));
         Assert.That(evt.Ip, Is.EqualTo("127.0.0.1"));
         Assert.That(evt.UserAgent, Is.EqualTo("test-agent"));
         Assert.That(evt.MetadataJson, Does.Contain("OTHER"));
@@ -82,19 +82,19 @@ public class SchedulingOrderServiceTest
     public async Task UpdateOrderAsync_GivenClinicOtherOrder_ReturnsNotFound()
     {
         var fixture = new Fixture(1);
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Other"), "127.0.0.1", "test", "OTHER");
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Other"), "127.0.0.1", "test", "OTHER");
 
         Assert.ThrowsAsync<KeyNotFoundException>(async () =>
             await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Nope")));
     }
 
     [Test]
-    public async Task UpdateOrderAsync_GivenTechnicianAnyOrder_UpdatesFields()
+    public async Task UpdateOrderAsync_GivenLabAnyOrder_UpdatesFields()
     {
         var fixture = new Fixture(1);
         var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
 
-        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Technician, created.OrderCode, fixture.CreateOrderDraft("Tech edit"));
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Lab, created.OrderCode, fixture.CreateOrderDraft("Tech edit"));
 
         Assert.That(updated.CaseName, Is.EqualTo("Tech edit"));
     }
@@ -115,15 +115,15 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
-    public async Task CreateOrderAsync_GivenTechnicianTargetClinic_CreatesForTargetClinicWithTechnicianCredential()
+    public async Task CreateOrderAsync_GivenLabTargetClinic_CreatesForTargetClinicWithLabMember()
     {
         var fixture = new Fixture(1);
 
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("For other"), "127.0.0.1", "test", "OTHER");
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("For other"), "127.0.0.1", "test", "OTHER");
 
         Assert.That(created.ClinicCode, Is.EqualTo("OTHER"));
         Assert.That(created.ClinicDisplayName, Is.EqualTo("Other Clinic"));
-        Assert.That(created.CredentialId, Is.EqualTo(TestActors.Technician.CredentialId));
+        Assert.That(created.MemberId, Is.EqualTo(TestActors.Lab.MemberId));
     }
 
     [Test]
@@ -136,12 +136,12 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
-    public void CreateOrderAsync_GivenTechnicianWithoutTargetClinic_Rejects()
+    public void CreateOrderAsync_GivenLabWithoutTargetClinic_Rejects()
     {
         var fixture = new Fixture(1);
 
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Missing target"), "127.0.0.1", "test"));
+            await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Missing target"), "127.0.0.1", "test"));
     }
 
     [Test]
@@ -156,14 +156,14 @@ public class SchedulingOrderServiceTest
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 9)
         }, "127.0.0.1", "test");
-        await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("other") with
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("other") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
         }, "127.0.0.1", "test", "OTHER");
 
         var first = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 1);
         var second = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 1, first.NextCursor);
-        var tech = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Technician, 10);
+        var tech = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Lab, 10);
 
         Assert.That(first.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "A-2" }));
         Assert.That(first.HasMore, Is.True);
@@ -176,7 +176,7 @@ public class SchedulingOrderServiceTest
     {
         var fixture = new Fixture(["26-0605-Z1AA", "27-0605-Z1AA", "26-0606-Z1BB"]);
         var own = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("own"), "127.0.0.1", "test");
-        await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("other same short") with
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("other same short") with
         {
             RequestedDeliveryDate = new DateOnly(2027, 6, 8)
         }, "127.0.0.1", "test", "OTHER");
@@ -194,7 +194,7 @@ public class SchedulingOrderServiceTest
         Assert.ThrowsAsync<KeyNotFoundException>(async () =>
             await fixture.Service.FindOrderContextForActorAsync(TestActors.Demo, "27-0605-Z1AA", 2));
         Assert.ThrowsAsync<AmbiguousOrderCodeException>(async () =>
-            await fixture.Service.FindOrderContextForActorAsync(TestActors.Technician, own.OrderCode[3..], 2));
+            await fixture.Service.FindOrderContextForActorAsync(TestActors.Lab, own.OrderCode[3..], 2));
         Assert.That(cancelledResult.ListModeRecommended, Is.True);
     }
 
@@ -210,7 +210,7 @@ public class SchedulingOrderServiceTest
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
         }, "127.0.0.1", "test");
-        var other = await fixture.Service.CreateOrderAsync(TestActors.Technician, fixture.CreateOrderDraft("Other") with
+        var other = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Other") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
         }, "127.0.0.1", "test", "OTHER");
@@ -221,7 +221,7 @@ public class SchedulingOrderServiceTest
         await fixture.Service.CancelOrderAsync(TestActors.Demo, cancelled.OrderCode);
 
         var clinicOrders = await fixture.Service.ListCalendarOrdersAsync(TestActors.Demo, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
-        var techOrders = await fixture.Service.ListCalendarOrdersAsync(TestActors.Technician, new DateOnly(2026, 6, 10), new DateOnly(2026, 6, 10));
+        var techOrders = await fixture.Service.ListCalendarOrdersAsync(TestActors.Lab, new DateOnly(2026, 6, 10), new DateOnly(2026, 6, 10));
 
         Assert.That(clinicOrders.Select(o => o.OrderCode), Is.EquivalentTo(new[] { demoEarly.OrderCode, demoLate.OrderCode }));
         Assert.That(techOrders.Select(o => o.OrderCode), Is.EquivalentTo(new[] { demoLate.OrderCode, other.OrderCode }));
@@ -447,6 +447,7 @@ public class SchedulingOrderServiceTest
             var clock = new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
             Service = new SchedulingOrderService(
                 configProvider ?? TestSchedulingConfigProvider.Create(),
+                new InMemorySchedulingIdentityRepository(),
                 Repository,
                 dateAvailabilityService,
                 orderCodeGenerator,

@@ -46,27 +46,28 @@ public sealed class SqliteAuthSessionRepo : IAuthSessionRepository
         await ctx.SaveChangesAsync(ct);
     }
 
-    public async Task RevokeClinicSessionsAsync(string clinicCode, DateTimeOffset revokedAt, CancellationToken ct = default)
+    public async Task RevokeOrganizationSessionsAsync(OrganizationType organizationType, string organizationCode, DateTimeOffset revokedAt, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
         await ctx.SchedulingAuthSessions
-            .Where(s => s.ClinicCode == clinicCode && s.RevokedAt == null)
+            .Where(s => s.OrganizationType == organizationType && s.OrganizationCode == organizationCode && s.RevokedAt == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.RevokedAt, revokedAt), ct);
     }
 
-    public async Task RevokeCredentialSessionsAsync(string clinicCode, string credentialId, DateTimeOffset revokedAt, CancellationToken ct = default)
+    public async Task RevokeMemberSessionsAsync(OrganizationType organizationType, string organizationCode, string memberId, DateTimeOffset revokedAt, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
         await ctx.SchedulingAuthSessions
-            .Where(s => s.ClinicCode == clinicCode && s.CredentialId == credentialId && s.RevokedAt == null)
+            .Where(s => s.OrganizationType == organizationType && s.OrganizationCode == organizationCode && s.MemberId == memberId && s.RevokedAt == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.RevokedAt, revokedAt), ct);
     }
 
     private static SchedulingAuthSessionEntity ToEntity(AuthSession session) => new()
     {
         Id = session.Id,
-        ClinicCode = session.ClinicCode,
-        CredentialId = session.CredentialId,
+        OrganizationType = session.OrganizationType,
+        OrganizationCode = session.OrganizationCode,
+        MemberId = session.MemberId,
         TokenHash = session.TokenHash,
         CreatedAt = session.CreatedAt,
         LastSeenAt = session.LastSeenAt,
@@ -79,8 +80,9 @@ public sealed class SqliteAuthSessionRepo : IAuthSessionRepository
 
     private static AuthSession ToDomain(SchedulingAuthSessionEntity e) => new(
         e.Id,
-        e.ClinicCode,
-        e.CredentialId,
+        e.OrganizationType,
+        e.OrganizationCode,
+        e.MemberId,
         e.TokenHash,
         e.CreatedAt,
         e.LastSeenAt,

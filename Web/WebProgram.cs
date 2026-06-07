@@ -64,6 +64,7 @@ builder.Services.AddSingleton<INonWorkingDayProvider, WeekendOnlyNonWorkingDayPr
 builder.Services.AddSingleton<DateAvailabilityService>();
 builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
+builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
 builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
 builder.Services.AddScoped<SchedulingAuthService>();
@@ -124,6 +125,12 @@ app.MapGet("/", async (Config cfg) =>
 app.MapGet("/orders", async () =>
 {
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("orders.html", webAssembly);
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
+app.MapGet("/iam", async () =>
+{
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("iam.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
@@ -189,6 +196,9 @@ app.MapGet("/licenses", async () =>
 
 Web.Api.MapRoutes(app);
 Web.SchedulingApi.MapRoutes(app);
+Web.IamApi.MapRoutes(app);
+
+await SchedulingIdentitySeed.SeedAsync(app.Services, builder.Environment);
 
 Console.WriteLine($"Running on {url}");
 await app.StartAsync();

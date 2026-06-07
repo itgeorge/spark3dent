@@ -175,9 +175,9 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.OrderCode = order.OrderCode;
         entity.ClinicCode = order.ClinicCode;
         entity.ClinicDisplayName = order.ClinicDisplayName;
-        entity.CredentialId = order.CredentialId;
-        entity.CredentialLabel = order.CredentialLabel;
-        entity.CredentialPinHashFingerprint = order.CredentialPinHashFingerprint;
+        entity.MemberId = order.MemberId;
+        entity.MemberLabel = order.MemberLabel;
+        entity.MemberPinHashFingerprint = order.MemberPinHashFingerprint;
         entity.CaseName = order.CaseName;
         entity.ImpressionDate = order.ImpressionDate;
         entity.ProductCategory = order.ProductCategory.ToString();
@@ -201,9 +201,9 @@ public sealed class SqliteOrderRepo : IOrderRepository
             e.OrderCode,
             e.ClinicCode,
             e.ClinicDisplayName,
-            e.CredentialId,
-            e.CredentialLabel,
-            e.CredentialPinHashFingerprint,
+            e.MemberId,
+            e.MemberLabel,
+            e.MemberPinHashFingerprint,
             e.CaseName,
             e.ImpressionDate,
             Enum.Parse<ProductCategory>(e.ProductCategory),

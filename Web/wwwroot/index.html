@@ -1036,8 +1036,8 @@
           </div>
         </div>
         <div class="auth-card-body">
-          <label for="invoicerLoginClinic">Clinic code</label>
-          <input id="invoicerLoginClinic" value="DEMO" autocomplete="username" />
+          <label for="invoicerLoginClinic">Organization code</label>
+          <input id="invoicerLoginClinic" value="LAB" autocomplete="username" />
           <label for="invoicerLoginPin">Password</label>
           <input id="invoicerLoginPin" type="password" value="654321" autocomplete="current-password" />
           <button class="btn primary" id="invoicerLoginBtn" type="button" style="width:100%;margin-top:16px;">Enter</button>
@@ -1511,7 +1511,7 @@
     async function bootstrapAuth(){
       const { response, data } = await schedulingJson("/api/scheduling/auth/me");
       if(!response.ok) return showInvoicerLogin();
-      if(!data.isTechnician){
+      if(!data.isLab){
         window.location.replace("/orders");
         return;
       }
@@ -2806,13 +2806,13 @@
       try{
         const { response, data } = await schedulingJson("/api/scheduling/auth/login", {
           method: "POST",
-          body: JSON.stringify({ clinicCode: $("#invoicerLoginClinic").value, pin: $("#invoicerLoginPin").value })
+          body: JSON.stringify({ organizationCode: $("#invoicerLoginClinic").value, pin: $("#invoicerLoginPin").value })
         });
         if(!response.ok){
           showInvoicerLogin(data.error || "Login failed.");
           return;
         }
-        if(!data.isTechnician){
+        if(!data.isLab){
           window.location.replace("/orders");
           return;
         }

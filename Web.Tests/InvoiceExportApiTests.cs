@@ -21,7 +21,7 @@ public class InvoiceExportApiTests
     [SetUp]
     public void SetUp()
     {
-        _fixture = new ApiTestFixture(autoLoginAsTechnician: true);
+        _fixture = new ApiTestFixture(autoLoginAsLab: true);
         _client = _fixture.Client;
     }
 
@@ -105,9 +105,9 @@ public class InvoiceExportApiTests
     [Test]
     public async Task PostPreview_WhenNoInvoicesExist_ThenUsesStartInvoiceNumberFromConfig()
     {
-        using var fixtureWithStart1000 = new ApiTestFixture(startInvoiceNumber: "1000", autoLoginAsTechnician: true);
+        using var fixtureWithStart1000 = new ApiTestFixture(startInvoiceNumber: "1000", autoLoginAsLab: true);
         var client = fixtureWithStart1000.CreateClient();
-        await ApiTestFixture.LoginAsTechnicianAsync(client);
+        await ApiTestFixture.LoginAsLabAsync(client);
         await CreateClientInFixtureAsync(client);
         var body = new { clientNickname = "acme", amountCents = 15000, date = "2026-02-20", format = "html" };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");

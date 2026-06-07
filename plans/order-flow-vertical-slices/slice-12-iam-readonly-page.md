@@ -218,29 +218,27 @@ UI/page tests if available:
 
 ## Implementation Checklist
 
-- [ ] Read Slice 10/11 completion notes and confirm entity/API names.
-- [ ] Add lab-only IAM API group.
-- [ ] Add lab detail endpoint.
-- [ ] Add clinic organization list endpoint.
-- [ ] Add clinic organization detail + members endpoint.
+- [x] Read Slice 10/11 completion notes and confirm entity/API names.
+- [x] Add lab-only IAM API group.
+- [x] Add lab detail endpoint.
+- [x] Add clinic organization list endpoint.
+- [x] Add clinic organization detail + members endpoint.
 - [ ] Optionally add lab-only client list/search endpoint for future prefill.
-- [ ] Add `/iam` page route and page file.
-- [ ] Extend `AppChrome` products with IAM visible to lab only.
-- [ ] Implement read-only IAM UI.
-- [ ] Ensure no PIN hashes/raw PINs are returned to browser.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify lab vs clinic IAM access.
-- [ ] Update master plan with implemented shape and next-slice recommendations.
+- [x] Add `/iam` page route and page file.
+- [x] Extend `AppChrome` products with IAM visible to lab only.
+- [x] Implement read-only IAM UI.
+- [x] Ensure no PIN hashes/raw PINs are returned to browser.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify lab vs clinic IAM access.
+- [x] Update master plan with implemented shape and next-slice recommendations.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- IAM endpoint shape:
-- AppChrome/product picker behavior:
-- Discoveries for future IAM mutation slices:
+- Status: Complete
+- Files changed: `Web/IamApi.cs`, `Web/WebProgram.cs`, `Web/wwwroot/iam.html`, `Web/wwwroot/js/app-chrome.js`, `Web/Web.csproj`, identity repos/entities, related tests, and planning docs
+- Tests run: `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test --no-restore -p:UseSharedCompilation=false`
+- Manual checks: Headless Chromium browser verification passed on `2026-06-07`. Verified unauthenticated `/iam` shows the IAM login gate, lab `/iam` loads lab profile and clinic organization details, clinic product navigation hides IAM, clinic direct `/iam` redirects to `/orders`, and the rendered IAM page text does not contain raw PINs (`123456`/`654321`) or stored hash text (`pbkdf2-sha256`).
+- IAM endpoint shape: `GET /api/iam/lab`, `GET /api/iam/organizations?includeInactive=`, and `GET /api/iam/organizations/{code}`; all are lab-only and return member `pinFingerprint` values, never raw PINs or stored hashes
+- AppChrome/product picker behavior: Scheduler is visible to any authenticated actor; Invoicer and IAM are lab-only; `/iam` client-side gate redirects clinic actors to `/orders`
+- Discoveries for future IAM mutation slices: client search/prefill was deferred; current page already surfaces linked client nickname and display color, so future mutation work can build directly on the same clinic detail DTOs

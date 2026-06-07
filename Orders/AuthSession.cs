@@ -2,8 +2,9 @@ namespace Orders;
 
 public sealed record AuthSession(
     string Id,
-    string ClinicCode,
-    string CredentialId,
+    OrganizationType OrganizationType,
+    string OrganizationCode,
+    string MemberId,
     string TokenHash,
     DateTimeOffset CreatedAt,
     DateTimeOffset LastSeenAt,

@@ -78,7 +78,29 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task SchedulingFlow_TechnicianCanListAndCreateWithTargetClinic()
+    public async Task SchedulingAuthResponses_UseOrganizationAndLabFields()
+    {
+        using var fixture = new ApiTestFixture();
+
+        using var clinic = fixture.Client;
+        var clinicLogin = await clinic.PostAsync("/api/scheduling/auth/login", Json("{\"organizationCode\":\"DEMO\",\"pin\":\"123456\"}"));
+        Assert.That(clinicLogin.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var clinicJson = JsonDocument.Parse(await clinicLogin.Content.ReadAsStringAsync());
+        Assert.That(clinicJson.RootElement.GetProperty("organizationType").GetString(), Is.EqualTo("clinic"));
+        Assert.That(clinicJson.RootElement.GetProperty("isClinic").GetBoolean(), Is.True);
+
+        using var lab = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(lab);
+        var me = await lab.GetAsync("/api/scheduling/auth/me");
+        Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var meJson = JsonDocument.Parse(await me.Content.ReadAsStringAsync());
+        Assert.That(meJson.RootElement.GetProperty("organizationType").GetString(), Is.EqualTo("lab"));
+        Assert.That(meJson.RootElement.GetProperty("isLab").GetBoolean(), Is.True);
+        Assert.That(meJson.RootElement.GetProperty("organizationCode").GetString(), Is.EqualTo("LAB"));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_LabCanListAndCreateWithTargetClinic()
     {
         using var fixture = new ApiTestFixture();
         using var clinicClient = fixture.Client;
@@ -97,7 +119,7 @@ public class SchedulingApiTests
         var code = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString();
 
         using var techClient = fixture.Client;
-        await ApiTestFixture.LoginAsTechnicianAsync(techClient);
+        await ApiTestFixture.LoginAsLabAsync(techClient);
         var list = await techClient.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain(code));
@@ -229,7 +251,7 @@ public class SchedulingApiTests
         Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         using var techClient = fixture.CreateClient();
-        await ApiTestFixture.LoginAsTechnicianAsync(techClient);
+        await ApiTestFixture.LoginAsLabAsync(techClient);
         var otherEnd = await SeedOrderAsync(fixture.DbPath, "OTH-610", "Other End", "OTHER", "2026-06-10");
 
         var clinicCalendar = await clinicClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-05&end=2026-06-10");
@@ -401,11 +423,11 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task SchedulingFlow_RetiredTechnicianOrdersRouteReturns404()
+    public async Task SchedulingFlow_RetiredLegacyTechnicianOrdersRouteReturns404()
     {
         using var fixture = new ApiTestFixture();
         using var client = fixture.Client;
-        await ApiTestFixture.LoginAsTechnicianAsync(client);
+        await ApiTestFixture.LoginAsLabAsync(client);
 
         var response = await client.GetAsync("/api/scheduling/technician/orders");
 
@@ -592,7 +614,7 @@ public class SchedulingApiTests
         Assert.That(cancelledDoc.RootElement.GetProperty("listModeRecommended").GetBoolean(), Is.True);
 
         using var techClient = fixture.CreateClient();
-        await ApiTestFixture.LoginAsTechnicianAsync(techClient);
+        await ApiTestFixture.LoginAsLabAsync(techClient);
         var techFind = await techClient.GetAsync("/api/scheduling/orders/find?code=27-0605-Z1AA");
         Assert.That(techFind.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var ambiguousShort = await techClient.GetAsync("/api/scheduling/orders/find?code=0605-Z1AA");

@@ -8,9 +8,9 @@ public class SchedulingOrderEntity
     public string OrderCode { get; set; } = string.Empty;
     public string ClinicCode { get; set; } = string.Empty;
     public string ClinicDisplayName { get; set; } = string.Empty;
-    public string CredentialId { get; set; } = string.Empty;
-    public string CredentialLabel { get; set; } = string.Empty;
-    public string CredentialPinHashFingerprint { get; set; } = string.Empty;
+    public string MemberId { get; set; } = string.Empty;
+    public string MemberLabel { get; set; } = string.Empty;
+    public string MemberPinHashFingerprint { get; set; } = string.Empty;
     public string CaseName { get; set; } = string.Empty;
     public DateOnly ImpressionDate { get; set; }
     public string ProductCategory { get; set; } = string.Empty;

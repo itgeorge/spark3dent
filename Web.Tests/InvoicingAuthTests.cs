@@ -8,7 +8,7 @@ namespace Web.Tests;
 public class InvoicingAuthTests
 {
     [Test]
-    public async Task InvoicingRoutes_RequireTechnicianAuth()
+    public async Task InvoicingRoutes_RequireLabAuth()
     {
         using var fixture = new ApiTestFixture();
 
@@ -21,16 +21,16 @@ public class InvoicingAuthTests
         var clinicResponse = await clinic.GetAsync("/api/invoicing/clients?limit=1");
         Assert.That(clinicResponse.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
 
-        using var technician = fixture.Client;
-        await ApiTestFixture.LoginAsTechnicianAsync(technician);
-        var technicianResponse = await technician.GetAsync("/api/invoicing/clients?limit=1");
-        Assert.That(technicianResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using var lab = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(lab);
+        var labResponse = await lab.GetAsync("/api/invoicing/clients?limit=1");
+        Assert.That(labResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     [Test]
     public async Task LegacyClientAndInvoiceRoutes_AreRetired()
     {
-        using var fixture = new ApiTestFixture(autoLoginAsTechnician: true);
+        using var fixture = new ApiTestFixture(autoLoginAsLab: true);
         using var client = fixture.Client;
 
         Assert.That((await client.GetAsync("/api/clients?limit=1")).StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -41,7 +41,7 @@ public class InvoicingAuthTests
     {
         var response = await client.PostAsync(
             "/api/scheduling/auth/login",
-            new StringContent($"{{\"clinicCode\":\"DEMO\",\"pin\":\"{pin}\"}}", Encoding.UTF8, "application/json"));
+            new StringContent($"{{\"organizationCode\":\"DEMO\",\"pin\":\"{pin}\"}}", Encoding.UTF8, "application/json"));
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var cookie = response.Headers.GetValues("Set-Cookie").First(v => v.StartsWith("s3d_order_session="));
         client.DefaultRequestHeaders.Add("Cookie", cookie.Split(';')[0]);

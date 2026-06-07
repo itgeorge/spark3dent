@@ -9,24 +9,33 @@ public sealed record LoginResult(string CookieToken, AuthenticatedActor Actor, D
 public sealed class SchedulingAuthService
 {
     private readonly ISchedulingConfigProvider _configProvider;
+    private readonly ISchedulingIdentityRepository _identities;
     private readonly IAuthSessionRepository _sessions;
     private readonly PinHasher _pinHasher;
     private readonly IClock _clock;
 
-    public SchedulingAuthService(ISchedulingConfigProvider configProvider, IAuthSessionRepository sessions, PinHasher pinHasher, IClock clock)
+    public SchedulingAuthService(
+        ISchedulingConfigProvider configProvider,
+        ISchedulingIdentityRepository identities,
+        IAuthSessionRepository sessions,
+        PinHasher pinHasher,
+        IClock clock)
     {
         _configProvider = configProvider;
+        _identities = identities;
         _sessions = sessions;
         _pinHasher = pinHasher;
         _clock = clock;
     }
 
-    public async Task<LoginResult> LoginAsync(string clinicCode, string pin, string ip, string userAgent, CancellationToken ct = default)
+    public async Task<LoginResult> LoginAsync(string organizationCode, string pin, string ip, string userAgent, CancellationToken ct = default)
     {
-        var clinic = TryGetActiveClinic(clinicCode.Trim())
+        var normalizedCode = organizationCode.Trim();
+        var organization = await _identities.FindOrganizationByCodeAsync(normalizedCode, includeInactive: false, ct)
             ?? throw new InvalidOperationException("Invalid credentials.");
-        var credential = FindMatchingCredential(clinic, pin);
-        if (credential == null)
+        var member = (await _identities.ListMembersAsync(organization.OrganizationType, organization.Code, includeInactive: false, ct))
+            .FirstOrDefault(m => _pinHasher.Verify(pin, m.PinHash));
+        if (member == null)
             throw new InvalidOperationException("Invalid credentials.");
 
         var token = GenerateToken();
@@ -37,8 +46,9 @@ public sealed class SchedulingAuthService
 
         var session = new AuthSession(
             Guid.NewGuid().ToString("N"),
-            clinic.Code,
-            credential.Id,
+            organization.OrganizationType,
+            organization.Code,
+            member.Id,
             HashToken(token),
             now,
             now,
@@ -49,7 +59,7 @@ public sealed class SchedulingAuthService
             userAgent);
 
         await _sessions.AddSessionAsync(session, ct);
-        return new LoginResult(token, ToActor(clinic, credential, session.Id), expires);
+        return new LoginResult(token, ToActor(organization, member, session.Id), expires);
     }
 
     public async Task<AuthenticatedActor?> AuthenticateAsync(string? token, CancellationToken ct = default)
@@ -59,29 +69,26 @@ public sealed class SchedulingAuthService
         var session = await _sessions.FindSessionByTokenHashAsync(HashToken(token), ct);
         if (!IsUsableSession(session)) return null;
 
-        var clinic = TryGetActiveClinic(session!.ClinicCode);
-        if (clinic == null) return null;
+        var organization = await _identities.GetOrganizationAsync(session!.OrganizationType, session.OrganizationCode, includeInactive: false, ct);
+        if (organization == null) return null;
 
-        var credential = clinic.Credentials.FirstOrDefault(c => c.Id == session.CredentialId && c.IsActive);
-        if (credential == null) return null;
+        var member = await _identities.GetMemberAsync(session.OrganizationType, session.OrganizationCode, session.MemberId, includeInactive: false, ct);
+        if (member == null) return null;
 
         await RefreshSlidingExpiryAsync(session, ct);
-        return ToActor(clinic, credential, session.Id);
+        return ToActor(organization, member, session.Id);
     }
 
     public Task LogoutAsync(string sessionId, CancellationToken ct = default) =>
         _sessions.RevokeSessionAsync(sessionId, _clock.UtcNow, ct);
 
-    public Task RevokeClinicSessionsAsync(string clinicCode, CancellationToken ct = default) =>
-        _sessions.RevokeClinicSessionsAsync(clinicCode, _clock.UtcNow, ct);
+    public Task RevokeOrganizationSessionsAsync(OrganizationType organizationType, string organizationCode, CancellationToken ct = default) =>
+        _sessions.RevokeOrganizationSessionsAsync(organizationType, organizationCode, _clock.UtcNow, ct);
 
-    public Task RevokeCredentialSessionsAsync(string clinicCode, string credentialId, CancellationToken ct = default) =>
-        _sessions.RevokeCredentialSessionsAsync(clinicCode, credentialId, _clock.UtcNow, ct);
+    public Task RevokeMemberSessionsAsync(OrganizationType organizationType, string organizationCode, string memberId, CancellationToken ct = default) =>
+        _sessions.RevokeMemberSessionsAsync(organizationType, organizationCode, memberId, _clock.UtcNow, ct);
 
     public static string HashToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
-
-    private ClinicCredentialConfig? FindMatchingCredential(ClinicConfig clinic, string pin) =>
-        clinic.Credentials.FirstOrDefault(c => c.IsActive && _pinHasher.Verify(pin, c.PinHash));
 
     private bool IsUsableSession(AuthSession? session)
     {
@@ -90,12 +97,6 @@ public sealed class SchedulingAuthService
         if (session.ExpiresAt <= now) return false;
         if (session.AbsoluteExpiresAt.HasValue && session.AbsoluteExpiresAt.Value <= now) return false;
         return true;
-    }
-
-    private ClinicConfig? TryGetActiveClinic(string clinicCode)
-    {
-        try { return _configProvider.Current.GetClinic(clinicCode); }
-        catch (InvalidOperationException) { return null; }
     }
 
     private async Task RefreshSlidingExpiryAsync(AuthSession session, CancellationToken ct)
@@ -114,8 +115,8 @@ public sealed class SchedulingAuthService
     private DateTimeOffset? CalculateAbsoluteExpiry(DateTimeOffset now) =>
         _configProvider.Current.Options.SessionAbsoluteDays is { } days ? now.AddDays(days) : null;
 
-    private static AuthenticatedActor ToActor(ClinicConfig clinic, ClinicCredentialConfig credential, string sessionId) =>
-        new(clinic.Code, clinic.DisplayName, credential.Id, credential.Label, PinHasher.Fingerprint(credential.PinHash), sessionId, credential.Role);
+    private static AuthenticatedActor ToActor(SchedulingOrganization organization, SchedulingMember member, string sessionId) =>
+        new(organization.OrganizationType, organization.Code, organization.DisplayName, member.Id, member.Label, member.PinFingerprint, sessionId);
 
     private static string GenerateToken() => Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 

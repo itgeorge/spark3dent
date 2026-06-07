@@ -175,7 +175,7 @@ class CliProgram
         Console.WriteLine("                          - Generate a hashed scheduling PIN for JSON config");
         Console.WriteLine("  audit list [filters]    - List audit events (newest first)");
         Console.WriteLine("                          - Filters: --service, --operation, --entity-type, --entity-id,");
-        Console.WriteLine("                            --actor-role, --actor-clinic, --since, --until, --limit, --json, --db");
+        Console.WriteLine("                            --actor-organization-type, --actor-organization, --actor-member, --since, --until, --limit, --json, --db");
     }
 
     static async Task RunAuditCommandAsync(string[] args, string defaultDbPath)
@@ -233,9 +233,9 @@ class CliProgram
         query = ApplyStringFilter(query, GetOption(opts, "operation"), e => e.Operation);
         query = ApplyStringFilter(query, GetOption(opts, "entity-type", "entitytype"), e => e.EntityType);
         query = ApplyStringFilter(query, GetOption(opts, "entity-id", "entityid"), e => e.EntityId);
-        query = ApplyStringFilter(query, GetOption(opts, "actor-role", "actorrole"), e => e.ActorRole);
-        query = ApplyStringFilter(query, GetOption(opts, "actor-clinic", "actor-clinic-code", "actorclinic", "actorcliniccode"), e => e.ActorClinicCode);
-        query = ApplyStringFilter(query, GetOption(opts, "actor-credential", "actor-credential-id", "actorcredential", "actorcredentialid"), e => e.ActorCredentialId);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-organization-type", "actororgtype", "actor-role", "actorrole"), e => e.ActorOrganizationType);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-organization", "actor-org", "actor-clinic", "actor-clinic-code", "actorclinic", "actorcliniccode"), e => e.ActorOrganizationCode);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-member", "actor-member-id", "actor-credential", "actor-credential-id", "actorcredential", "actorcredentialid"), e => e.ActorMemberId);
 
         if (since.Value.HasValue)
             query = query.Where(e => e.OccurredAtUnixTimeMilliseconds >= since.Value.Value.ToUnixTimeMilliseconds());
@@ -253,10 +253,10 @@ class CliProgram
                 e.EntityType,
                 e.EntityId,
                 e.EntityDisplay,
-                e.ActorRole,
-                e.ActorClinicCode,
-                e.ActorCredentialId,
-                e.ActorCredentialLabel,
+                e.ActorOrganizationType,
+                e.ActorOrganizationCode,
+                e.ActorMemberId,
+                e.ActorMemberLabel,
                 e.ActorSessionId,
                 e.OccurredAt,
                 e.Ip,
@@ -282,7 +282,7 @@ class CliProgram
         {
             var occurred = row.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
             var entity = Truncate($"{row.EntityType}:{row.EntityId}", 26);
-            var actorParts = new[] { row.ActorRole, row.ActorClinicCode, row.ActorCredentialLabel ?? row.ActorCredentialId }
+            var actorParts = new[] { row.ActorOrganizationType, row.ActorOrganizationCode, row.ActorMemberLabel ?? row.ActorMemberId }
                 .Where(p => !string.IsNullOrWhiteSpace(p));
             var actor = Truncate(string.Join("/", actorParts), 26);
             Console.WriteLine($"{row.Id,-6} {occurred,-20} {Truncate(row.ServiceName, 10),-11} {Truncate(row.Operation, 22),-23} {entity,-28} {actor,-28} {Truncate(row.MetadataJson ?? "", 80)}");
@@ -297,9 +297,9 @@ class CliProgram
         Console.WriteLine("  --operation <name>           e.g. OrderCreated, InvoiceIssued");
         Console.WriteLine("  --entity-type <type>         e.g. SchedulingOrder, Invoice, Client");
         Console.WriteLine("  --entity-id <id>             Entity id/order code/invoice number/client nickname");
-        Console.WriteLine("  --actor-role <role>          Clinic | Technician");
-        Console.WriteLine("  --actor-clinic <code>        Acting actor clinic code");
-        Console.WriteLine("  --actor-credential <id>      Acting credential id");
+        Console.WriteLine("  --actor-organization-type <type> Lab | Clinic");
+        Console.WriteLine("  --actor-organization <code>  Acting actor organization code");
+        Console.WriteLine("  --actor-member <id>          Acting member id");
         Console.WriteLine("  --since <date|timestamp>     yyyy-MM-dd or ISO timestamp");
         Console.WriteLine("  --until <date|timestamp>     yyyy-MM-dd or ISO timestamp");
         Console.WriteLine("  --limit <n>                  1..500, default 100");
@@ -368,10 +368,10 @@ class CliProgram
         string EntityType,
         string EntityId,
         string? EntityDisplay,
-        string ActorRole,
-        string? ActorClinicCode,
-        string? ActorCredentialId,
-        string? ActorCredentialLabel,
+        string ActorOrganizationType,
+        string? ActorOrganizationCode,
+        string? ActorMemberId,
+        string? ActorMemberLabel,
         string? ActorSessionId,
         DateTimeOffset OccurredAt,
         string? Ip,

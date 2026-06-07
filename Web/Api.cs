@@ -32,7 +32,7 @@ public static class Api
         var logger = app.Services.GetRequiredService<Utilities.ILogger>();
 
         var invoicing = app.MapGroup("/api/invoicing")
-            .AddEndpointFilter(SchedulingEndpointAuth.RequireTechnicianActorAsync);
+            .AddEndpointFilter(SchedulingEndpointAuth.RequireLabActorAsync);
 
         invoicing.MapGet("/audit", async (Func<AppDbContext> contextFactory, string? entityType, string? entityId, int? limit) =>
         {
@@ -55,10 +55,10 @@ public static class Api
                     e.EntityType,
                     e.EntityId,
                     e.EntityDisplay,
-                    e.ActorRole,
-                    e.ActorClinicCode,
-                    e.ActorCredentialId,
-                    e.ActorCredentialLabel,
+                    e.ActorOrganizationType,
+                    e.ActorOrganizationCode,
+                    e.ActorMemberId,
+                    e.ActorMemberLabel,
                     e.ActorSessionId,
                     e.OccurredAt,
                     e.Ip,
@@ -597,10 +597,10 @@ public static class Api
             entityType,
             entityId,
             entityDisplay,
-            actor?.Role.ToString() ?? "Unknown",
-            actor?.ClinicCode,
-            actor?.CredentialId,
-            actor?.CredentialLabel,
+            actor?.OrganizationType.ToString() ?? "Unknown",
+            actor?.OrganizationCode,
+            actor?.MemberId,
+            actor?.MemberLabel,
             actor?.SessionId,
             clock.UtcNow,
             RemoteIp(ctx),

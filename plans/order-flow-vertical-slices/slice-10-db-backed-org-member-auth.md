@@ -235,30 +235,28 @@ Audit if changed:
 
 ## Implementation Checklist
 
-- [ ] Add lab, clinic, and member DB entities.
-- [ ] Add auth-session org/member fields and migration.
-- [ ] Add repositories for lab/clinic/member auth lookup.
-- [ ] Add idempotent dev seed for singleton lab, lab member, demo clinic, demo clinic member.
-- [ ] Update auth service to use DB-backed org/member auth.
-- [ ] Update actor model with organization type/code/member terminology.
-- [ ] Update permission checks to use `IsLab`/`IsClinic` internally where practical.
-- [ ] Keep scheduler work rules/config loading intact.
-- [ ] Update scheduling and invoicing route auth to work with lab actors.
-- [ ] Update audit actor metadata or document compatibility fallback.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify lab and clinic login flows.
-- [ ] Update master plan and next slice plans with actual implemented shape.
+- [x] Add lab, clinic, and member DB entities.
+- [x] Add auth-session org/member fields and migration.
+- [x] Add repositories for lab/clinic/member auth lookup.
+- [x] Add idempotent dev seed for singleton lab, lab member, demo clinic, demo clinic member.
+- [x] Update auth service to use DB-backed org/member auth.
+- [x] Update actor model with organization type/code/member terminology.
+- [x] Update permission checks to use `IsLab`/`IsClinic` internally where practical.
+- [x] Keep scheduler work rules/config loading intact.
+- [x] Update scheduling and invoicing route auth to work with lab actors.
+- [x] Update audit actor metadata or document compatibility fallback.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify lab and clinic login flows.
+- [x] Update master plan and next slice plans with actual implemented shape.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Lab/clinic/member DB model chosen:
-- Seed/migration behavior:
-- Audit compatibility notes:
-- Discoveries affecting Slice 11/12:
+- Status: Complete
+- Files changed: `Orders/*` auth/session/actor/order-service files; `Database/*` identity entities/repos/context/migration; `Web/*` scheduling/invoicing auth, seed, and routing; `Web.Tests/*`; `Orders.Tests/*`; `Database.Tests/*`; `Cli/CliProgram.cs`; `plans/order-flow-vertical-slices/master-plan.md`
+- Tests run: `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false`; `dotnet test --no-restore -p:UseSharedCompilation=false`
+- Manual checks: Headless Chromium browser verification passed on `2026-06-07` against a temp DB. Verified unauthenticated `/iam` shows login gate; lab login on `/orders` succeeds with LAB/654321; lab create flow exposes target clinic selector; lab browser session can create an order for DEMO and retrieve it; clinic login on `/orders` succeeds with DEMO/123456 and remains clinic-scoped.
+- Lab/clinic/member DB model chosen: separate `SchedulingLabs` and `SchedulingClinics` tables plus shared `SchedulingMembers` table keyed by `(OrganizationType, OrganizationCode, Id)`
+- Seed/migration behavior: migration `20260607172254_AddSchedulingIdentityTablesAndLabAuth` adds lab/clinic/member tables and `SchedulingAuthSessions.OrganizationType`; dev/test-only startup seed creates lab `LAB`, lab member `lab-1`/`654321`, clinic `DEMO`, clinic member `assistant-1`/`123456`, and active clinic `OTHER` for test/dev coverage; seed is idempotent and does not overwrite existing members
+- Audit compatibility notes: audit/session/order code now uses organization/member terminology while EF column mappings intentionally keep legacy column names (`ActorRole`, `ActorClinicCode`, `Credential*`) underneath to avoid a larger data migration in this slice
+- Discoveries affecting Slice 11/12: final auth DTO shape uses `organizationType`, `organizationCode`, `organizationName`, `memberId`, `memberLabel`, `isLab`, `isClinic`; login accepts `organizationCode` and still tolerates old `clinicCode` input for transition

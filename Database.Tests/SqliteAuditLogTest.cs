@@ -46,10 +46,10 @@ public class SqliteAuditLogTest
             "SchedulingOrder",
             "ABC-123",
             "Case A",
-            "Technician",
-            "DEMO",
-            "tech-1",
-            "Technician",
+            "Lab",
+            "LAB",
+            "lab-1",
+            "Lab Member 1",
             "session-1",
             occurredAt,
             "127.0.0.1",
@@ -60,7 +60,7 @@ public class SqliteAuditLogTest
         var saved = await ctx.AuditEvents.SingleAsync(e => e.EntityType == "SchedulingOrder" && e.EntityId == "ABC-123");
         Assert.That(saved.Id, Is.GreaterThan(0));
         Assert.That(saved.Operation, Is.EqualTo("OrderCreated"));
-        Assert.That(saved.ActorCredentialId, Is.EqualTo("tech-1"));
+        Assert.That(saved.ActorMemberId, Is.EqualTo("lab-1"));
         Assert.That(saved.OccurredAtUnixTimeMilliseconds, Is.EqualTo(occurredAt.ToUnixTimeMilliseconds()));
         Assert.That(saved.MetadataJson, Does.Contain("OTHER"));
     }

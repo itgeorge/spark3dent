@@ -16,14 +16,14 @@ public static class SchedulingEndpointAuth
         return actor;
     }
 
-    public static async ValueTask<object?> RequireTechnicianActorAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    public static async ValueTask<object?> RequireLabActorAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var auth = context.HttpContext.RequestServices.GetRequiredService<SchedulingAuthService>();
         var actor = await AuthenticateAsync(context.HttpContext, auth);
         if (actor == null)
             return Results.Json(new { error = "Not authenticated." }, statusCode: StatusCodes.Status401Unauthorized);
-        if (!actor.IsTechnician)
-            return Results.Json(new { error = "Technician access required." }, statusCode: StatusCodes.Status403Forbidden);
+        if (!actor.IsLab)
+            return Results.Json(new { error = "Lab access required." }, statusCode: StatusCodes.Status403Forbidden);
         return await next(context);
     }
 
