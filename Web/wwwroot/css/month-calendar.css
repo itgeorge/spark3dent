@@ -8,7 +8,7 @@
 .month-calendar-cell{position:relative;min-height:96px;min-width:0;display:flex;flex-direction:column;background:white;color:var(--text,#0f172a)}
 .month-calendar-cell.outside-month{background:#f8fafc;color:#94a3b8}
 .month-calendar-cell.weekend:not(.outside-month){background:#fffafa}
-.month-calendar-cell.today .month-calendar-day-number{box-shadow:0 0 0 2px rgba(124,58,237,.22);border-radius:999px}
+.month-calendar-cell.today:not(.outside-month){outline:3px solid rgba(251,191,36,.45);outline-offset:-3px;background:#fffbeb;z-index:1}
 .month-calendar-day-head{display:flex;align-items:flex-start;justify-content:space-between;gap:4px;padding:8px 8px 2px;min-width:0}
 .month-calendar-day-number{font-size:18px;font-weight:950;line-height:1;padding:1px 3px;margin:-1px -3px}
 .month-calendar-day-weekday{font-size:10px;font-weight:850;color:var(--muted,#64748b);text-align:right;line-height:1.1}
