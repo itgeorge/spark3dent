@@ -53,7 +53,7 @@ Existing relevant files/routes:
 13. Orders calendar view is a display mode of the scheduler list. It defaults to calendar for technician/lab actors and list for clinic actors, persists the selected mode in `localStorage`, excludes cancelled orders, and uses a dedicated calendar API endpoint.
 14. Orders may contain multiple order work items on the same impression. Each work item has its own construction type and tooth/range; material and shade remain order-level for now. Slice 7 added JSON serialization and temporary single-selection compatibility fields.
 15. Slice 8 made `WorkItems` the sole source of truth, removed order-level `WorkType`/`ConstructionType`/`ToothStart`/`ToothEnd`, removed all abutment-related live code, wiped scheduling order rows via migration while preserving invoice/client data, and deleted the obsolete stepper prototype.
-16. Slice 9 should add cursor paging to the orders list view and a server-backed Find-by-code flow that navigates list/calendar context before opening the order review.
+16. Slice 9 added cursor paging to the orders list view and a server-backed Find-by-code flow that navigates list/calendar context before opening the order review.
 
 ## Slice Index and Status
 
@@ -138,7 +138,7 @@ Append dated notes here after each slice.
 - 2026-06-05 Slice 6: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (54 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (76 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (93 tests); `dotnet build Web/Web.csproj --no-restore` passed; `node --check Web/wwwroot/js/month-calendar.js` and `node --check` on extracted `orders.html` inline script passed; full `dotnet test --no-restore` passed (Configuration 10, Storage 41, Orders 54, Accounting 61, Database 76, Invoices 251, Web 93); headless Chromium/CDP smoke passed for clinic default list, cancelled-present list, active-only calendar, `localStorage` persistence, mobile 7-column month grid/count aggregation/day popup, popup row review, delivery picker shared component render, and technician default calendar.
 - 2026-06-05 Slice 7: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore` passed (60 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore` passed (78 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore` passed (96 tests); `dotnet build Web/Web.csproj --no-restore` passed; `node --check` on extracted `orders.html` inline script passed; headless Chromium/CDP smoke passed on a temp DB at `http://127.0.0.1:61247` for clinic login, multi-item create, locked-tooth prevention, overview/confirmation/list/review displays, edit latest work item, calendar day popup, and popup-to-review.
 - 2026-06-06 Slice 8: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (58 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (78 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (97 tests); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `orders.html` inline script passed; headless Chromium/PuppeteerSharp smoke passed on a temp DB at `http://127.0.0.1:61259` for clinic login, multi-item bridge+crown create, create/date payloads verified `workItems` without legacy fields, list/review display, edit second work item to tooth 24 with update payload verified, calendar display, and calendar-to-review.
-- 2026-06-06 Slice 9: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (60 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (81 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (99 tests); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `orders.html` inline script passed.
+- 2026-06-06 Slice 9: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (60 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (81 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (99 tests, including browser-backed smoke coverage); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `orders.html` inline script passed.
 
 ## Global Verification Commands
 
@@ -172,7 +172,7 @@ Scheduling:
 - `GET /api/scheduling/auth/me`
 - `POST /api/scheduling/dates`
 - `GET /api/scheduling/clinics` (technician-only active clinic list for target selection)
-- `GET /api/scheduling/orders?limit=&cursor=` (clinic actors see own clinic; technician actors see all; Slice 9 target includes cursor-paged response)
+- `GET /api/scheduling/orders?limit=&cursor=` (clinic actors see own clinic; technician actors see all; returns cursor-paged response)
 - `POST /api/scheduling/orders`
 - `GET /api/scheduling/orders/{code}`
 - `PUT /api/scheduling/orders/{code}`

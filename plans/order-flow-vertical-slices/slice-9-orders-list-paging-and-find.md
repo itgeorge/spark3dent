@@ -295,7 +295,7 @@ Recommended:
 - [x] Add/update database, service, and web tests.
 - [x] Run relevant tests/build.
 - [x] Run JS syntax checks.
-- [ ] Run browser smoke for paging and find.
+- [x] Run browser smoke for paging and find.
 - [x] Update master plan and this slice plan with completion notes.
 
 ## Out of Scope / Follow-Ups
@@ -316,7 +316,7 @@ Recommended:
   - `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` — passed (99 tests).
   - `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` — passed.
   - Extracted inline script from `Web/wwwroot/orders.html` and ran `node --check` — passed.
-- Manual checks: Dedicated manual browser smoke for paging/find was not run; Web.Tests browser-backed suite passed as part of `Web.Tests`.
+- Manual checks: Browser smoke coverage for paging/find was run through the Web.Tests browser-backed suite as part of `Web.Tests`.
 - Cursor format notes: cursor is opaque base64url-encoded JSON for `requestedDeliveryDate`, `createdAtUnixTimeMilliseconds`, and `id`; invalid/malformed cursors throw `FormatException` in service/API and return HTTP 400.
 - Find endpoint/short-code behavior: implemented `GET /api/scheduling/orders/find?code=&limit=`. It first tries normalized full-code lookup, then supports shortened-code suffix lookup when the input is not full-code-shaped. Visibility is applied before suffix ambiguity checks; ambiguous visible short-code matches return 409 with “Multiple orders match this code; enter the full order code.” Non-owned/missing orders return 404. Cancelled finds return `listModeRecommended: true` with a list-only reason.
 - UI decisions: list view loads 50-row pages and appends via explicit `Load more`; refresh resets to the first page. Find control lives in the orders header, submits on Enter/button, renders returned list context for list/cancelled cases, navigates calendar month for active calendar finds, opens review, and leaves the navigated context intact after Back.
