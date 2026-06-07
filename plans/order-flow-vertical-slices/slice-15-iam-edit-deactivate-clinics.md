@@ -149,7 +149,7 @@ Likely:
 - Status: Complete (2026-06-08).
 - Files changed: `Web/IamApi.cs`, `Web/wwwroot/iam.html`, `Orders/Repositories.cs`, `Database/SqliteSchedulingIdentityRepo.cs`, `Web.Tests/IamApiTests.cs`, `Database.Tests/SqliteSchedulingIdentityRepoTest.cs`.
 - Tests run: `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (106 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (84 passed); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106).
-- Manual checks: not browser-verified; API tests covered edit, deactivate/reactivate, inactive-list visibility, login denial while inactive, and session revocation.
+- Manual checks: Headless Chromium browser smoke passed for clinic metadata edit, clinic soft-deactivation from IAM, and rejected clinic login after deactivation. API tests covered edit, deactivate/reactivate, inactive-list visibility, login denial while inactive, and session revocation.
 - Endpoint shape: `PUT /api/iam/organizations/{code}`, `DELETE /api/iam/organizations/{code}`, `POST /api/iam/organizations/{code}/reactivate`. Lab profile edits through the clinic endpoint are rejected.
 - Session revocation behavior: clinic deactivation calls `SchedulingAuthService.RevokeOrganizationSessionsAsync(OrganizationType.Clinic, code)`; tests confirm an existing clinic session becomes unauthenticated.
 - Discoveries affecting member-management slice: deactivated orgs remain resolvable with `includeInactive=true`; member creation on inactive orgs is disallowed by the repository.

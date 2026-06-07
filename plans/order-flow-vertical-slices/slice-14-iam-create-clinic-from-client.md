@@ -191,7 +191,7 @@ UI/manual:
 - Status: Complete (2026-06-08).
 - Files changed: `Web/IamApi.cs`, `Web/wwwroot/iam.html`, `Orders/Repositories.cs`, `Database/SqliteSchedulingIdentityRepo.cs`, `Web.Tests/IamApiTests.cs`.
 - Tests run: `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (106 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (84 passed); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `iam.html` inline script passed; full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106).
-- Manual checks: not browser-verified; API create flow covered by integration tests including new clinic login and audit inspection.
+- Manual checks: Headless Chromium browser smoke passed for lab `/iam` login, IAM client prefill from an invoicing client, prompt-based clinic creation with an initial member/custom secret, and created clinic visibility in IAM. API integration tests also cover new clinic login and audit inspection.
 - Endpoint shape: `GET /api/iam/clients?query=&limit=`, `GET /api/iam/clients/{nickname}/prefill`, and `POST /api/iam/organizations`.
 - Validation rules: clinic codes are normalized uppercase and must be 1-32 chars using letters/numbers/`-`/`_`; reserved IAM/INVOICING/SCHEDULER and current lab code rejected; `displayColor` must be `#RRGGBB` when supplied; linked clients are verified when provided; initial member is required.
 - Secret handling: UI generates editable six-digit defaults; API accepts Slice 13 custom secrets, stores only hashes, and never returns or audits raw secrets.
