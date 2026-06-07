@@ -58,6 +58,10 @@ Existing relevant files/routes:
 18. Lab-specific data should live on a separate lab entity/table, not on a clinic organization row. Clinic organizations keep clinic-specific fields such as linked invoicing client nickname and display color.
 19. Organization/member deletes should be soft deletes/deactivation so order, session, and audit history remains understandable.
 20. IAM should be introduced vertically: first DB-backed lab/clinic/member auth with no UI, then lab terminology cleanup, then a lab-only read-only IAM page. Mutation/onboarding/PIN-management slices should be planned after those shapes are implemented and reviewed.
+21. Production lab bootstrap should be operator-only through CLI, not API. The CLI may set lab code/name/member/secret; if a lab already exists it must require an explicit reset flag and revoke old lab sessions.
+22. Credential secrets are no longer limited to six numeric digits. UIs may generate six-digit defaults client-side, but users may submit custom secrets; only hashes are stored.
+23. IAM clinic creation should require an initial member and can be prefilled from an invoicing client. Clinic code is immutable after creation. Display color is auto-generated but editable.
+24. IAM organization/member deletion always means soft deactivation, with session revocation where applicable.
 
 ## Slice Index and Status
 
@@ -76,6 +80,11 @@ Existing relevant files/routes:
 | 10 | `plans/order-flow-vertical-slices/slice-10-db-backed-org-member-auth.md` | Complete | DB-backed `SchedulingLabs`/`SchedulingClinics`/`SchedulingMembers`, organization-based sessions, dev/test seed, and lab-aware scheduler/invoicer auth |
 | 11 | `plans/order-flow-vertical-slices/slice-11-lab-permissions-terminology.md` | Complete | `Technician` terminology replaced with lab-vs-clinic semantics across actor/auth/API/UI/audit/CLI surfaces |
 | 12 | `plans/order-flow-vertical-slices/slice-12-iam-readonly-page.md` | Complete | Lab-only `/iam` page plus read-only `/api/iam/lab` and `/api/iam/organizations*` endpoints |
+| 13 | `plans/order-flow-vertical-slices/slice-13-cli-lab-bootstrap-and-secret-policy.md` | Not started | Operator CLI lab bootstrap/reset, remove Web runtime seed, and relax credential secret validation |
+| 14 | `plans/order-flow-vertical-slices/slice-14-iam-create-clinic-from-client.md` | Not started | Lab-only IAM create-clinic flow with client prefill and required initial member |
+| 15 | `plans/order-flow-vertical-slices/slice-15-iam-edit-deactivate-clinics.md` | Not started | Lab-only IAM clinic edit, soft-deactivate, reactivate, and session revocation |
+| 16 | `plans/order-flow-vertical-slices/slice-16-iam-member-management-and-secret-rotation.md` | Not started | Lab-only IAM member add/edit/deactivate/reactivate and credential secret rotation |
+| 17 | `plans/order-flow-vertical-slices/slice-17-scheduler-clinic-metadata-ui.md` | Not started | Use clinic display color/client metadata in scheduler list/calendar/review and lab target selector |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 
@@ -113,6 +122,11 @@ Before handing off to another agent:
 - Slice 10 depends on the current auth/session/audit behavior through Slice 9 and should preserve scheduler/invoicer user-visible behavior while replacing the identity source of truth.
 - Slice 11 depends on Slice 10's actual actor/entity names and should clean up terminology without changing permissions.
 - Slice 12 depends on Slices 10-11 and should add read-only IAM only after lab-vs-clinic auth semantics are stable.
+- Slice 13 depends on DB-backed identity from Slice 10 and should happen before relying on IAM mutations in deployment.
+- Slice 14 depends on Slice 13's credential secret policy and on Slice 12's IAM page/API shape.
+- Slice 15 depends on Slice 14's clinic creation/DTO validation shape.
+- Slice 16 depends on Slice 13's credential secret policy and Slice 12's member display shape; it can run after Slice 14 or 15.
+- Slice 17 depends on clinic metadata existing from Slices 10/12 and benefits from editability in Slice 15.
 
 ## Cross-Slice Discoveries / Course Corrections
 
@@ -138,6 +152,7 @@ Append dated notes here after each slice.
 - 2026-06-06: Slice 9 complete. `GET /api/scheduling/orders?limit=&cursor=` now returns cursor pages with opaque base64url JSON cursors over requested delivery date, created-at milliseconds, and id; invalid cursors return 400. Added `GET /api/scheduling/orders/find?code=&limit=` with actor scoping, full-code lookup, shortened-code suffix lookup, 409 for ambiguous shortened matches, and cancelled-order list-mode recommendation. `orders.html` now uses first-page/Load-more list loading and find navigation that preserves the loaded list/calendar context after review closes.
 - 2026-06-07: Added Slices 10-12 plans for DB-backed lab/clinic/member auth, lab terminology cleanup, and a lab-only read-only IAM page. The lab should be a separate singleton-like entity from clinics so lab-only settings such as future capacity configuration do not pollute clinic organization data.
 - 2026-06-07: Slices 10-12 complete. Scheduling auth now uses DB-backed `SchedulingLabs`, `SchedulingClinics`, and shared `SchedulingMembers`; auth DTOs now expose `organizationType`/`organizationCode`/`organizationName`/`memberId`/`memberLabel` with `isLab`/`isClinic`; `AppChrome` now shows Scheduler to all authenticated actors and Invoicer/IAM only to lab actors; `/iam` and `/api/iam/*` provide the first read-only IAM surface; the IAM organization list now includes the lab at the top with distinct styling and uses a single detail panel for lab vs clinic selection; EF mappings intentionally retain legacy column names such as `CredentialId` and `ActorRole` underneath to avoid a larger historical data migration in the same slice.
+- 2026-06-07: Added Slices 13-17 plans for CLI lab bootstrap and IAM mutation follow-ups. Bootstrap should be CLI-only and replace Web runtime identity seed; IAM clinic creation should require an initial member; default generated secrets are six digits but custom secrets are allowed and stored only as hashes; org/member deletes are soft deactivation.
 
 ## Verification Evidence
 
@@ -201,13 +216,21 @@ Invoicing/client after Slice 2:
 - CLI: `audit list [filters]` lists audit events newest-first for operator inspection/export; use `--json` for machine-readable output and prefer `--actor-organization-type`, `--actor-organization`, and `--actor-member` filters.
 - Update `Web/wwwroot/index.html` fetch calls accordingly.
 
-IAM target after Slices 10-12:
+IAM target after Slices 10-12, extended by planned Slices 14-16:
 
 - `GET /iam` lab-only IAM page.
 - `GET /api/iam/lab` lab-only lab profile/member detail.
-- `GET /api/iam/organizations?includeInactive=` lab-only clinic organization list.
-- `GET /api/iam/organizations/{code}` lab-only clinic organization detail and members.
-- Optional `GET /api/iam/clients?query=&limit=` lab-only client search/list for future organization prefill.
+- `GET /api/iam/organizations?includeInactive=` lab-only organization list.
+- `GET /api/iam/organizations/{code}` lab-only organization detail and members.
+- Planned: `GET /api/iam/clients?query=&limit=` and/or `GET /api/iam/clients/{nickname}/prefill` for client-based clinic prefill.
+- Planned: `POST /api/iam/organizations` to create a clinic with required initial member.
+- Planned: `PUT /api/iam/organizations/{code}`, `DELETE /api/iam/organizations/{code}`, and `POST /api/iam/organizations/{code}/reactivate` for clinic metadata and soft-deactivation.
+- Planned: member management endpoints under `/api/iam/organizations/{code}/members...` for add/edit/deactivate/reactivate/secret rotation.
+
+CLI target after Slice 13:
+
+- Planned operator-only command: `iam bootstrap-lab` with explicit reset behavior for existing labs.
+- Existing `audit list` remains available for audit inspection/export.
 
 ## Files Most Likely to Change by Slice
 
@@ -357,10 +380,63 @@ Slice 12:
 - optional client listing integration with `Accounting/Client.cs` / client repo
 - `Web.Tests/*`
 
+Slice 13:
+
+- `Cli/CliProgram.cs`
+- `Orders/PinHasher.cs`
+- identity repositories/write methods
+- auth session revocation helpers
+- `Web/WebProgram.cs`
+- remove or restrict `Web/SchedulingIdentitySeed.cs`
+- test fixtures/helpers that currently rely on Web runtime seed
+- tests in `Orders.Tests` / `Database.Tests` / `Web.Tests`
+
+Slice 14:
+
+- `Web/IamApi.cs`
+- `Web/wwwroot/iam.html`
+- identity repository create methods
+- optional IAM service/validation types
+- client repo integration for prefill/search
+- audit logging
+- `Web.Tests/IamApiTests.cs`
+- possible `Database.Tests`
+
+Slice 15:
+
+- `Web/IamApi.cs`
+- `Web/wwwroot/iam.html`
+- identity repository update/deactivate/reactivate methods
+- auth session revocation helpers
+- audit logging
+- `Web.Tests/IamApiTests.cs`
+- possible `Database.Tests`
+
+Slice 16:
+
+- `Web/IamApi.cs`
+- `Web/wwwroot/iam.html`
+- identity repository member write methods
+- auth session revocation helpers
+- audit logging
+- `Web.Tests/IamApiTests.cs`
+- possible `Database.Tests` / `Orders.Tests`
+
+Slice 17:
+
+- `Web/SchedulingApi.cs`
+- `Orders/SchedulingOrderService.cs`
+- identity repository metadata lookup helpers
+- `Web/wwwroot/orders.html`
+- `Web.Tests/SchedulingApiTests.cs`
+- browser/UI tests if available
+
 ## Open Questions to Resolve During Implementation
 
 - `/` access behavior is resolved for v1: client-side scheduling-auth gate shows login when unauthenticated and redirects clinic users to `/orders`; `/api/invoicing/*` remains the server-side security boundary.
 - Lab order creation target selection is resolved for v1: lab actors create using the `GET /api/scheduling/clinics` list and a target clinic selector above the stepper; existing order clinic reassignment is not supported.
 - Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. Current auth/audit code uses organization/member terminology while keeping some legacy physical column names for compatibility.
 - Per-work-item material/shade is a known follow-up after Slice 7; Slice 7 keeps material and shade order-level while allowing multiple construction/tooth work items.
-- Future IAM mutation slices still need product decisions for org/member create/edit/deactivate flows, client-prefill search, and PIN rotation UX.
+- Future IAM mutation slices are now planned as Slices 14-16: client-prefilled clinic creation with required initial member, clinic edit/deactivate/reactivate, and member management/secret rotation.
+- Slice 13 should resolve deployment bootstrap by adding a CLI-only lab bootstrap/reset command and removing Web runtime identity seed. It should also relax credential secret validation beyond six numeric digits while preserving six-digit generated defaults in UI.
+- Scheduler clinic metadata display is planned as Slice 17 after clinic display color/client metadata is available through IAM.
