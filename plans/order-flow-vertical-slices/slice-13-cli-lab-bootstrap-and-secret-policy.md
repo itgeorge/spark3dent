@@ -162,28 +162,26 @@ Likely:
 
 ## Implementation Checklist
 
-- [ ] Define final CLI command name/options.
-- [ ] Relax `PinHasher.ValidatePinShape` to custom secret policy.
-- [ ] Add/update PinHasher tests.
-- [ ] Add write-capable identity repository methods or direct CLI DB logic.
-- [ ] Implement bootstrap create path.
-- [ ] Implement explicit reset path and lab session revocation.
-- [ ] Add audit event without raw secret.
-- [ ] Remove Web runtime identity seed.
-- [ ] Update tests to seed identity explicitly.
-- [ ] Add CLI tests or integration tests as practical.
-- [ ] Run relevant tests/build.
-- [ ] Update master plan and deployment notes.
+- [x] Define final CLI command name/options.
+- [x] Relax `PinHasher.ValidatePinShape` to custom secret policy.
+- [x] Add/update PinHasher tests.
+- [x] Add write-capable identity repository methods or direct CLI DB logic.
+- [x] Implement bootstrap create path.
+- [x] Implement explicit reset path and lab session revocation.
+- [x] Add audit event without raw secret.
+- [x] Remove Web runtime identity seed.
+- [x] Update tests to seed identity explicitly.
+- [x] Add CLI tests or integration tests as practical.
+- [x] Run relevant tests/build.
+- [x] Update master plan and deployment notes.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- CLI command shape:
-- Secret validation policy:
-- Seed removal/test-seed strategy:
-- Discoveries affecting IAM mutation slices:
+- Status: Complete (2026-06-08).
+- Files changed: `Cli/CliProgram.cs`, `Orders/PinHasher.cs`, `Orders/Repositories.cs`, `Database/SqliteSchedulingIdentityRepo.cs`, `Web/WebProgram.cs`, deleted `Web/SchedulingIdentitySeed.cs`, `Web.Tests/ApiTestFixture.cs`, `Orders.Tests/PinHasherTest.cs`, `Orders.Tests/SchedulingAuthServiceTest.cs`, `Orders.Tests/TestSupport.cs`, `Database.Tests/SqliteSchedulingIdentityRepoTest.cs`, `Web.Tests/IamApiTests.cs`.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` (66 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (84 passed); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (106 passed); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `dotnet build Cli/Cli.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `iam.html` inline script passed; full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106).
+- Manual checks: CLI bootstrap on a temp DB succeeded, second run without `--reset` exited non-zero, and reset succeeded with new lab code.
+- CLI command shape: `iam bootstrap-lab --db <path> [--reset] [--lab-code LAB] [--lab-name "Spark3Dent Lab"] [--member-id lab-1] [--member-label "Lab Admin"] [--secret-stdin]`; missing flags prompt interactively.
+- Secret validation policy: 6-128 characters, not all whitespace; letters/digits/symbols allowed; no trimming inside `PinHasher`; errors remain `Invalid credential secret.`.
+- Seed removal/test-seed strategy: Web runtime no longer calls or contains `SchedulingIdentitySeed`; Web tests seed explicitly through `ApiTestFixture.SeedSchedulingIdentityAsync`, and one Web test verifies LAB login fails when the explicit seed is disabled.
+- Discoveries affecting IAM mutation slices: write-capable identity repository methods were added in Slice 13 and reused by Slices 14-16.

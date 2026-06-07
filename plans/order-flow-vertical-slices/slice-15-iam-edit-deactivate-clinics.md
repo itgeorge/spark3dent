@@ -134,24 +134,22 @@ Likely:
 
 ## Implementation Checklist
 
-- [ ] Add update/deactivate/reactivate identity repository methods.
-- [ ] Add lab-only API endpoints.
-- [ ] Revoke clinic sessions on deactivate.
-- [ ] Add audit events.
-- [ ] Add IAM UI edit/deactivate/reactivate controls.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify session revocation and reactivation behavior.
-- [ ] Update master plan.
+- [x] Add update/deactivate/reactivate identity repository methods.
+- [x] Add lab-only API endpoints.
+- [x] Revoke clinic sessions on deactivate.
+- [x] Add audit events.
+- [x] Add IAM UI edit/deactivate/reactivate controls.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify session revocation and reactivation behavior.
+- [x] Update master plan.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Endpoint shape:
-- Session revocation behavior:
-- Discoveries affecting member-management slice:
+- Status: Complete (2026-06-08).
+- Files changed: `Web/IamApi.cs`, `Web/wwwroot/iam.html`, `Orders/Repositories.cs`, `Database/SqliteSchedulingIdentityRepo.cs`, `Web.Tests/IamApiTests.cs`, `Database.Tests/SqliteSchedulingIdentityRepoTest.cs`.
+- Tests run: `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (106 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (84 passed); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106).
+- Manual checks: not browser-verified; API tests covered edit, deactivate/reactivate, inactive-list visibility, login denial while inactive, and session revocation.
+- Endpoint shape: `PUT /api/iam/organizations/{code}`, `DELETE /api/iam/organizations/{code}`, `POST /api/iam/organizations/{code}/reactivate`. Lab profile edits through the clinic endpoint are rejected.
+- Session revocation behavior: clinic deactivation calls `SchedulingAuthService.RevokeOrganizationSessionsAsync(OrganizationType.Clinic, code)`; tests confirm an existing clinic session becomes unauthenticated.
+- Discoveries affecting member-management slice: deactivated orgs remain resolvable with `includeInactive=true`; member creation on inactive orgs is disallowed by the repository.

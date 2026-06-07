@@ -24,6 +24,25 @@ public class SchedulingAuthServiceTest
     }
 
     [Test]
+    public async Task LoginAsync_GivenCustomSecret_ReturnsActor()
+    {
+        var hasher = new PinHasher();
+        var secret = "custom-secret! 2026";
+        var members = new[]
+        {
+            new SchedulingMember(OrganizationType.Clinic, "DEMO", "cred-1", "Cred 1", hasher.Hash(secret, iterations: 10_000), true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        };
+        var identities = new InMemorySchedulingIdentityRepository(members: members);
+        var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
+        var repo = new InMemoryAuthSessionRepository();
+        var service = new SchedulingAuthService(TestSchedulingConfigProvider.Create(), identities, repo, hasher, clock);
+
+        var result = await service.LoginAsync("DEMO", secret, "127.0.0.1", "test");
+
+        Assert.That(result.Actor.OrganizationCode, Is.EqualTo("DEMO"));
+    }
+
+    [Test]
     public async Task LoginAsync_GivenClinicMember_ReturnsClinicActor()
     {
         var hasher = new PinHasher();

@@ -110,6 +110,15 @@ internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentity
                 && string.Equals(x.OrganizationCode, organizationCode, StringComparison.OrdinalIgnoreCase)
                 && (includeInactive || x.IsActive))
             .ToList());
+
+    public Task<SchedulingLab> BootstrapLabAsync(LabBootstrapRequest request, bool reset, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingClinic> CreateClinicWithInitialMemberAsync(ClinicCreateRequest request, MemberCreateRequest initialMember, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingClinic> UpdateClinicAsync(string clinicCode, ClinicUpdateRequest request, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingClinic> SetClinicActiveAsync(string clinicCode, bool isActive, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingMember> CreateMemberAsync(OrganizationType organizationType, string organizationCode, MemberCreateRequest request, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingMember> UpdateMemberLabelAsync(OrganizationType organizationType, string organizationCode, string memberId, string label, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingMember> SetMemberActiveAsync(OrganizationType organizationType, string organizationCode, string memberId, bool isActive, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SchedulingMember> UpdateMemberSecretAsync(OrganizationType organizationType, string organizationCode, string memberId, string pinHash, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
 }
 
 internal static class TestActors

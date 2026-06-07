@@ -176,25 +176,23 @@ UI/manual:
 
 ## Implementation Checklist
 
-- [ ] Add client search/prefill endpoint(s).
-- [ ] Add clinic/member create request/validation.
-- [ ] Add transactional identity repository create method(s).
-- [ ] Add lab-only `POST /api/iam/organizations`.
-- [ ] Audit clinic/member creation without raw secret.
-- [ ] Add IAM UI create flow with generated editable secret.
-- [ ] Add/update tests.
-- [ ] Manually verify create-from-client and new clinic login.
-- [ ] Update master plan and next slices with implemented DTO shape.
+- [x] Add client search/prefill endpoint(s).
+- [x] Add clinic/member create request/validation.
+- [x] Add transactional identity repository create method(s).
+- [x] Add lab-only `POST /api/iam/organizations`.
+- [x] Audit clinic/member creation without raw secret.
+- [x] Add IAM UI create flow with generated editable secret.
+- [x] Add/update tests.
+- [x] Manually verify create-from-client and new clinic login.
+- [x] Update master plan and next slices with implemented DTO shape.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Endpoint shape:
-- Validation rules:
-- Secret handling:
-- Discoveries affecting edit/member slices:
+- Status: Complete (2026-06-08).
+- Files changed: `Web/IamApi.cs`, `Web/wwwroot/iam.html`, `Orders/Repositories.cs`, `Database/SqliteSchedulingIdentityRepo.cs`, `Web.Tests/IamApiTests.cs`.
+- Tests run: `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (106 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (84 passed); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `iam.html` inline script passed; full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106).
+- Manual checks: not browser-verified; API create flow covered by integration tests including new clinic login and audit inspection.
+- Endpoint shape: `GET /api/iam/clients?query=&limit=`, `GET /api/iam/clients/{nickname}/prefill`, and `POST /api/iam/organizations`.
+- Validation rules: clinic codes are normalized uppercase and must be 1-32 chars using letters/numbers/`-`/`_`; reserved IAM/INVOICING/SCHEDULER and current lab code rejected; `displayColor` must be `#RRGGBB` when supplied; linked clients are verified when provided; initial member is required.
+- Secret handling: UI generates editable six-digit defaults; API accepts Slice 13 custom secrets, stores only hashes, and never returns or audits raw secrets.
+- Discoveries affecting edit/member slices: organization detail DTO remained compatible and is reused after create/update/member mutations.

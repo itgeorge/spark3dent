@@ -41,7 +41,7 @@ public sealed class PinHasher
 
     public static void ValidatePinShape(string pin)
     {
-        if (pin.Length != 6 || pin.Any(ch => ch < '0' || ch > '9'))
+        if (pin.Length < 6 || pin.Length > 128 || string.IsNullOrWhiteSpace(pin))
             throw new InvalidOperationException("Invalid credential secret.");
     }
 

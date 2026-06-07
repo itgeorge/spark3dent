@@ -80,10 +80,10 @@ Existing relevant files/routes:
 | 10 | `plans/order-flow-vertical-slices/slice-10-db-backed-org-member-auth.md` | Complete | DB-backed `SchedulingLabs`/`SchedulingClinics`/`SchedulingMembers`, organization-based sessions, dev/test seed, and lab-aware scheduler/invoicer auth |
 | 11 | `plans/order-flow-vertical-slices/slice-11-lab-permissions-terminology.md` | Complete | `Technician` terminology replaced with lab-vs-clinic semantics across actor/auth/API/UI/audit/CLI surfaces |
 | 12 | `plans/order-flow-vertical-slices/slice-12-iam-readonly-page.md` | Complete | Lab-only `/iam` page plus read-only `/api/iam/lab` and `/api/iam/organizations*` endpoints |
-| 13 | `plans/order-flow-vertical-slices/slice-13-cli-lab-bootstrap-and-secret-policy.md` | Not started | Operator CLI lab bootstrap/reset, remove Web runtime seed, and relax credential secret validation |
-| 14 | `plans/order-flow-vertical-slices/slice-14-iam-create-clinic-from-client.md` | Not started | Lab-only IAM create-clinic flow with client prefill and required initial member |
-| 15 | `plans/order-flow-vertical-slices/slice-15-iam-edit-deactivate-clinics.md` | Not started | Lab-only IAM clinic edit, soft-deactivate, reactivate, and session revocation |
-| 16 | `plans/order-flow-vertical-slices/slice-16-iam-member-management-and-secret-rotation.md` | Not started | Lab-only IAM member add/edit/deactivate/reactivate and credential secret rotation |
+| 13 | `plans/order-flow-vertical-slices/slice-13-cli-lab-bootstrap-and-secret-policy.md` | Complete | CLI-only lab bootstrap/reset, Web runtime seed removed, explicit test seeding added, and credential secrets relaxed to custom 6-128 char values |
+| 14 | `plans/order-flow-vertical-slices/slice-14-iam-create-clinic-from-client.md` | Complete | Lab-only IAM client search/prefill and create-clinic-with-initial-member API/UI with audited hash-only secret handling |
+| 15 | `plans/order-flow-vertical-slices/slice-15-iam-edit-deactivate-clinics.md` | Complete | Lab-only IAM clinic metadata edit, soft deactivate/reactivate, audit events, and clinic session revocation |
+| 16 | `plans/order-flow-vertical-slices/slice-16-iam-member-management-and-secret-rotation.md` | Complete | Lab-only IAM member add/edit/deactivate/reactivate and secret rotation with session revocation and audit coverage |
 | 17 | `plans/order-flow-vertical-slices/slice-17-scheduler-clinic-metadata-ui.md` | Not started | Use clinic display color/client metadata in scheduler list/calendar/review and lab target selector |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
@@ -153,6 +153,7 @@ Append dated notes here after each slice.
 - 2026-06-07: Added Slices 10-12 plans for DB-backed lab/clinic/member auth, lab terminology cleanup, and a lab-only read-only IAM page. The lab should be a separate singleton-like entity from clinics so lab-only settings such as future capacity configuration do not pollute clinic organization data.
 - 2026-06-07: Slices 10-12 complete. Scheduling auth now uses DB-backed `SchedulingLabs`, `SchedulingClinics`, and shared `SchedulingMembers`; auth DTOs now expose `organizationType`/`organizationCode`/`organizationName`/`memberId`/`memberLabel` with `isLab`/`isClinic`; `AppChrome` now shows Scheduler to all authenticated actors and Invoicer/IAM only to lab actors; `/iam` and `/api/iam/*` provide the first read-only IAM surface; the IAM organization list now includes the lab at the top with distinct styling and uses a single detail panel for lab vs clinic selection; EF mappings intentionally retain legacy column names such as `CredentialId` and `ActorRole` underneath to avoid a larger historical data migration in the same slice.
 - 2026-06-07: Added Slices 13-17 plans for CLI lab bootstrap and IAM mutation follow-ups. Bootstrap should be CLI-only and replace Web runtime identity seed; IAM clinic creation should require an initial member; default generated secrets are six digits but custom secrets are allowed and stored only as hashes; org/member deletes are soft deactivation.
+- 2026-06-08: Slices 13-16 complete. `PinHasher` now allows non-whitespace 6-128 character custom credential secrets; Web no longer seeds lab/clinic/member identity at runtime and Web tests seed explicitly. CLI `iam bootstrap-lab` creates/resets the singleton lab and first lab member, refusing existing labs without `--reset` and revoking lab sessions on reset. IAM now supports client search/prefill, clinic create/edit/deactivate/reactivate, member add/edit/deactivate/reactivate, and member secret rotation. All IAM mutations are lab-only, soft-deactivate instead of hard-delete, audit without raw secrets, and revoke sessions for clinic deactivation/member deactivation/secret rotation.
 
 ## Verification Evidence
 
@@ -167,6 +168,7 @@ Append dated notes here after each slice.
 - 2026-06-06 Slice 8: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (58 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (78 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (97 tests); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `orders.html` inline script passed; headless Chromium/PuppeteerSharp smoke passed on a temp DB at `http://127.0.0.1:61259` for clinic login, multi-item bridge+crown create, create/date payloads verified `workItems` without legacy fields, list/review display, edit second work item to tooth 24 with update payload verified, calendar display, and calendar-to-review.
 - 2026-06-06 Slice 9: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (60 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (81 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (99 tests, including browser-backed smoke coverage); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `orders.html` inline script passed.
 - 2026-06-07 Slices 10-12: `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (60 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (81 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (102 tests, including new IAM coverage); full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 60, Accounting 61, Database 81, Invoices 251, Web 102); headless Chromium manual browser verification passed against a temp DB for unauthenticated `/iam`, lab `/orders` + product visibility + order creation, lab `/` invoicer access, lab `/iam` read-only IAM, clinic Scheduler-only navigation, clinic 403s on lab-only APIs, and clinic redirects from `/` / `/iam` to `/orders`.
+- 2026-06-08 Slices 13-16: `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `dotnet build Cli/Cli.csproj --no-restore -p:UseSharedCompilation=false` passed; `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (66 tests); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (84 tests); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` passed (106 tests); full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106); `node --check` on extracted `Web/wwwroot/iam.html` inline script passed; CLI temp-DB smoke passed for bootstrap success, refusal without `--reset`, and reset success.
 
 ## Global Verification Commands
 
@@ -222,14 +224,15 @@ IAM target after Slices 10-12, extended by planned Slices 14-16:
 - `GET /api/iam/lab` lab-only lab profile/member detail.
 - `GET /api/iam/organizations?includeInactive=` lab-only organization list.
 - `GET /api/iam/organizations/{code}` lab-only organization detail and members.
-- Planned: `GET /api/iam/clients?query=&limit=` and/or `GET /api/iam/clients/{nickname}/prefill` for client-based clinic prefill.
-- Planned: `POST /api/iam/organizations` to create a clinic with required initial member.
-- Planned: `PUT /api/iam/organizations/{code}`, `DELETE /api/iam/organizations/{code}`, and `POST /api/iam/organizations/{code}/reactivate` for clinic metadata and soft-deactivation.
-- Planned: member management endpoints under `/api/iam/organizations/{code}/members...` for add/edit/deactivate/reactivate/secret rotation.
+- `GET /api/iam/clients?query=&limit=` lab-only client search for IAM prefill.
+- `GET /api/iam/clients/{nickname}/prefill` lab-only client-based clinic prefill with suggested clinic code/name/client/color.
+- `POST /api/iam/organizations` lab-only clinic creation with required initial member; raw secret is accepted only in request and never returned.
+- `PUT /api/iam/organizations/{code}`, `DELETE /api/iam/organizations/{code}`, and `POST /api/iam/organizations/{code}/reactivate` for clinic metadata and soft-deactivation/reactivation.
+- `POST /api/iam/organizations/{code}/members`, `PUT /api/iam/organizations/{code}/members/{memberId}`, `DELETE /api/iam/organizations/{code}/members/{memberId}`, `POST /api/iam/organizations/{code}/members/{memberId}/reactivate`, and `POST /api/iam/organizations/{code}/members/{memberId}/secret` for lab/clinic member add/edit/deactivate/reactivate/secret rotation.
 
 CLI target after Slice 13:
 
-- Planned operator-only command: `iam bootstrap-lab` with explicit reset behavior for existing labs.
+- Operator-only command: `iam bootstrap-lab --db <path> [--reset] [--lab-code LAB] [--lab-name "Spark3Dent Lab"] [--member-id lab-1] [--member-label "Lab Admin"] [--secret-stdin]`; missing options prompt interactively. Existing labs require `--reset`, and reset revokes lab sessions.
 - Existing `audit list` remains available for audit inspection/export.
 
 ## Files Most Likely to Change by Slice
@@ -438,5 +441,5 @@ Slice 17:
 - Audit log storage is resolved for v1: append-only SQLite `AuditEvents` table via `IAuditLog`; existing app/file logger remains separate. Current auth/audit code uses organization/member terminology while keeping some legacy physical column names for compatibility.
 - Per-work-item material/shade is a known follow-up after Slice 7; Slice 7 keeps material and shade order-level while allowing multiple construction/tooth work items.
 - Future IAM mutation slices are now planned as Slices 14-16: client-prefilled clinic creation with required initial member, clinic edit/deactivate/reactivate, and member management/secret rotation.
-- Slice 13 should resolve deployment bootstrap by adding a CLI-only lab bootstrap/reset command and removing Web runtime identity seed. It should also relax credential secret validation beyond six numeric digits while preserving six-digit generated defaults in UI.
+- Slice 13 resolved deployment bootstrap with a CLI-only `iam bootstrap-lab` command and removed Web runtime identity seed. Credential secret validation now accepts custom 6-128 character non-whitespace secrets while preserving six-digit generated defaults in UI.
 - Scheduler clinic metadata display is planned as Slice 17 after clinic display color/client metadata is available through IAM.

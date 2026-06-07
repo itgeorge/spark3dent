@@ -198,8 +198,6 @@ Web.Api.MapRoutes(app);
 Web.SchedulingApi.MapRoutes(app);
 Web.IamApi.MapRoutes(app);
 
-await SchedulingIdentitySeed.SeedAsync(app.Services, builder.Environment);
-
 Console.WriteLine($"Running on {url}");
 await app.StartAsync();
 

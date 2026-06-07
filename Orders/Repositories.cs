@@ -19,7 +19,21 @@ public interface ISchedulingIdentityRepository
     Task<IReadOnlyList<SchedulingClinic>> ListClinicsAsync(bool includeInactive = false, CancellationToken ct = default);
     Task<SchedulingMember?> GetMemberAsync(OrganizationType organizationType, string organizationCode, string memberId, bool includeInactive = false, CancellationToken ct = default);
     Task<IReadOnlyList<SchedulingMember>> ListMembersAsync(OrganizationType organizationType, string organizationCode, bool includeInactive = false, CancellationToken ct = default);
+
+    Task<SchedulingLab> BootstrapLabAsync(LabBootstrapRequest request, bool reset, CancellationToken ct = default);
+    Task<SchedulingClinic> CreateClinicWithInitialMemberAsync(ClinicCreateRequest request, MemberCreateRequest initialMember, CancellationToken ct = default);
+    Task<SchedulingClinic> UpdateClinicAsync(string clinicCode, ClinicUpdateRequest request, CancellationToken ct = default);
+    Task<SchedulingClinic> SetClinicActiveAsync(string clinicCode, bool isActive, DateTimeOffset now, CancellationToken ct = default);
+    Task<SchedulingMember> CreateMemberAsync(OrganizationType organizationType, string organizationCode, MemberCreateRequest request, CancellationToken ct = default);
+    Task<SchedulingMember> UpdateMemberLabelAsync(OrganizationType organizationType, string organizationCode, string memberId, string label, DateTimeOffset now, CancellationToken ct = default);
+    Task<SchedulingMember> SetMemberActiveAsync(OrganizationType organizationType, string organizationCode, string memberId, bool isActive, DateTimeOffset now, CancellationToken ct = default);
+    Task<SchedulingMember> UpdateMemberSecretAsync(OrganizationType organizationType, string organizationCode, string memberId, string pinHash, DateTimeOffset now, CancellationToken ct = default);
 }
+
+public sealed record LabBootstrapRequest(string LabCode, string LabDisplayName, string MemberId, string MemberLabel, string MemberPinHash, DateTimeOffset Now);
+public sealed record ClinicCreateRequest(string Code, string DisplayName, string? LinkedClientNickname, string? DisplayColor, DateTimeOffset Now);
+public sealed record ClinicUpdateRequest(string DisplayName, string? LinkedClientNickname, string? DisplayColor, DateTimeOffset Now);
+public sealed record MemberCreateRequest(string Id, string Label, string PinHash, DateTimeOffset Now);
 
 public interface IOrderRepository
 {

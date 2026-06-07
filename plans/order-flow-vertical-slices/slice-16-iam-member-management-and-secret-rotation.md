@@ -151,26 +151,24 @@ Likely:
 
 ## Implementation Checklist
 
-- [ ] Add member create/update/deactivate/reactivate/secret repository methods.
-- [ ] Add session revocation on member deactivate/secret change.
-- [ ] Add lab-only API endpoints.
-- [ ] Add audit events without raw secrets.
-- [ ] Add IAM members UI actions.
-- [ ] Add generated editable secret UI for add/rotate.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
-- [ ] Manually verify add/deactivate/rotate flows.
-- [ ] Update master plan.
+- [x] Add member create/update/deactivate/reactivate/secret repository methods.
+- [x] Add session revocation on member deactivate/secret change.
+- [x] Add lab-only API endpoints.
+- [x] Add audit events without raw secrets.
+- [x] Add IAM members UI actions.
+- [x] Add generated editable secret UI for add/rotate.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
+- [x] Manually verify add/deactivate/rotate flows.
+- [x] Update master plan.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
-- Endpoint shape:
-- Secret handling:
-- Session revocation behavior:
-- Discoveries:
+- Status: Complete (2026-06-08).
+- Files changed: `Web/IamApi.cs`, `Web/wwwroot/iam.html`, `Orders/Repositories.cs`, `Database/SqliteSchedulingIdentityRepo.cs`, `Web.Tests/IamApiTests.cs`, `Database.Tests/SqliteSchedulingIdentityRepoTest.cs`.
+- Tests run: `dotnet test Orders.Tests/Orders.Tests.csproj --no-restore -p:UseSharedCompilation=false` (66 passed); `dotnet test Database.Tests/Database.Tests.csproj --no-restore -p:UseSharedCompilation=false` (84 passed); `dotnet test Web.Tests/Web.Tests.csproj --no-restore -p:UseSharedCompilation=false` (106 passed); `dotnet build Web/Web.csproj --no-restore -p:UseSharedCompilation=false` passed; `node --check` on extracted `iam.html` inline script passed; full `dotnet test --no-restore -p:UseSharedCompilation=false` passed (Configuration 10, Storage 41, Orders 66, Accounting 61, Database 84, Invoices 251, Web 106).
+- Manual checks: not browser-verified; API tests covered clinic member add/edit/deactivate/reactivate/secret rotation plus adding a lab member.
+- Endpoint shape: `POST /api/iam/organizations/{code}/members`, `PUT /api/iam/organizations/{code}/members/{memberId}`, `DELETE /api/iam/organizations/{code}/members/{memberId}`, `POST /api/iam/organizations/{code}/members/{memberId}/reactivate`, `POST /api/iam/organizations/{code}/members/{memberId}/secret`. Lab and clinic orgs are resolved by the existing `/organizations/{code}` convention, with lab taking precedence when the code matches the singleton lab.
+- Secret handling: create/rotate requests accept custom secrets and store only `PinHasher` hashes; detail responses expose only fingerprints. Raw secrets are not audited.
+- Session revocation behavior: member deactivate and secret rotation call `SchedulingAuthService.RevokeMemberSessionsAsync`; tests confirm old sessions and old secrets stop working.
+- Discoveries: member id is immutable and unique case-insensitively per org; adding members to inactive orgs is blocked.
