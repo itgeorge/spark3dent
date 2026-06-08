@@ -71,7 +71,7 @@ public static class SchedulingApi
             if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
             var clinics = (await identities.ListClinicsAsync(includeInactive: false, ctx.RequestAborted))
                 .OrderBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .Select(c => new { clinicCode = c.Code, clinicDisplayName = c.DisplayName });
+                .Select(ToClinicMetaDto);
             return Results.Json(new { items = clinics }, JsonOptions);
         });
 
@@ -111,14 +111,17 @@ public static class SchedulingApi
             }
         });
 
-        app.MapGet("/api/scheduling/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, int? limit, string? cursor) =>
+        app.MapGet("/api/scheduling/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities, int? limit, string? cursor) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             try
             {
                 var page = await orders.ListOrdersPageForActorAsync(actor, limit, cursor, ctx.RequestAborted);
-                return Results.Json(ToPageDto(page), JsonOptions);
+                Dictionary<string, object>? clinics = null;
+                if (actor.IsLab)
+                    clinics = await BuildClinicsMetaMapAsync(identities, page.Items, ctx.RequestAborted);
+                return Results.Json(ToPageDto(page, clinics), JsonOptions);
             }
             catch (FormatException ex)
             {
@@ -126,7 +129,7 @@ public static class SchedulingApi
             }
         });
 
-        app.MapGet("/api/scheduling/orders/find", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, string? code, int? limit) =>
+        app.MapGet("/api/scheduling/orders/find", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities, string? code, int? limit) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
@@ -135,10 +138,17 @@ public static class SchedulingApi
             try
             {
                 var result = await orders.FindOrderContextForActorAsync(actor, code, limit, ctx.RequestAborted);
+                Dictionary<string, object>? clinics = null;
+                SchedulingClinic? orderClinic = null;
+                if (actor.IsLab)
+                {
+                    clinics = await BuildClinicsMetaMapAsync(identities, result.ListPage.Items.Append(result.Order), ctx.RequestAborted);
+                    orderClinic = await identities.GetClinicAsync(result.Order.ClinicCode, includeInactive: false, ctx.RequestAborted);
+                }
                 return Results.Json(new
                 {
-                    order = ToDto(result.Order),
-                    listPage = ToPageDto(result.ListPage),
+                    order = ToDto(result.Order, orderClinic),
+                    listPage = ToPageDto(result.ListPage, clinics),
                     result.ListModeRecommended,
                     result.Reason
                 }, JsonOptions);
@@ -153,7 +163,7 @@ public static class SchedulingApi
             }
         });
 
-        app.MapGet("/api/scheduling/orders/calendar", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, DateOnly? start, DateOnly? end) =>
+        app.MapGet("/api/scheduling/orders/calendar", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities, DateOnly? start, DateOnly? end) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
@@ -165,21 +175,27 @@ public static class SchedulingApi
                 return Results.Json(new { error = "Calendar date range cannot exceed 93 days." }, statusCode: 400, options: JsonOptions);
 
             var items = await orders.ListCalendarOrdersAsync(actor, start.Value, end.Value, ctx.RequestAborted);
+            Dictionary<string, object>? clinics = null;
+            if (actor.IsLab)
+                clinics = await BuildClinicsMetaMapAsync(identities, items, ctx.RequestAborted);
             var days = items
                 .GroupBy(o => o.RequestedDeliveryDate)
                 .OrderBy(g => g.Key)
-                .Select(g => new { date = g.Key, orders = g.Select(ToDto) });
-            return Results.Json(new { start = start.Value, end = end.Value, days }, JsonOptions);
+                .Select(g => new { date = g.Key, orders = g.Select(o => ToDto(o)) });
+            return Results.Json(ToCalendarDto(start.Value, end.Value, days, clinics), JsonOptions);
         });
 
-        app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
+        app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
             if (order == null || (!actor.IsLab && !string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase)))
                 return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
-            return Results.Json(new { order = ToDto(order) }, JsonOptions);
+            SchedulingClinic? liveClinic = null;
+            if (actor.IsLab)
+                liveClinic = await identities.GetClinicAsync(order.ClinicCode, includeInactive: false, ctx.RequestAborted);
+            return Results.Json(new { order = ToDto(order, liveClinic) }, JsonOptions);
         });
 
         app.MapPut("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
@@ -259,34 +275,112 @@ public static class SchedulingApi
             body.Notes);
     }
 
-    private static object ToPageDto(OrderPage page) => new
+    private static object ToPageDto(OrderPage page, Dictionary<string, object>? clinics = null)
     {
-        items = page.Items.Select(ToDto),
-        page.NextCursor,
-        page.HasMore
+        if (clinics == null || clinics.Count == 0)
+        {
+            return new
+            {
+                items = page.Items.Select(o => ToDto(o)),
+                page.NextCursor,
+                page.HasMore
+            };
+        }
+
+        return new
+        {
+            items = page.Items.Select(o => ToDto(o)),
+            page.NextCursor,
+            page.HasMore,
+            clinics
+        };
+    }
+
+    private static object ToCalendarDto(DateOnly start, DateOnly end, IEnumerable<object> days, Dictionary<string, object>? clinics)
+    {
+        if (clinics == null || clinics.Count == 0)
+            return new { start, end, days };
+        return new { start, end, days, clinics };
+    }
+
+    private static object ToClinicMetaDto(SchedulingClinic clinic) => new
+    {
+        clinicCode = clinic.Code,
+        clinicDisplayName = clinic.DisplayName,
+        clinicDisplayColor = clinic.DisplayColor,
+        linkedClientNickname = clinic.LinkedClientNickname
     };
 
-    private static object ToDto(OrderRecord o) => new
+    private static async Task<Dictionary<string, object>> BuildClinicsMetaMapAsync(
+        ISchedulingIdentityRepository identities,
+        IEnumerable<OrderRecord> orders,
+        CancellationToken ct)
     {
-        o.Id,
-        o.OrderCode,
-        shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
-        o.ClinicCode,
-        o.ClinicDisplayName,
-        o.MemberId,
-        o.MemberLabel,
-        o.CaseName,
-        o.ImpressionDate,
-        o.ProductCategory,
-        o.Material,
-        workItems = o.WorkItems.Select(ToWorkItemDto),
-        o.RequestedDeliveryDate,
-        o.Status,
-        o.Shade,
-        o.Notes,
-        o.CreatedAt,
-        o.UpdatedAt
-    };
+        var needed = orders
+            .Select(o => o.ClinicCode)
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (needed.Count == 0)
+            return new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+        var clinics = await identities.ListClinicsAsync(includeInactive: false, ct);
+        return clinics
+            .Where(c => needed.Contains(c.Code))
+            .ToDictionary(c => c.Code, c => ToClinicMetaDto(c), StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static object ToDto(OrderRecord o, SchedulingClinic? liveClinic = null)
+    {
+        if (liveClinic == null)
+        {
+            return new
+            {
+                o.Id,
+                o.OrderCode,
+                shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
+                o.ClinicCode,
+                o.ClinicDisplayName,
+                o.MemberId,
+                o.MemberLabel,
+                o.CaseName,
+                o.ImpressionDate,
+                o.ProductCategory,
+                o.Material,
+                workItems = o.WorkItems.Select(ToWorkItemDto),
+                o.RequestedDeliveryDate,
+                o.Status,
+                o.Shade,
+                o.Notes,
+                o.CreatedAt,
+                o.UpdatedAt
+            };
+        }
+
+        return new
+        {
+            o.Id,
+            o.OrderCode,
+            shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
+            o.ClinicCode,
+            o.ClinicDisplayName,
+            clinicDisplayColor = liveClinic.DisplayColor,
+            linkedClientNickname = liveClinic.LinkedClientNickname,
+            o.MemberId,
+            o.MemberLabel,
+            o.CaseName,
+            o.ImpressionDate,
+            o.ProductCategory,
+            o.Material,
+            workItems = o.WorkItems.Select(ToWorkItemDto),
+            o.RequestedDeliveryDate,
+            o.Status,
+            o.Shade,
+            o.Notes,
+            o.CreatedAt,
+            o.UpdatedAt
+        };
+    }
 
     private static object ToWorkItemDto(OrderWorkItem item) => new
     {

@@ -84,7 +84,7 @@ Existing relevant files/routes:
 | 14 | `plans/order-flow-vertical-slices/slice-14-iam-create-clinic-from-client.md` | Complete | Lab-only IAM client search/prefill and create-clinic-with-initial-member API/UI with audited hash-only secret handling |
 | 15 | `plans/order-flow-vertical-slices/slice-15-iam-edit-deactivate-clinics.md` | Complete | Lab-only IAM clinic metadata edit, soft deactivate/reactivate, audit events, and clinic session revocation |
 | 16 | `plans/order-flow-vertical-slices/slice-16-iam-member-management-and-secret-rotation.md` | Complete | Lab-only IAM member add/edit/deactivate/reactivate and secret rotation with session revocation and audit coverage |
-| 17 | `plans/order-flow-vertical-slices/slice-17-scheduler-clinic-metadata-ui.md` | Not started | Use clinic display color/client metadata in scheduler list/calendar/review and lab target selector |
+| 17 | `plans/order-flow-vertical-slices/slice-17-scheduler-clinic-metadata-ui.md` | Done | Use clinic display color/client metadata in scheduler list/calendar/review and lab target selector |
 
 Statuses: `Not started`, `In progress`, `Blocked`, `Complete`, `Needs revision`.
 

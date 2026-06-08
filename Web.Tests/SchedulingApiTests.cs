@@ -633,6 +633,144 @@ public class SchedulingApiTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
+    [Test]
+    public async Task SchedulingClinicsEndpoint_ReturnsDisplayColorAndLinkedClientForLab()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+
+        var response = await client.GetAsync("/api/scheduling/clinics");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var demo = doc.RootElement.GetProperty("items").EnumerateArray()
+            .First(e => e.GetProperty("clinicCode").GetString() == "DEMO");
+        Assert.That(demo.GetProperty("clinicDisplayName").GetString(), Is.EqualTo("Demo Dental Clinic"));
+        Assert.That(demo.GetProperty("clinicDisplayColor").GetString(), Is.EqualTo("#7c3aed"));
+        Assert.That(demo.GetProperty("linkedClientNickname").GetString(), Is.EqualTo("demo-client"));
+    }
+
+    [Test]
+    public async Task SchedulingOrdersList_IncludesClinicMetadataForLab()
+    {
+        using var fixture = new ApiTestFixture();
+        await SeedOrderAsync(fixture.DbPath, "META-001", "Meta Demo", "DEMO", "2026-06-05");
+        await SeedOrderAsync(fixture.DbPath, "META-002", "Meta Other", "OTHER", "2026-06-06");
+
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+        var response = await client.GetAsync("/api/scheduling/orders?limit=50");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.TryGetProperty("clinics", out var clinics), Is.True);
+        Assert.That(clinics.TryGetProperty("DEMO", out var demo), Is.True);
+        Assert.That(demo.GetProperty("clinicDisplayColor").GetString(), Is.EqualTo("#7c3aed"));
+        Assert.That(demo.GetProperty("linkedClientNickname").GetString(), Is.EqualTo("demo-client"));
+        Assert.That(clinics.TryGetProperty("OTHER", out var other), Is.True);
+        Assert.That(other.GetProperty("clinicDisplayColor").GetString(), Is.EqualTo("#0ea5e9"));
+    }
+
+    [Test]
+    public async Task SchedulingOrdersList_ClinicScopedDoesNotIncludeClinicsMap()
+    {
+        using var fixture = new ApiTestFixture();
+        await SeedOrderAsync(fixture.DbPath, "CLN-001", "Clinic Only", "DEMO", "2026-06-05");
+
+        using var client = fixture.Client;
+        await LoginAsync(client);
+        var response = await client.GetAsync("/api/scheduling/orders?limit=50");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.TryGetProperty("clinics", out _), Is.False);
+    }
+
+    [Test]
+    public async Task SchedulingCalendar_IncludesClinicMetadataForLab()
+    {
+        using var fixture = new ApiTestFixture();
+        await SeedOrderAsync(fixture.DbPath, "CAL-001", "Calendar Demo", "DEMO", "2026-06-05");
+
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+        var response = await client.GetAsync("/api/scheduling/orders/calendar?start=2026-06-01&end=2026-06-30");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.TryGetProperty("clinics", out var clinics), Is.True);
+        Assert.That(clinics.TryGetProperty("DEMO", out var demo), Is.True);
+        Assert.That(demo.GetProperty("clinicDisplayColor").GetString(), Is.EqualTo("#7c3aed"));
+    }
+
+    [Test]
+    public async Task SchedulingOrderDetail_IncludesClinicMetadataForLab()
+    {
+        using var fixture = new ApiTestFixture();
+        const string code = "DET-001";
+        await SeedOrderAsync(fixture.DbPath, code, "Detail Demo", "DEMO", "2026-06-05");
+
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+        var response = await client.GetAsync($"/api/scheduling/orders/{code}");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var order = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(order.GetProperty("clinicDisplayColor").GetString(), Is.EqualTo("#7c3aed"));
+        Assert.That(order.GetProperty("linkedClientNickname").GetString(), Is.EqualTo("demo-client"));
+    }
+
+    [Test]
+    public async Task SchedulingOrdersFind_ListPageIncludesClinicMetadataForLab()
+    {
+        using var fixture = new ApiTestFixture();
+        const string code = "FND-001";
+        await SeedOrderAsync(fixture.DbPath, code, "Find Demo", "DEMO", "2026-06-05");
+
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+        var response = await client.GetAsync($"/api/scheduling/orders/find?code={code}&limit=50");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("order").GetProperty("clinicDisplayColor").GetString(), Is.EqualTo("#7c3aed"));
+        Assert.That(doc.RootElement.GetProperty("listPage").TryGetProperty("clinics", out var clinics), Is.True);
+        Assert.That(clinics.TryGetProperty("DEMO", out _), Is.True);
+    }
+
+    [Test]
+    public async Task SchedulingClinicMetadata_InactiveClinicHistoricalOrderOmitsLiveMetadata()
+    {
+        using var fixture = new ApiTestFixture();
+        _ = fixture.CreateClient();
+        const string code = "INA-001";
+        await SeedOrderAsync(fixture.DbPath, code, "Inactive Clinic Order", "OTHER", "2026-06-05");
+        await DeactivateClinicAsync(fixture.DbPath, "OTHER");
+
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+        var response = await client.GetAsync("/api/scheduling/orders?limit=50");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("items").EnumerateArray().Any(e => e.GetProperty("orderCode").GetString() == code), Is.True);
+        if (doc.RootElement.TryGetProperty("clinics", out var clinics))
+            Assert.That(clinics.TryGetProperty("OTHER", out _), Is.False);
+
+        var detail = await client.GetAsync($"/api/scheduling/orders/{code}");
+        Assert.That(detail.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var order = JsonDocument.Parse(await detail.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(order.GetProperty("clinicDisplayName").GetString(), Is.EqualTo("Other Clinic"));
+        Assert.That(order.TryGetProperty("clinicDisplayColor", out _), Is.False);
+        Assert.That(order.TryGetProperty("linkedClientNickname", out _), Is.False);
+    }
+
+    private static async Task DeactivateClinicAsync(string dbPath, string clinicCode)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using var ctx = new AppDbContext(options);
+        var clinic = await ctx.SchedulingClinics.SingleAsync(c => c.Code == clinicCode);
+        clinic.IsActive = false;
+        clinic.UpdatedAt = DateTimeOffset.UtcNow;
+        await ctx.SaveChangesAsync();
+    }
+
     private static async Task LoginAsync(HttpClient client)
     {
         var login = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"123456\"}"));

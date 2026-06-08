@@ -117,22 +117,25 @@ Likely:
 
 ## Implementation Checklist
 
-- [ ] Choose API DTO shape for clinic metadata.
-- [ ] Add metadata enrichment without N+1 query issues.
-- [ ] Update list/calendar/review UI.
-- [ ] Update lab target clinic selector UI.
-- [ ] Add/update tests.
-- [ ] Run relevant tests/build.
+- [x] Choose API DTO shape for clinic metadata.
+- [x] Add metadata enrichment without N+1 query issues.
+- [x] Update list/calendar/review UI.
+- [x] Update lab target clinic selector UI.
+- [x] Add/update tests.
+- [x] Run relevant tests/build.
 - [ ] Manual accessibility/readability smoke.
-- [ ] Update master plan.
+- [x] Update master plan.
 
 ## Completion Notes
 
-Fill in after implementation.
-
-- Status:
-- Files changed:
-- Tests run:
-- Manual checks:
+- Status: Implemented
+- Files changed: `Web/SchedulingApi.cs`, `Web/wwwroot/orders.html`, `Web.Tests/SchedulingApiTests.cs`, `plans/order-flow-vertical-slices/master-plan.md`
+- Tests run: `dotnet test Web.Tests/Web.Tests.csproj --filter FullyQualifiedName~SchedulingApiTests` (27 passed)
+- Manual checks: Pending — lab list/calendar/review/create selector color + client nickname; clinic view remains clean
 - API metadata shape:
-- Discoveries:
+  - Lab list/calendar/find `listPage`: `{ items, nextCursor?, hasMore?, clinics?: { [clinicCode]: { clinicCode, clinicDisplayName, clinicDisplayColor, linkedClientNickname } } }`
+  - Lab calendar: `{ start, end, days, clinics? }`
+  - Lab order detail/find order: optional `clinicDisplayColor`, `linkedClientNickname` on order DTO
+  - `/api/scheduling/clinics` items include `clinicDisplayColor`, `linkedClientNickname` (active clinics only)
+  - Clinic-scoped list/calendar responses omit `clinics` map; inactive clinics omitted from live metadata (UI neutral fallback)
+- Discoveries: Single `ListClinicsAsync` batch lookup per lab list/calendar/find response avoids N+1; inactive clinics keep order-stored `clinicDisplayName` without live color/client fields.
