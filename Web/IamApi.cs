@@ -34,7 +34,7 @@ public static class IamApi
 
         iam.MapGet("/clients", async (IClientRepo clients, string? query, int? limit) =>
         {
-            var take = Math.Clamp(limit ?? 20, 1, 50);
+            var take = Math.Clamp(limit ?? 200, 1, 200);
             var result = await clients.ListAsync(200);
             var q = query?.Trim();
             var filtered = string.IsNullOrWhiteSpace(q)
