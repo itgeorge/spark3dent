@@ -109,6 +109,10 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
         if (existing != null && !reset)
             throw new InvalidOperationException("A lab already exists. Re-run with --reset to replace bootstrap identity.");
 
+        var requestedLabCode = request.LabCode.Trim().ToUpperInvariant();
+        if (await ctx.SchedulingClinics.AnyAsync(c => c.Code.ToUpper() == requestedLabCode, ct))
+            throw new InvalidOperationException("Lab code conflicts with an existing clinic code.");
+
         var oldLabCode = existing?.Code;
         if (existing == null)
         {

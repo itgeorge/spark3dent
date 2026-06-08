@@ -70,6 +70,24 @@ public class SqliteSchedulingIdentityRepoTest
     }
 
     [Test]
+    public async Task BootstrapLabAsync_WithResetToExistingClinicCode_Throws()
+    {
+        var repo = new SqliteSchedulingIdentityRepo(_contextFactory);
+        var now = DateTimeOffset.Parse("2026-06-08T10:00:00Z");
+        await repo.BootstrapLabAsync(new LabBootstrapRequest("LAB", "Spark3Dent Lab", "lab-1", "Lab Admin", "hash-1", now), reset: false);
+        await repo.CreateClinicWithInitialMemberAsync(
+            new ClinicCreateRequest("DEMO", "Demo", null, "#7c3aed", now),
+            new MemberCreateRequest("assistant-1", "Assistant", "hash-1", now));
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await repo.BootstrapLabAsync(new LabBootstrapRequest("demo", "Ambiguous Lab", "owner", "Owner", "hash-2", now.AddHours(1)), reset: true));
+
+        Assert.That(ex!.Message, Is.EqualTo("Lab code conflicts with an existing clinic code."));
+        Assert.That((await repo.GetLabAsync(includeInactive: true))!.Code, Is.EqualTo("LAB"));
+        Assert.That(await repo.GetClinicAsync("DEMO", includeInactive: true), Is.Not.Null);
+    }
+
+    [Test]
     public async Task ClinicAndMemberMutations_SoftDeactivateAndUpdateSecrets()
     {
         var repo = new SqliteSchedulingIdentityRepo(_contextFactory);
