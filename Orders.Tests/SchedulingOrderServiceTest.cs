@@ -297,6 +297,36 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_GivenLabBeforeMinimumDeliveryDate_AllowsSelection()
+    {
+        var fixture = new Fixture(1);
+        var minimum = await fixture.Service.CalculateMinimumDeliveryDateAsync(fixture.CreateOrderDraft("Test"));
+        var earlyDate = minimum.AddDays(-1);
+        while (DateAvailabilityService.IsWeekend(earlyDate))
+            earlyDate = earlyDate.AddDays(-1);
+
+        var draft = fixture.CreateOrderDraft("Early lab") with { RequestedDeliveryDate = earlyDate };
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, draft, "127.0.0.1", "test", "OTHER");
+
+        Assert.That(created.RequestedDeliveryDate, Is.EqualTo(earlyDate));
+    }
+
+    [Test]
+    public async Task CreateOrderAsync_GivenClinicBeforeMinimumDeliveryDate_Rejects()
+    {
+        var fixture = new Fixture(1);
+        var minimum = await fixture.Service.CalculateMinimumDeliveryDateAsync(fixture.CreateOrderDraft("Test"));
+        var earlyDate = minimum.AddDays(-1);
+        while (DateAvailabilityService.IsWeekend(earlyDate))
+            earlyDate = earlyDate.AddDays(-1);
+
+        var draft = fixture.CreateOrderDraft("Early clinic") with { RequestedDeliveryDate = earlyDate };
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test"));
+    }
+
+    [Test]
     public async Task UpdateOrderAsync_GivenWorkItemChange_MarksAuditWorkItemsChanged()
     {
         var audit = new CapturingAuditLog();

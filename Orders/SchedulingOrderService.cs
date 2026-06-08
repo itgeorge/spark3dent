@@ -61,8 +61,7 @@ public sealed class SchedulingOrderService
     public async Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, string? targetClinicCode, CancellationToken ct = default)
     {
         ValidateDraft(draft);
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
-        await _availability.ValidateDeliveryDateAsync(draft.RequestedDeliveryDate, minimum, ct);
+        await ValidateDeliveryDateForActorAsync(actor, draft, ct);
 
         var targetClinic = await ResolveTargetClinicAsync(actor, targetClinicCode, ct);
         var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent);
@@ -98,8 +97,7 @@ public sealed class SchedulingOrderService
             throw new InvalidOperationException("Cancelled orders cannot be modified.");
 
         ValidateDraft(draft);
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
-        await _availability.ValidateDeliveryDateAsync(draft.RequestedDeliveryDate, minimum, ct);
+        await ValidateDeliveryDateForActorAsync(actor, draft, ct);
 
         var updated = existing with
         {
@@ -257,6 +255,15 @@ public sealed class SchedulingOrderService
         if (oldOrder.Shade != newOrder.Shade) changed.Add(nameof(OrderRecord.Shade));
         if (oldOrder.Notes != newOrder.Notes) changed.Add(nameof(OrderRecord.Notes));
         return changed.ToArray();
+    }
+
+    private async Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct)
+    {
+        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
+        var status = await _availability.GetStatusAsync(draft.RequestedDeliveryDate, minimum, ct);
+        if (status.IsSelectable) return;
+        if (actor.IsLab && status.IsBeforeMinimum && !status.IsClosed && !status.IsFirstBusinessDayAfterClosure) return;
+        throw new InvalidOperationException($"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {status.Reason}.");
     }
 
     private static void ValidateDraft(OrderDraft draft)
