@@ -376,8 +376,11 @@ public static class IamApi
 
     private static string NormalizeOrganizationCode(string value)
     {
-        var chars = value.Trim().ToUpperInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : ch is '-' or '_' or ' ' ? '-' : '\0').Where(ch => ch != '\0').ToArray();
-        var code = string.Join("", new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
+        var chars = value.Trim().ToUpperInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : char.IsWhiteSpace(ch) ? '-' : '\0')
+            .Where(ch => ch != '\0')
+            .ToArray();
+        var code = new string(chars);
         return code.Length > 32 ? code[..32] : code;
     }
 

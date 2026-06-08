@@ -65,11 +65,13 @@ public class IamApiTests
 
         var prefill = await lab.GetAsync("/api/iam/clients/alpha-client/prefill");
         Assert.That(prefill.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(await prefill.Content.ReadAsStringAsync(), Does.Contain("Alpha Dental"));
+        var prefillText = await prefill.Content.ReadAsStringAsync();
+        Assert.That(prefillText, Does.Contain("Alpha Dental"));
+        Assert.That(prefillText, Does.Contain("ALPHA-CLIENT"));
 
         var create = await lab.PostAsync("/api/iam/organizations", Json("""
         {
-          "code":"ALPHA",
+          "code":"ALPHA-CLINIC",
           "displayName":"Alpha Dental",
           "linkedClientNickname":"alpha-client",
           "displayColor":"#123abc",
@@ -82,11 +84,11 @@ public class IamApiTests
         Assert.That(createText, Does.Not.Contain("custom secret 2026!").And.Not.Contain("pbkdf2-sha256"));
 
         using var clinic = fixture.Client;
-        await LoginAsync(clinic, "ALPHA", "custom secret 2026!");
+        await LoginAsync(clinic, "ALPHA-CLINIC", "custom secret 2026!");
         var me = await clinic.GetAsync("/api/scheduling/auth/me");
         Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
-        var audit = await lab.GetAsync("/api/invoicing/audit?entityType=Clinic&entityId=ALPHA");
+        var audit = await lab.GetAsync("/api/invoicing/audit?entityType=Clinic&entityId=ALPHA-CLINIC");
         Assert.That(audit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var auditText = await audit.Content.ReadAsStringAsync();
         Assert.That(auditText, Does.Contain("ClinicCreated"));
