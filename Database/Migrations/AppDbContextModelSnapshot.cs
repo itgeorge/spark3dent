@@ -17,6 +17,79 @@ namespace Database.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
 
+            modelBuilder.Entity("Database.Entities.AuditEventEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ActorMemberId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ActorCredentialId");
+
+                    b.Property<string>("ActorMemberLabel")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ActorCredentialLabel");
+
+                    b.Property<string>("ActorOrganizationCode")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ActorClinicCode");
+
+                    b.Property<string>("ActorOrganizationType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ActorRole");
+
+                    b.Property<string>("ActorSessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityDisplay")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Ip")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OccurredAtUnixTimeMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ServiceName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUnixTimeMilliseconds");
+
+                    b.HasIndex("ActorOrganizationCode", "OccurredAtUnixTimeMilliseconds");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.HasIndex("ServiceName", "Operation", "OccurredAtUnixTimeMilliseconds");
+
+                    b.ToTable("AuditEvents");
+                });
+
             modelBuilder.Entity("Database.Entities.ClientEntity", b =>
                 {
                     b.Property<string>("Nickname")
@@ -206,6 +279,257 @@ namespace Database.Migrations
                         {
                             t.HasCheckConstraint("CK_InvoiceSequence_Id", "Id = 1");
                         });
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingAuthSessionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("AbsoluteExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedIp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedUserAgent")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemberId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("CredentialId");
+
+                    b.Property<string>("OrganizationCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ClinicCode");
+
+                    b.Property<string>("OrganizationType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationType", "OrganizationCode", "MemberId");
+
+                    b.ToTable("SchedulingAuthSessions");
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingClinicEntity", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayColor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LinkedClientNickname")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Code");
+
+                    b.ToTable("SchedulingClinics");
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingLabEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("SchedulingLabs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SchedulingLabs_Singleton", "Id = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingMemberEntity", b =>
+                {
+                    b.Property<string>("OrganizationType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrganizationCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PinHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("OrganizationType", "OrganizationCode", "Id");
+
+                    b.HasIndex("OrganizationType", "OrganizationCode", "IsActive");
+
+                    b.ToTable("SchedulingMembers");
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingOrderEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CaseName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClinicCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClinicDisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUnixTimeMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedIp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedUserAgent")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ImpressionDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Material")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemberId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("CredentialId");
+
+                    b.Property<string>("MemberLabel")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("CredentialLabel");
+
+                    b.Property<string>("MemberPinHashFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("CredentialPinHashFingerprint");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrderCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProductCategory")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("RequestedDeliveryDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Shade")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkItemsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClinicCode");
+
+                    b.HasIndex("CreatedAtUnixTimeMilliseconds");
+
+                    b.HasIndex("OrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("RequestedDeliveryDate");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("SchedulingOrders");
                 });
 
             modelBuilder.Entity("Database.Entities.InvoiceLineItemEntity", b =>

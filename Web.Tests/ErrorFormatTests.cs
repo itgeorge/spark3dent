@@ -14,7 +14,7 @@ public class ErrorFormatTests
     [SetUp]
     public void SetUp()
     {
-        _fixture = new ApiTestFixture();
+        _fixture = new ApiTestFixture(autoLoginAsLab: true);
         _client = _fixture.Client;
     }
 
@@ -26,7 +26,7 @@ public class ErrorFormatTests
     {
         var body = new { nickname = "x" };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
         var json = await response.Content.ReadAsStringAsync();
@@ -38,7 +38,7 @@ public class ErrorFormatTests
     [Test]
     public async Task GetClient_WhenNotExists_Returns404WithErrorShape()
     {
-        var response = await _client.GetAsync("/api/clients/nonexistent");
+        var response = await _client.GetAsync("/api/invoicing/clients/nonexistent");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
         var json = await response.Content.ReadAsStringAsync();

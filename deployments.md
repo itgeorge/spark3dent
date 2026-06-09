@@ -44,6 +44,28 @@ The app supports three hosting modes via `Runtime.HostingMode`:
 
 ---
 
+## LanDev (Desktop, LAN access)
+
+Run the web app on your LAN so other devices (e.g. a phone) can reach it. Uses `HostingMode.Desktop` with `appsettings.LanDev.json`.
+
+**Prerequisites:** .NET 9 SDK
+
+**Run:**
+```bash
+# PowerShell
+dotnet run --project Web -e ASPNETCORE_ENVIRONMENT=LanDev
+
+# Bash
+ASPNETCORE_ENVIRONMENT=LanDev dotnet run --project Web
+```
+
+- Binds to `http://0.0.0.0:<dynamic-port>` (or `PORT` env).
+- Auto-opens browser at `http://localhost:<port>`.
+- From another device on the same network, use `http://<your-lan-ip>:<port>` (e.g. `http://192.168.0.137:8080`).
+- Data paths default to `%LocalAppData%\Spark3Dent` and `Documents\Spark3Dent` (Windows).
+
+---
+
 ## Development (Desktop)
 
 Run the web app directly without Docker. Uses `HostingMode.Desktop` by default.
@@ -56,7 +78,7 @@ dotnet run --project Web
 ```
 
 - Binds to `http://127.0.0.1:<dynamic-port>` (or `PORT` env).
-- Auto-opens browser when `ASPNETCORE_ENVIRONMENT` is `Development` or `Mvp`.
+- Auto-opens browser when `ASPNETCORE_ENVIRONMENT` is `LanDev` or `Mvp`.
 - Data paths default to `%LocalAppData%\Spark3Dent` and `Documents\Spark3Dent` (Windows).
 
 ---
@@ -170,7 +192,7 @@ Deploy to a Hetzner VPS with Caddy as reverse proxy, TLS via Let's Encrypt, and 
 
 | Variable | Scope | Default | Description |
 |----------|-------|---------|-------------|
-| `ASPNETCORE_ENVIRONMENT` | Web | - | `Development`, `Production`, etc. |
+| `ASPNETCORE_ENVIRONMENT` | Web | - | `LanDev`, `Production`, etc. |
 | `App__OpenAiKey` | Web | null | OpenAI API key for legacy PDF import. **Never commit real keys.** Use env or env file. |
 | `OPENAI_API_KEY` | Web | - | Fallback for OpenAI key (alternative to `App__OpenAiKey`) |
 | `Runtime__HostingMode` | Web | Desktop | `Desktop`, `LocalDocker`, `HetznerDocker` |

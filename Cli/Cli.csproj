@@ -31,6 +31,7 @@
         <ProjectReference Include="..\Database\Database.csproj" />
         <ProjectReference Include="..\Storage\Storage.csproj" />
         <ProjectReference Include="..\Utilities\Utilities.csproj" />
+        <ProjectReference Include="..\Orders\Orders.csproj" />
     </ItemGroup>
 
     <!-- Bundle Chromium at build time so the app does not download at runtime.
@@ -39,9 +40,7 @@
         <PropertyGroup>
             <_ChromiumOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(OutputPath)chromium'))</_ChromiumOutputPath>
         </PropertyGroup>
-        <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\ChromiumFetcher\ChromiumFetcher.csproj&quot; --no-build -c $(Configuration) -- &quot;$(_ChromiumOutputPath)&quot;"
-              WorkingDirectory="$(MSBuildProjectDirectory)\.."
-              IgnoreExitCode="false" />
+        <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\ChromiumFetcher\ChromiumFetcher.csproj&quot; --no-build -c $(Configuration) -- &quot;$(_ChromiumOutputPath)&quot;" WorkingDirectory="$(MSBuildProjectDirectory)\.." IgnoreExitCode="false" />
     </Target>
 
     <!-- Include Chromium in publish output so deployed app has PDF support without runtime download. -->

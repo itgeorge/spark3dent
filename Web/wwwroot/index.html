@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="icon" type="image/png" href="images/logo.png" />
   <title>Spark3Dent Invoicer</title>
+  <link rel="stylesheet" href="css/app-chrome.css" />
   <style>
     :root{
       --a1:#22c1c3; /* teal */
@@ -59,41 +60,6 @@
       border-bottom: 1px solid rgba(226,232,240,.8);
     }
 
-    .topbar-inner{
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 14px 18px;
-      display:flex;
-      align-items:center;
-      gap:12px;
-    }
-
-    .brand{
-      display:flex;
-	  flex:auto;
-      align-items:center;
-      gap:10px;
-      min-width: 220px;
-      cursor: pointer;
-    }
-    .logo{
-      width:34px;height:34px;
-      border-radius: 10px;
-      object-fit: contain;
-    }
-    .brand h1{
-      margin:0;
-      font-size: 14px;
-      line-height: 1.2;
-      letter-spacing: .2px;
-    }
-    .sub{
-      display:block;
-      font-size:12px;
-      color: var(--muted2);
-      font-weight: 500;
-    }
-
     .search{
       flex:2;
       display:flex;
@@ -124,15 +90,8 @@
       background: white;
     }
 
-    .actions{
-      display:flex;
-      gap:10px;
-    }
-
     .container{
-      max-width: 1280px;
-      margin:0 auto;
-      padding: 18px;
+      padding-block: 18px;
       width:100%;
     }
 
@@ -867,10 +826,11 @@
     /* Nav tabs */
     .nav-tabs{
       border-bottom: 1px solid rgba(226,232,240,.8);
-      padding: 0 18px;
+      padding-left: var(--app-chrome-pad-x, 18px);
+      padding-right: var(--app-chrome-pad-x, 18px);
     }
     .nav-tabs-inner{
-      max-width: 1280px;
+      max-width: var(--app-content-max, 1280px);
       margin: 0 auto;
       display: flex;
       gap: 0;
@@ -902,6 +862,36 @@
       background: var(--a2);
     }
 
+    /* App auth and product navigation */
+    .auth-shell{
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .auth-card{
+      width: min(100%, 520px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .auth-card-head{
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .auth-card-head img{ width: 38px; height: 38px; border-radius: 10px; object-fit: contain; }
+    .auth-card-body{ padding: 20px; }
+    .auth-card-body label{ display:block; margin: 12px 0 6px; font-size: 12px; font-weight: 800; color: var(--muted); }
+    .auth-card-body input{ width:100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; }
+    .auth-msg{ margin-top: 12px; padding: 10px 12px; border: 1px solid #fecaca; border-radius: 12px; color: #991b1b; background: #fff1f2; font-size: 13px; }
+    .app.auth-locked .app-header,
+    .app.auth-locked > .container{ display:none; }
+    .app:not(.auth-locked) .auth-shell{ display:none; }
     /* Settings dropdown */
     .settings-dropdown-wrap{
       position: relative;
@@ -1012,23 +1002,53 @@
     @media (max-width: 1100px){
       .grid-2{ grid-template-columns: 1fr; }
       .editor{ grid-template-columns: 1fr; }
-      .brand{ min-width: 160px; }
       .row{ grid-template-columns: 70px 120px 1fr 64px minmax(90px, auto); }
+    }
+
+    @media (max-width: 600px){
+      .container{ padding-block: 12px; }
+      .row{
+        grid-template-columns: 46px minmax(78px, 1fr) auto auto;
+        grid-template-areas: "status meta download amount";
+        gap: 6px 8px;
+        padding: 10px 12px;
+        align-items: start;
+      }
+      .row-status{ grid-area: status; align-items: flex-start; }
+      .meta{ grid-area: meta; }
+      .main{ display: none; }
+      .row-download{ grid-area: download; justify-content: flex-end; }
+      .right{ grid-area: amount; align-items: flex-start; }
+      .amount{ font-size: 13px; }
+      .chip{ font-size: 10px; padding: 4px 7px; }
+      .row-download .btn{ padding: 6px 8px; font-size: 11px; }
     }
   </style>
 </head>
 <body>
-  <div class="app">
-    <header class="app-header">
-    <div class="topbar">
-      <div class="topbar-inner">
-        <div class="brand" id="btnBrand" role="button" tabindex="0" title="Обратно към начало">
-          <img src="images/logo.png" alt="" class="logo" aria-hidden="true" />
+  <div class="app auth-locked" id="appRoot">
+    <section id="invoicerAuthShell" class="auth-shell" aria-label="Invoicer login">
+      <div class="auth-card">
+        <div class="auth-card-head">
+          <img src="images/logo.png" alt="" aria-hidden="true" />
           <div>
-            <h1>Spark3Dent Invoicer <span class="sub">Издаване и преглед на фактури, добавяне и редакция на клиенти</span></h1>
+            <h1 style="margin:0;font-size:18px;">Spark3Dent Invoicer</h1>
           </div>
         </div>
-        <div class="actions">
+        <div class="auth-card-body">
+          <label for="invoicerLoginClinic">Organization code</label>
+          <input id="invoicerLoginClinic" value="LAB" autocomplete="username" />
+          <label for="invoicerLoginPin">Password</label>
+          <input id="invoicerLoginPin" type="password" value="654321" autocomplete="current-password" />
+          <button class="btn primary" id="invoicerLoginBtn" type="button" style="width:100%;margin-top:16px;">Enter</button>
+          <div id="invoicerLoginMsg" class="auth-msg hidden"></div>
+        </div>
+      </div>
+    </section>
+    <header class="app-header">
+    <div class="topbar">
+      <div class="topbar-inner" id="appChromeMount">
+        <div data-app-chrome-extra>
           <div class="settings-dropdown-wrap" id="settingsDropdownWrap">
             <button class="btn icon" id="btnTopSettings" title="Настройки" aria-haspopup="true" aria-expanded="false">&#9881;</button>
             <div class="settings-dropdown-menu" id="settingsDropdownMenu" role="menu">
@@ -1057,7 +1077,7 @@
     </div>
     </header>
 
-    <div class="container">
+    <div class="container app-page">
       <div id="viewDashboard">
         <div class="grid-2">
           <div class="card">
@@ -1360,6 +1380,7 @@
     </div>
   </div>
 
+  <script src="js/app-chrome.js"></script>
   <script>
     // ---- State (loaded from API) ----
     let clients = [];
@@ -1369,6 +1390,8 @@
     let editorMode = "issue";
     let selectedClientNickname = null;
     let correctingInvoiceNumber = null;
+    let appInitialized = false;
+    let appChrome;
 
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -1455,6 +1478,46 @@
       };
     }
 
+    async function schedulingJson(url, options = {}){
+      const response = await fetch(url, {
+        headers: { "content-type": "application/json", ...(options.headers || {}) },
+        ...options
+      });
+      const data = await response.json().catch(()=>({}));
+      return { response, data };
+    }
+
+    function showInvoicerLogin(message){
+      $("#appRoot").classList.add("auth-locked");
+      appChrome?.sync(null);
+      const msg = $("#invoicerLoginMsg");
+      msg.textContent = message || "";
+      msg.classList.toggle("hidden", !message);
+      $("#invoicerLoginBtn").disabled = false;
+      $("#invoicerLoginBtn").textContent = "Enter";
+    }
+
+    async function unlockInvoicer(actor){
+      $("#invoicerLoginBtn").disabled = false;
+      $("#invoicerLoginBtn").textContent = "Enter";
+      appChrome.sync(actor);
+      $("#appRoot").classList.remove("auth-locked");
+      if(!appInitialized){
+        appInitialized = true;
+        await init();
+      }
+    }
+
+    async function bootstrapAuth(){
+      const { response, data } = await schedulingJson("/api/scheduling/auth/me");
+      if(!response.ok) return showInvoicerLogin();
+      if(!data.isLab){
+        window.location.replace("/orders");
+        return;
+      }
+      await unlockInvoicer(data);
+    }
+
     // ---- API ----
     function mapClient(c){
       return {
@@ -1486,7 +1549,7 @@
     }
 
     async function loadLatestClients(){
-      const r = await fetch("/api/clients/latest?limit=5");
+      const r = await fetch("/api/invoicing/clients/latest?limit=5");
       if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
       const data = await r.json();
       latestClients = (data.items || []).map(mapClient);
@@ -1494,7 +1557,7 @@
     }
 
     async function loadInvoices(){
-      const r = await fetch("/api/invoices?limit=100");
+      const r = await fetch("/api/invoicing/invoices?limit=100");
       if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на фактури"); return; }
       const data = await r.json();
       invoices = (data.items || []).map(inv => ({
@@ -1520,7 +1583,7 @@
       clients = [];
       try {
         for(;;){
-          const url = cursor ? `/api/clients?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/clients?limit=${PAGE}`;
+          const url = cursor ? `/api/invoicing/clients?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoicing/clients?limit=${PAGE}`;
           const r = await fetch(url);
           if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на клиенти"); return; }
           const data = await r.json();
@@ -1544,7 +1607,7 @@
       invoices = [];
       try {
         for(;;){
-          const url = cursor ? `/api/invoices?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoices?limit=${PAGE}`;
+          const url = cursor ? `/api/invoicing/invoices?limit=${PAGE}&startAfter=${encodeURIComponent(cursor)}` : `/api/invoicing/invoices?limit=${PAGE}`;
           const r = await fetch(url);
           if(!r.ok){ const data = await r.json().catch(()=>({})); showErrorPopup(data.error || "Неуспешно зареждане на фактури"); return; }
           const data = await r.json();
@@ -1677,7 +1740,7 @@
     }
 
     function downloadPdf(number){
-      window.open(`/api/invoices/${encodeURIComponent(number)}/pdf`, "_blank", "noopener");
+      window.open(`/api/invoicing/invoices/${encodeURIComponent(number)}/pdf`, "_blank", "noopener");
     }
 
     function renderClients(list, rootEl){
@@ -1861,10 +1924,6 @@
       setView("dashboard");
       toast("Обратно към начало");
     }
-    $("#btnBrand").addEventListener("click", goToDashboard);
-    $("#btnBrand").addEventListener("keydown", (e)=>{
-      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); goToDashboard(); }
-    });
 
     async function performSave(){
       const number = ($("#inputNumber").value || "").trim();
@@ -1888,7 +1947,7 @@
       showLoadingOverlay(editorMode === "issue" ? "Издаване на фактура..." : "Запазване на корекция...");
       try {
         if(editorMode === "issue"){
-          const r = await fetch("/api/invoices/issue", {
+          const r = await fetch("/api/invoicing/invoices/issue", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ clientNickname: selectedClientNickname, amountCents: amtCents, date })
@@ -1897,7 +1956,7 @@
           if(!r.ok){ showErrorPopup(data.error || "Неуспешно издаване на фактура"); return; }
           toast(`Издадена фактура №${data.invoice?.number || "?"}`);
         }else{
-          const r = await fetch("/api/invoices/correct", {
+          const r = await fetch("/api/invoicing/invoices/correct", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ invoiceNumber: number, amountCents: amtCents, date, correctInvoiceNumber: correctingInvoiceNumber })
@@ -2092,7 +2151,7 @@
         saved = true;
         showLoadingOverlay("Преименуване...");
         try {
-          const r = await fetch(`/api/clients/${encodeURIComponent(nickname)}/rename`, {
+          const r = await fetch(`/api/invoicing/clients/${encodeURIComponent(nickname)}/rename`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ newNickname: newNick })
@@ -2187,7 +2246,7 @@
       showLoadingOverlay("Запазване на клиент...");
       try {
         if(clientModalMode === "edit"){
-          const r = await fetch(`/api/clients/${encodeURIComponent(clientModalEditNickname)}`, {
+          const r = await fetch(`/api/invoicing/clients/${encodeURIComponent(clientModalEditNickname)}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
@@ -2196,7 +2255,7 @@
           if(!r.ok){ showErrorPopup(data.error || "Неуспешна актуализация на клиент"); return; }
           toast(`Клиент „${nickname}" актуализиран`);
         }else{
-          const r = await fetch("/api/clients", {
+          const r = await fetch("/api/invoicing/clients", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
@@ -2282,7 +2341,7 @@
         $("#previewStatus").className = "chip ok";
         let container = $("#tab_preview");
         try {
-          const detailR = await fetch(`/api/invoices/${encodeURIComponent(invNum)}`);
+          const detailR = await fetch(`/api/invoicing/invoices/${encodeURIComponent(invNum)}`);
           if (!detailR.ok) throw new Error("Неуспешно зареждане на данни");
           const detail = await detailR.json();
           const buyer = detail.buyerAddress || {};
@@ -2338,7 +2397,7 @@
 
       try {
         const previewBody = { clientNickname: clientNick, amountCents: amtCents, date, format: "html", ...(invNum && { invoiceNumber: invNum }) };
-        const r = await fetch("/api/invoices/preview", {
+        const r = await fetch("/api/invoicing/invoices/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(previewBody)
@@ -2454,6 +2513,7 @@
       const btn = $("#btnTopSettings");
       wrap.classList.toggle("open");
       btn.setAttribute("aria-expanded", wrap.classList.contains("open"));
+      appChrome.closeMenu();
     }
     function closeSettingsDropdown(){
       $("#settingsDropdownWrap").classList.remove("open");
@@ -2540,7 +2600,7 @@
         const form = new FormData();
         importSelectedFiles.forEach(f=> form.append("files", f));
         form.append("nicknameFromMol", "true");
-        const r = await fetch("/api/invoices/import/analyze", {
+        const r = await fetch("/api/invoicing/invoices/import/analyze", {
           method: "POST",
           body: form
         });
@@ -2667,7 +2727,7 @@
       $("#btnImportCommit").disabled = true;
       showLoadingOverlay("Импортиране...");
       try {
-        const r = await fetch("/api/invoices/import/commit", {
+        const r = await fetch("/api/invoicing/invoices/import/commit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items, nicknameMap, dryRun: false })
@@ -2736,7 +2796,52 @@
       selectedInvoiceNumber = invoices[0]?.number ?? null;
     }
 
-    init();
+    $("#invoicerLoginBtn").addEventListener("click", async ()=>{
+      const btn = $("#invoicerLoginBtn");
+      if(btn.disabled) return;
+      const msg = $("#invoicerLoginMsg");
+      btn.disabled = true;
+      btn.textContent = "Signing in…";
+      msg.classList.add("hidden");
+      try{
+        const { response, data } = await schedulingJson("/api/scheduling/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ organizationCode: $("#invoicerLoginClinic").value, pin: $("#invoicerLoginPin").value })
+        });
+        if(!response.ok){
+          showInvoicerLogin(data.error || "Login failed.");
+          return;
+        }
+        if(!data.isLab){
+          window.location.replace("/orders");
+          return;
+        }
+        await unlockInvoicer(data);
+      }catch{
+        showInvoicerLogin("Login failed.");
+      }
+    });
+    ["#invoicerLoginClinic", "#invoicerLoginPin"].forEach(sel => {
+      $(sel).addEventListener("keydown", e => {
+        if(e.key === "Enter") $("#invoicerLoginBtn").click();
+      });
+    });
+    appChrome = AppChrome.mount(document.getElementById("appChromeMount"), {
+      product: "invoicer",
+      logoSrc: "images/logo.png",
+      brandClick: goToDashboard,
+      brandTitle: "Обратно към начало",
+      menuButtonClass: "btn icon",
+      hideMenuWhenSignedOut: false
+    });
+    appChrome.onMenuOpen(() => closeSettingsDropdown());
+    appChrome.onLogout(async () => {
+      await schedulingJson("/api/scheduling/auth/logout", { method: "POST", body: "{}" });
+      closeSettingsDropdown();
+      showInvoicerLogin();
+    });
+
+    bootstrapAuth();
   </script>
 </body>
 </html>

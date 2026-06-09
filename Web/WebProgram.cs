@@ -5,6 +5,9 @@ using System.Reflection;
 using Accounting;
 using AppSetup;
 using Configuration;
+using Database;
+using Microsoft.EntityFrameworkCore;
+using Orders;
 using Utilities;
 using Web;
 
@@ -49,8 +52,33 @@ builder.Services.AddScoped<IInvoiceImporter>(sp =>
         setup.ImportTempBucket,
         sp.GetRequiredService<Utilities.ILogger>()));
 
+var schedulingConfigPath = ResolveSchedulingConfigPath(config, builder.Environment.ContentRootPath);
+var dbOptions = new DbContextOptionsBuilder<AppDbContext>()
+    .UseSqlite($"Data Source={config.SingleBox.DatabasePath}")
+    .Options;
+builder.Services.AddSingleton<Func<AppDbContext>>(_ => () => new AppDbContext(dbOptions));
+builder.Services.AddSingleton<ISchedulingConfigProvider>(_ => new JsonSchedulingConfigProvider(schedulingConfigPath));
+builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER")));
+builder.Services.AddSingleton<INonWorkingDayProvider, WeekendOnlyNonWorkingDayProvider>();
+builder.Services.AddSingleton<DateAvailabilityService>();
+builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
+builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
+builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
+builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
+builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
+builder.Services.AddScoped<SchedulingAuthService>();
+builder.Services.AddScoped<SchedulingOrderService>();
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new ShadeJsonConverter());
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
+});
+
 var (bindAddress, port) = ResolveEndpoint(config, builder.Configuration);
 var url = $"http://{bindAddress}:{port}";
+var browserUrl = ToBrowserUrl(bindAddress, port);
 builder.WebHost.UseUrls(url);
 
 var app = builder.Build();
@@ -91,6 +119,18 @@ app.MapGet("/", async (Config cfg) =>
         const string banner = @"<div id=""dev-banner"" style=""background:#facc15;color:#0f172a;text-align:center;font-size:2.25rem;font-weight:700;padding:8px;border-bottom:2px solid #eab308;animation:dev-pulse 2s ease-in-out infinite;"">Development</div><style>@keyframes dev-pulse{0%,100%{opacity:1}50%{opacity:.75}}</style>";
         html = html.Replace("<body>", "<body>" + banner);
     }
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
+app.MapGet("/orders", async () =>
+{
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("orders.html", webAssembly);
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
+app.MapGet("/iam", async () =>
+{
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("iam.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
@@ -155,34 +195,53 @@ app.MapGet("/licenses", async () =>
 });
 
 Web.Api.MapRoutes(app);
+Web.SchedulingApi.MapRoutes(app);
+Web.IamApi.MapRoutes(app);
 
 Console.WriteLine($"Running on {url}");
 await app.StartAsync();
 
-// Development/Mvp: open browser. Test: exit immediately. Production: run until Cloud Run scales down.
+// LanDev/Mvp: open browser. Test: exit immediately. Production: run until Cloud Run scales down.
 var env = builder.Environment.EnvironmentName;
-const string DevelopmentEnvName = "Development";
+const string LanDevEnvName = "LanDev";
 const string MvpEnvName = "Mvp";
 const string TestEnvName = "Test";
 var shouldOpenBrowser = config.Runtime.HostingMode == HostingMode.Desktop &&
     (config.App.ShouldOpenBrowserOnStart
-     ?? (string.Equals(env, DevelopmentEnvName, StringComparison.OrdinalIgnoreCase) ||
+     ?? (string.Equals(env, LanDevEnvName, StringComparison.OrdinalIgnoreCase) ||
          string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase)));
 var shouldWaitForShutdown = !string.Equals(env, TestEnvName, StringComparison.OrdinalIgnoreCase);
 
 if (shouldOpenBrowser)
 {
-    Console.WriteLine($"Spark3Dent Web running at {url}");
+    Console.WriteLine($"Spark3Dent Web running at {browserUrl}");
+    if (!string.Equals(browserUrl, url, StringComparison.OrdinalIgnoreCase))
+        Console.WriteLine($"Listening on all interfaces at {url}");
     Console.WriteLine("Press Ctrl+C to stop.");
-    Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+    Process.Start(new ProcessStartInfo { FileName = browserUrl, UseShellExecute = true });
 }
 else
 {
-    Console.WriteLine("NOT auto-starting browser. To open the browser automatically, set `App.ShouldOpenBrowserOnStart: true` in appsettings.json, or set `ASPNETCORE_ENVIRONMENT=Mvp` (or Development).");
+    Console.WriteLine("NOT auto-starting browser. To open the browser automatically, set `App.ShouldOpenBrowserOnStart: true` in appsettings.json, or set `ASPNETCORE_ENVIRONMENT=LanDev` (or Mvp).");
 }
 
 if (shouldWaitForShutdown)
     await app.WaitForShutdownAsync();
+
+static string ResolveSchedulingConfigPath(Config config, string contentRootPath)
+{
+    if (!string.IsNullOrWhiteSpace(config.App.SchedulingConfigPath))
+        return Path.IsPathRooted(config.App.SchedulingConfigPath)
+            ? config.App.SchedulingConfigPath
+            : Path.Combine(contentRootPath, config.App.SchedulingConfigPath);
+    return Path.Combine(contentRootPath, "scheduling.walking-skeleton.json");
+}
+
+static string ToBrowserUrl(string bindAddress, int port)
+{
+    var host = bindAddress is "0.0.0.0" or "*" or "+" ? "localhost" : bindAddress;
+    return $"http://{host}:{port}";
+}
 
 static (string BindAddress, int Port) ResolveEndpoint(Config config, IConfiguration configuration)
 {

@@ -1,8 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Accounting;
 using AppSetup;
+using Database;
 using Invoices;
+using Microsoft.EntityFrameworkCore;
+using Orders;
 using Utilities;
 
 namespace Cli;
@@ -17,6 +21,12 @@ class CliProgram
         Console.InputEncoding = System.Text.Encoding.UTF8;
 
         var config = await AppBootstrap.LoadAndResolveConfigAsync();
+
+        if (await TryRunIamHelperAsync(args, config))
+            return;
+
+        if (TryRunSchedulingHelper(args, config))
+            return;
 
         var logDir = config.SingleBox.LogDirectory;
         Directory.CreateDirectory(logDir);
@@ -33,7 +43,178 @@ class CliProgram
             return;
         }
 
-        await RunCommandLoopAsync(args, setup.InvoiceManagement, setup.ClientRepo, setup.PdfExporter, setup.ImageExporter, logger);
+        await RunCommandLoopAsync(args, setup.InvoiceManagement, setup.ClientRepo, setup.PdfExporter, setup.ImageExporter, logger, config.SingleBox.DatabasePath);
+    }
+
+    static async Task<bool> TryRunIamHelperAsync(string[] args, Configuration.Config config)
+    {
+        if (args.Length < 2 || !args[0].Equals("iam", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!args[1].Equals("bootstrap-lab", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Usage: iam bootstrap-lab --db <path> [--reset] [--lab-code LAB] [--lab-name \"Spark3Dent Lab\"] [--member-id lab-1] [--member-label \"Lab Admin\"] [--secret-stdin]");
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        var (opts, positional) = CliOptsParser.ParseWithPositional(args.Skip(2).ToList());
+        if (positional.Count > 0)
+        {
+            Console.WriteLine("Unexpected positional argument(s): " + string.Join(" ", positional));
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        var dbPath = GetOption(opts, "db") ?? config.SingleBox.DatabasePath;
+        if (string.IsNullOrWhiteSpace(dbPath))
+        {
+            Console.WriteLine("Error: database path is not configured. Pass --db <path>.");
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        var labCode = ReadOptionOrPrompt(opts, "lab-code", "Lab code [LAB]", "LAB");
+        var labName = ReadOptionOrPrompt(opts, "lab-name", "Lab display name", null);
+        var memberId = ReadOptionOrPrompt(opts, "member-id", "First member id [lab-1]", "lab-1");
+        var memberLabel = ReadOptionOrPrompt(opts, "member-label", "First member label", null);
+        string secret;
+        try
+        {
+            secret = CliOptsParser.HasFlag(opts, "secret-stdin")
+                ? (await Console.In.ReadToEndAsync()).TrimEnd('\r', '\n')
+                : ReadSecretTwice();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.WriteLine("Error: " + ex.Message);
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(labName) || string.IsNullOrWhiteSpace(memberLabel))
+        {
+            Console.WriteLine("Error: lab display name and first member label are required.");
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        var validationError = ValidateBootstrapInputs(labCode, memberId, secret);
+        if (validationError != null)
+        {
+            Console.WriteLine("Error: " + validationError);
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        var dbDir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(dbDir))
+            Directory.CreateDirectory(dbDir);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using (var ctx = new AppDbContext(options))
+            await ctx.Database.MigrateAsync();
+
+        AppDbContext ContextFactory() => new(options);
+        var now = DateTimeOffset.UtcNow;
+        var hasher = new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER"));
+        var identities = new SqliteSchedulingIdentityRepo(ContextFactory);
+        var reset = CliOptsParser.HasFlag(opts, "reset");
+
+        try
+        {
+            var lab = await identities.BootstrapLabAsync(
+                new LabBootstrapRequest(NormalizeCode(labCode), labName.Trim(), memberId.Trim(), memberLabel.Trim(), hasher.Hash(secret), now),
+                reset);
+
+            await new SqliteAuditLog(ContextFactory).AppendAsync(new AuditEvent(
+                0,
+                "IAM",
+                reset ? "LabBootstrapReset" : "LabBootstrapped",
+                "Lab",
+                lab.Code,
+                lab.DisplayName,
+                "System",
+                null,
+                null,
+                null,
+                null,
+                now,
+                null,
+                "cli",
+                JsonSerializer.Serialize(new { source = "cli", reset, memberId = memberId.Trim() })));
+
+            Console.WriteLine(reset ? $"Lab '{lab.Code}' reset successfully." : $"Lab '{lab.Code}' bootstrapped successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error: " + ex.Message);
+            Environment.ExitCode = 1;
+        }
+
+        return true;
+    }
+
+    static string ReadOptionOrPrompt(Dictionary<string, string> opts, string key, string prompt, string? defaultValue)
+    {
+        if (GetOption(opts, key) is { } value)
+            return value;
+        Console.Write(defaultValue == null ? prompt + ": " : prompt + ": ");
+        var input = Console.ReadLine();
+        return string.IsNullOrWhiteSpace(input) ? defaultValue ?? string.Empty : input;
+    }
+
+    static string ReadSecretTwice()
+    {
+        var first = ReadSecret("Credential secret: ");
+        var second = ReadSecret("Credential secret again: ");
+        if (first != second)
+            throw new InvalidOperationException("Credential secrets did not match.");
+        return first;
+    }
+
+    static string? ValidateBootstrapInputs(string labCode, string memberId, string secret)
+    {
+        if (!IsCodeLike(labCode, maxLength: 32)) return "Lab code must be 1-32 characters: uppercase letters, numbers, '-' or '_'.";
+        if (!IsCodeLike(memberId, maxLength: 64, allowLower: true)) return "Member id must be 1-64 letters, numbers, '-' or '_'.";
+        try { PinHasher.ValidatePinShape(secret); }
+        catch (InvalidOperationException ex) { return ex.Message; }
+        return null;
+    }
+
+    static bool IsCodeLike(string value, int maxLength, bool allowLower = false)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0 || trimmed.Length > maxLength) return false;
+        return trimmed.All(ch => char.IsDigit(ch) || ch == '-' || ch == '_' || (ch >= 'A' && ch <= 'Z') || (allowLower && ch >= 'a' && ch <= 'z'));
+    }
+
+    static string NormalizeCode(string value) => value.Trim().ToUpperInvariant();
+
+    static bool TryRunSchedulingHelper(string[] args, Configuration.Config config)
+    {
+        if (args.Length < 2 || !args[0].Equals("scheduling", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (args[1].Equals("hash-pin", StringComparison.OrdinalIgnoreCase))
+        {
+            var pin = args.Length >= 3 ? args[2] : ReadSecret("PIN (6 digits): ");
+            var hasher = new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER"));
+            var hash = hasher.Hash(pin);
+            Console.WriteLine(hash);
+            return true;
+        }
+
+        Console.WriteLine("Usage: scheduling hash-pin <credential-secret>");
+        return true;
+    }
+
+    static string ReadSecret(string prompt)
+    {
+        Console.Write(prompt);
+        var value = Console.ReadLine();
+        return value ?? string.Empty;
     }
 
     static async Task RunCommandLoopAsync(
@@ -42,11 +223,12 @@ class CliProgram
         IClientRepo clientRepo,
         IInvoiceExporter pdfExporter,
         IInvoiceExporter? imageExporter,
-        ILogger logger)
+        ILogger logger,
+        string dbPath)
     {
         if (args.Length > 0)
         {
-            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
+            await ExecuteCommandAsync(args, invoiceManagement, clientRepo, pdfExporter, imageExporter, logger, dbPath);
             return;
         }
 
@@ -65,7 +247,7 @@ class CliProgram
                 break;
             }
 
-            await ExecuteCommandAsync(parts.ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter, logger);
+            await ExecuteCommandAsync(parts.ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter, logger, dbPath);
         }
     }
 
@@ -75,7 +257,8 @@ class CliProgram
         IClientRepo clientRepo,
         IInvoiceExporter pdfExporter,
         IInvoiceExporter? imageExporter,
-        ILogger logger)
+        ILogger logger,
+        string dbPath)
     {
         try
         {
@@ -101,6 +284,18 @@ class CliProgram
             if (cmd == "invoices")
             {
                 await RunInvoicesCommandAsync(args.Skip(1).ToArray(), invoiceManagement, clientRepo, pdfExporter, imageExporter);
+                return;
+            }
+
+            if (cmd == "audit")
+            {
+                await RunAuditCommandAsync(args.Skip(1).ToArray(), dbPath);
+                return;
+            }
+
+            if (cmd == "iam")
+            {
+                await TryRunIamHelperAsync(args, new Configuration.Config { SingleBox = new Configuration.SingleBoxConfig { DatabasePath = dbPath }, App = new Configuration.AppConfig() });
                 return;
             }
 
@@ -131,7 +326,214 @@ class CliProgram
         Console.WriteLine("  invoices list           - List recent invoices (newest first)");
         Console.WriteLine("  invoices import <dir> [--dry-run] [-k <openaikey>] [--limit <n>] [--nickname-from-mol]");
         Console.WriteLine("                          - Import legacy PDF invoices recursively; prompt for client nicknames");
+        Console.WriteLine("  scheduling hash-pin <secret>");
+        Console.WriteLine("                          - Generate a hashed scheduling credential secret");
+        Console.WriteLine("  iam bootstrap-lab --db <path> [--reset]");
+        Console.WriteLine("                          - Create/reset the singleton lab and first lab member");
+        Console.WriteLine("  audit list [filters]    - List audit events (newest first)");
+        Console.WriteLine("                          - Filters: --service, --operation, --entity-type, --entity-id,");
+        Console.WriteLine("                            --actor-organization-type, --actor-organization, --actor-member, --since, --until, --limit, --json, --db");
     }
+
+    static async Task RunAuditCommandAsync(string[] args, string defaultDbPath)
+    {
+        if (args.Length == 0 || args[0].Equals("help", StringComparison.OrdinalIgnoreCase))
+        {
+            PrintAuditUsage();
+            return;
+        }
+
+        var sub = args[0].ToLowerInvariant();
+        if (sub != "list")
+        {
+            Console.WriteLine($"Unknown subcommand: {sub}. Use: audit list");
+            return;
+        }
+
+        var (opts, positional) = CliOptsParser.ParseWithPositional(
+            args.Skip(1).ToList(),
+            new Dictionary<string, string> { ["l"] = "limit", ["s"] = "service", ["o"] = "operation" });
+        if (positional.Count > 0)
+        {
+            Console.WriteLine("Unexpected positional argument(s): " + string.Join(" ", positional));
+            PrintAuditUsage();
+            return;
+        }
+
+        var dbPath = GetOption(opts, "db") ?? defaultDbPath;
+        if (string.IsNullOrWhiteSpace(dbPath))
+        {
+            Console.WriteLine("Error: database path is not configured. Pass --db <path>.");
+            return;
+        }
+
+        var limit = 100;
+        if (GetOption(opts, "limit") is { } limitStr && (!int.TryParse(limitStr, out limit) || limit <= 0))
+        {
+            Console.WriteLine("Error: --limit must be a positive integer.");
+            return;
+        }
+        limit = Math.Clamp(limit, 1, 500);
+
+        var since = ParseAuditDateOption(GetOption(opts, "since"), isUntil: false, "--since");
+        if (since.Invalid) return;
+        var until = ParseAuditDateOption(GetOption(opts, "until"), isUntil: true, "--until");
+        if (until.Invalid) return;
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using var ctx = new AppDbContext(options);
+        var query = ctx.AuditEvents.AsNoTracking().AsQueryable();
+
+        query = ApplyStringFilter(query, GetOption(opts, "service", "service-name", "servicename"), e => e.ServiceName);
+        query = ApplyStringFilter(query, GetOption(opts, "operation"), e => e.Operation);
+        query = ApplyStringFilter(query, GetOption(opts, "entity-type", "entitytype"), e => e.EntityType);
+        query = ApplyStringFilter(query, GetOption(opts, "entity-id", "entityid"), e => e.EntityId);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-organization-type", "actororgtype", "actor-role", "actorrole"), e => e.ActorOrganizationType);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-organization", "actor-org", "actor-clinic", "actor-clinic-code", "actorclinic", "actorcliniccode"), e => e.ActorOrganizationCode);
+        query = ApplyStringFilter(query, GetOption(opts, "actor-member", "actor-member-id", "actor-credential", "actor-credential-id", "actorcredential", "actorcredentialid"), e => e.ActorMemberId);
+
+        if (since.Value.HasValue)
+            query = query.Where(e => e.OccurredAtUnixTimeMilliseconds >= since.Value.Value.ToUnixTimeMilliseconds());
+        if (until.Value.HasValue)
+            query = query.Where(e => e.OccurredAtUnixTimeMilliseconds <= until.Value.Value.ToUnixTimeMilliseconds());
+
+        var rows = await query
+            .OrderByDescending(e => e.OccurredAtUnixTimeMilliseconds)
+            .ThenByDescending(e => e.Id)
+            .Take(limit)
+            .Select(e => new AuditListRow(
+                e.Id,
+                e.ServiceName,
+                e.Operation,
+                e.EntityType,
+                e.EntityId,
+                e.EntityDisplay,
+                e.ActorOrganizationType,
+                e.ActorOrganizationCode,
+                e.ActorMemberId,
+                e.ActorMemberLabel,
+                e.ActorSessionId,
+                e.OccurredAt,
+                e.Ip,
+                e.UserAgent,
+                e.MetadataJson))
+            .ToListAsync();
+
+        if (CliOptsParser.HasFlag(opts, "json") || string.Equals(GetOption(opts, "format"), "json", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true }));
+            return;
+        }
+
+        if (rows.Count == 0)
+        {
+            Console.WriteLine("No audit events found.");
+            return;
+        }
+
+        Console.WriteLine($"{"Id",-6} {"Occurred",-20} {"Service",-11} {"Operation",-23} {"Entity",-28} {"Actor",-28} Metadata");
+        Console.WriteLine(new string('-', 138));
+        foreach (var row in rows)
+        {
+            var occurred = row.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            var entity = Truncate($"{row.EntityType}:{row.EntityId}", 26);
+            var actorParts = new[] { row.ActorOrganizationType, row.ActorOrganizationCode, row.ActorMemberLabel ?? row.ActorMemberId }
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+            var actor = Truncate(string.Join("/", actorParts), 26);
+            Console.WriteLine($"{row.Id,-6} {occurred,-20} {Truncate(row.ServiceName, 10),-11} {Truncate(row.Operation, 22),-23} {entity,-28} {actor,-28} {Truncate(row.MetadataJson ?? "", 80)}");
+        }
+    }
+
+    static void PrintAuditUsage()
+    {
+        Console.WriteLine("Usage: audit list [filters]");
+        Console.WriteLine("Filters:");
+        Console.WriteLine("  --service <name>             Scheduling | Invoicing | Clients");
+        Console.WriteLine("  --operation <name>           e.g. OrderCreated, InvoiceIssued");
+        Console.WriteLine("  --entity-type <type>         e.g. SchedulingOrder, Invoice, Client");
+        Console.WriteLine("  --entity-id <id>             Entity id/order code/invoice number/client nickname");
+        Console.WriteLine("  --actor-organization-type <type> Lab | Clinic");
+        Console.WriteLine("  --actor-organization <code>  Acting actor organization code");
+        Console.WriteLine("  --actor-member <id>          Acting member id");
+        Console.WriteLine("  --since <date|timestamp>     yyyy-MM-dd or ISO timestamp");
+        Console.WriteLine("  --until <date|timestamp>     yyyy-MM-dd or ISO timestamp");
+        Console.WriteLine("  --limit <n>                  1..500, default 100");
+        Console.WriteLine("  --json                       Output JSON");
+        Console.WriteLine("  --db <path>                  Override configured SQLite DB path");
+    }
+
+    static IQueryable<Database.Entities.AuditEventEntity> ApplyStringFilter(
+        IQueryable<Database.Entities.AuditEventEntity> query,
+        string? value,
+        System.Linq.Expressions.Expression<Func<Database.Entities.AuditEventEntity, string?>> selector)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return query;
+
+        var trimmed = value.Trim();
+        return query.Where(BuildEqualsExpression(selector, trimmed));
+    }
+
+    static System.Linq.Expressions.Expression<Func<Database.Entities.AuditEventEntity, bool>> BuildEqualsExpression(
+        System.Linq.Expressions.Expression<Func<Database.Entities.AuditEventEntity, string?>> selector,
+        string value)
+    {
+        var toLower = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+        var notNull = System.Linq.Expressions.Expression.NotEqual(selector.Body, System.Linq.Expressions.Expression.Constant(null, typeof(string)));
+        var loweredMember = System.Linq.Expressions.Expression.Call(selector.Body, toLower);
+        var equals = System.Linq.Expressions.Expression.Equal(loweredMember, System.Linq.Expressions.Expression.Constant(value.ToLowerInvariant()));
+        var body = System.Linq.Expressions.Expression.AndAlso(notNull, equals);
+        return System.Linq.Expressions.Expression.Lambda<Func<Database.Entities.AuditEventEntity, bool>>(body, selector.Parameters);
+    }
+
+    static (DateTimeOffset? Value, bool Invalid) ParseAuditDateOption(string? raw, bool isUntil, string optionName)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return (null, false);
+
+        if (DateOnly.TryParseExact(raw.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateOnly))
+        {
+            var dateTime = isUntil
+                ? dateOnly.ToDateTime(TimeOnly.MaxValue)
+                : dateOnly.ToDateTime(TimeOnly.MinValue);
+            return (new DateTimeOffset(dateTime, TimeSpan.Zero), false);
+        }
+
+        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto))
+            return (dto.ToUniversalTime(), false);
+
+        Console.WriteLine($"Error: {optionName} must be yyyy-MM-dd or an ISO timestamp.");
+        return (null, true);
+    }
+
+    static string? GetOption(Dictionary<string, string> opts, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (opts.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+        return null;
+    }
+
+    private sealed record AuditListRow(
+        long Id,
+        string ServiceName,
+        string Operation,
+        string EntityType,
+        string EntityId,
+        string? EntityDisplay,
+        string ActorOrganizationType,
+        string? ActorOrganizationCode,
+        string? ActorMemberId,
+        string? ActorMemberLabel,
+        string? ActorSessionId,
+        DateTimeOffset OccurredAt,
+        string? Ip,
+        string? UserAgent,
+        string? MetadataJson);
 
     static async Task RunClientsCommandAsync(string[] args, IClientRepo clientRepo)
     {

@@ -1,0 +1,181 @@
+:root{
+  --app-content-max: 1280px;
+  --app-chrome-pad-x: 18px;
+  --app-chrome-pad-y: 16px;
+}
+.app-chrome-host{
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: var(--app-chrome-pad-y) var(--app-chrome-pad-x);
+  display: flex;
+  align-items: center;
+}
+.app-page{
+  box-sizing: border-box;
+  max-width: var(--app-content-max);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--app-chrome-pad-x);
+  padding-right: var(--app-chrome-pad-x);
+  width: 100%;
+}
+.app-chrome{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.app-chrome-brand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  text-decoration: none;
+  color: inherit;
+}
+button.app-chrome-brand{
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.app-chrome-brand.clickable{
+  cursor: pointer;
+}
+.app-chrome-brand.clickable:hover{
+  opacity: .88;
+}
+.app-chrome-logo{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.app-chrome-brand-text{
+  min-width: 0;
+  overflow: hidden;
+}
+.app-chrome-name,
+.app-chrome-product{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-chrome-name{
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: .2px;
+}
+.app-chrome-product{
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted2, var(--muted));
+  line-height: 1.2;
+}
+.app-chrome-actions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.app-chrome-extra{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-menu-account{
+  padding: 6px 14px 4px;
+}
+.app-menu-account-label{
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted2, var(--muted));
+  opacity: .65;
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+.app-menu-actor{
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-menu-wrap{
+  position: relative;
+}
+.app-menu{
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius2, 12px);
+  box-shadow: var(--shadow);
+  padding: 6px 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 50;
+}
+.app-menu-wrap.open .app-menu{
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.app-menu-item{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-decoration: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.app-menu-item:hover{
+  background: rgba(124,58,237,.08);
+}
+.app-menu-item.active{
+  color: #6d28d9;
+  background: rgba(124,58,237,.08);
+}
+.app-menu-divider{
+  height: 1px;
+  margin: 6px 0;
+  background: var(--border);
+}
+.app-menu-logout{
+  color: #991b1b;
+}
+.app-menu-logout:hover{
+  background: rgba(239,68,68,.08);
+}

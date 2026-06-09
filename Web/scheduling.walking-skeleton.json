@@ -1,0 +1,49 @@
+{
+  "sessionSlidingDays": 30,
+  "sessionAbsoluteDays": 180,
+  "defaultMinBusinessDays": 3,
+  "workRules": [
+    {
+      "productCategory": "permanent",
+      "workType": "crown",
+      "material": "fullContourZirconia",
+      "constructionType": "crown",
+      "minBusinessDays": 3
+    },
+    {
+      "productCategory": "permanent",
+      "workType": "crown",
+      "material": "glassCeramics",
+      "constructionType": "crown",
+      "minBusinessDays": 3
+    },
+    {
+      "productCategory": "permanent",
+      "workType": "bridge",
+      "material": "pfm",
+      "constructionType": "bridge",
+      "minBusinessDays": 5
+    },
+    {
+      "productCategory": "permanent",
+      "workType": "bridge",
+      "material": "pfzLayeredZrCrown",
+      "constructionType": "bridge",
+      "minBusinessDays": 5
+    },
+    {
+      "productCategory": "temporary",
+      "workType": "temporaryCrownBridge",
+      "material": "pmma",
+      "constructionType": "crown",
+      "minBusinessDays": 1
+    },
+    {
+      "productCategory": "temporary",
+      "workType": "temporaryCrownBridge",
+      "material": "pmma",
+      "constructionType": "bridge",
+      "minBusinessDays": 2
+    }
+  ]
+}

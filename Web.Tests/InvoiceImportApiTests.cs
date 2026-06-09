@@ -34,11 +34,11 @@ public class InvoiceImportApiTests
     public async Task PostImportAnalyze_WhenOpenAiKeyNotConfigured_Returns500AndLogsOpenAiError()
     {
         var capturingLogger = new CapturingLogger();
-        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger);
+        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger, autoLoginAsLab: true);
         var client = fixture.Client;
 
         var content = new MultipartFormDataContent();
-        var response = await client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.InternalServerError);
@@ -51,12 +51,12 @@ public class InvoiceImportApiTests
     public async Task PostImportCommit_WhenOpenAiKeyNotConfigured_Returns500AndLogsOpenAiError()
     {
         var capturingLogger = new CapturingLogger();
-        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger);
+        using var fixture = new ApiTestFixture(openAiKey: null, loggerOverride: capturingLogger, autoLoginAsLab: true);
         var client = fixture.Client;
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>() };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await client.PostAsync("/api/invoices/import/commit", content);
+        var response = await client.PostAsync("/api/invoicing/invoices/import/commit", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.InternalServerError);
@@ -68,11 +68,11 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WhenOpenAiKeyConfigured_DoesNotReturn500ForMissingKey()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-test-dummy-key");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-test-dummy-key", autoLoginAsLab: true);
         var client = fixture.Client;
 
         var content = new MultipartFormDataContent();
-        var response = await client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         // Key is present, so we should NOT get 500 (missing key). We may get 400 for no files.
         Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.InternalServerError));
@@ -81,12 +81,12 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportCommit_WhenOpenAiKeyConfigured_DoesNotReturn500ForMissingKey()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var client = fixture.Client;
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>() };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await client.PostAsync("/api/invoices/import/commit", content);
+        var response = await client.PostAsync("/api/invoicing/invoices/import/commit", content);
 
         Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.InternalServerError));
     }
@@ -94,10 +94,10 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithInvalidMultipartForm_Returns422WithDevFriendlyMessage()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         // Empty MultipartFormDataContent produces invalid multipart body (no valid Content-Disposition).
-        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.UnprocessableEntity);
@@ -110,13 +110,13 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithNonPdfFile_Returns400WithError()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("not a pdf"));
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "files", "document.txt");
 
-        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
@@ -135,13 +135,13 @@ public class InvoiceImportApiTests
             return;
         }
 
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(pdfPath));
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "files", "invoice.pdf");
 
-        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
@@ -169,14 +169,15 @@ public class InvoiceImportApiTests
         var fakeCommit = new ImportCommitResponse(0, 0, 0, []);
         using var fixture = new ApiTestFixture(
             openAiKey: "sk-dummy",
-            invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit));
+            invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit),
+            autoLoginAsLab: true);
 
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(pdfPath));
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "files", "invoice.pdf");
 
-        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.That(doc.RootElement.GetProperty("files")[0].GetProperty("invoiceNumber").GetString(), Is.EqualTo("42"));
@@ -186,9 +187,9 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportCommit_WithInvalidJson_Returns400()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new StringContent("{ invalid json }", Encoding.UTF8, "application/json");
-        var response = await fixture.Client.PostAsync("/api/invoices/import/commit", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/commit", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
@@ -197,10 +198,10 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportCommit_WithValidPayload_Returns200WithExpectedShape()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>(), dryRun = false };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await fixture.Client.PostAsync("/api/invoices/import/commit", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/commit", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
@@ -223,11 +224,12 @@ public class InvoiceImportApiTests
             [new ImportCommitItemStatus("invoice.pdf", "failed", "parse failed")]);
         using var fixture = new ApiTestFixture(
             openAiKey: "sk-dummy",
-            invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit));
+            invoiceImporterOverride: new FakeInvoiceImporter(fakeAnalyze, fakeCommit),
+            autoLoginAsLab: true);
 
         var body = new { items = Array.Empty<object>(), nicknameMap = new Dictionary<string, string>(), dryRun = false };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await fixture.Client.PostAsync("/api/invoices/import/commit", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/commit", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -240,7 +242,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithTooManyFiles_Returns400()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var pdfPath = MinimalPdfPath;
         if (!File.Exists(pdfPath))
         {
@@ -257,7 +259,7 @@ public class InvoiceImportApiTests
             content.Add(fileContent, "files", $"invoice{i}.pdf");
         }
 
-        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
@@ -266,7 +268,7 @@ public class InvoiceImportApiTests
     [Test]
     public async Task PostImportAnalyze_WithFileTooLarge_Returns400()
     {
-        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy");
+        using var fixture = new ApiTestFixture(openAiKey: "sk-dummy", autoLoginAsLab: true);
         var content = new MultipartFormDataContent();
         var oversized = new byte[1024 * 1024 + 1]; // 1MB + 1 byte
         new Random(42).NextBytes(oversized);
@@ -278,7 +280,7 @@ public class InvoiceImportApiTests
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "files", "large.pdf");
 
-        var response = await fixture.Client.PostAsync("/api/invoices/import/analyze", content);
+        var response = await fixture.Client.PostAsync("/api/invoicing/invoices/import/analyze", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spark3Dent IAM</title>
+  <link rel="icon" href="/images/logo.png" />
+  <link rel="stylesheet" href="/css/app-chrome.css" />
+  <style>
+    :root{--a2:#7c3aed;--bg:#f8fafc;--panel:#fff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--shadow:0 8px 30px rgba(15,23,42,.08);--radius:16px;--ok:#10b981;--bad:#ef4444;--lab-bg:#f5f3ff;--lab-border:#c4b5fd}
+    *{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;color:var(--text);background:var(--bg)}header{border-bottom:1px solid var(--border);background:rgba(248,250,252,.88);backdrop-filter:blur(10px);position:sticky;top:0;z-index:2}.wrap{margin:0 auto;padding-block:22px}.grid{display:grid;grid-template-columns:320px 1fr;gap:18px}.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}.head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}.body{padding:18px}.sub{font-size:12px;color:var(--muted)}.list{display:flex;flex-direction:column;gap:10px}.org-btn{width:100%;text-align:left;border:1px solid var(--border);border-radius:12px;background:white;padding:12px;cursor:pointer}.org-btn.lab{background:var(--lab-bg);border-color:var(--lab-border)}.org-btn.active{border-color:var(--a2);box-shadow:0 0 0 4px rgba(124,58,237,.12)}.org-btn .meta{display:block;font-size:12px;color:var(--muted);margin-top:4px}.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.kv div{border:1px solid var(--border);border-radius:12px;padding:12px;background:#fff}.label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--muted);margin-bottom:4px}.chip{display:inline-block;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700}.chip.active{background:#dcfce7;color:#166534}.chip.inactive{background:#fee2e2;color:#991b1b}.swatch{display:inline-flex;align-items:center;gap:8px}.swatch i{display:inline-block;width:18px;height:18px;border-radius:999px;border:1px solid var(--border)}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-size:13px}th{font-size:11px;text-transform:uppercase;color:var(--muted)}.hidden{display:none!important}body.auth-locked header{display:none}.auth-shell{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(100%,520px);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.auth-card-head{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}.auth-card-head img{width:38px;height:38px;border-radius:10px;object-fit:contain}.auth-card-body{padding:20px}.auth-card-body label{display:block;margin:12px 0 6px;font-size:12px;font-weight:800;color:var(--muted)}.auth-card-body input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:12px;font:inherit}.btn{border:1px solid var(--border);border-radius:12px;background:white;padding:10px 13px;font-weight:750;cursor:pointer}.btn.primary{background:linear-gradient(180deg,#7c3aed,#6d28d9);color:white;border-color:#7c3aed}.btn.danger{border-color:#fecaca;color:#991b1b}.btn.small{padding:6px 9px;border-radius:9px;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.msg{margin-top:12px;padding:10px 12px;border-radius:12px;font-size:13px}.msg.err{background:#fff1f2;border:1px solid #fecaca;color:#991b1b}.msg.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.empty{color:var(--muted)}.modal-overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.34);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}.add-member-card{width:min(100%,430px)}.add-member-actions{display:flex;justify-content:flex-end;gap:10px;padding:0 18px 18px;flex-wrap:wrap}.add-member-card label{display:block;margin:12px 0 6px;font-size:12px;font-weight:800;color:var(--muted)}.add-member-card label:first-of-type{margin-top:0}.add-member-card input,.add-member-card select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:12px;font:inherit;background:#fff}.secret-input-row{display:flex;align-items:stretch;gap:8px}.secret-input-row input{flex:1;min-width:0}.btn.circle-icon{width:38px;height:38px;min-width:38px;padding:0;border-radius:999px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}.btn.circle-icon:hover:not(:disabled){border-color:rgba(124,58,237,.45);color:#7c3aed}.copy-icon{display:block;width:18px;height:18px;flex:0 0 auto}.copy-feedback-pop{position:fixed;z-index:60;padding:6px 10px;border-radius:8px;background:#0f172a;color:#fff;font-size:12px;font-weight:650;line-height:1.2;box-shadow:0 8px 24px rgba(15,23,42,.22);pointer-events:none;opacity:1;transition:opacity .3s ease;white-space:nowrap}.copy-feedback-pop.fade-out{opacity:0}.add-member-card input[readonly]{background:#f8fafc;color:var(--muted);cursor:default}.add-member-card .msg{margin:12px 0 0}.confirm-popup-card{width:min(100%,420px)}.confirm-popup-text{margin:0;font-size:15px;line-height:1.5;color:var(--muted)}.confirm-popup-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:900;letter-spacing:.04em;color:var(--text)}.confirm-popup-actions{display:flex;justify-content:flex-end;gap:10px;padding:0 18px 18px;flex-wrap:wrap}.color-field{display:flex;flex-direction:column}.color-input-wrap{position:relative}.color-input-wrap input{padding-right:48px}.color-input-preview{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:999px;border:1px solid var(--border);padding:0;cursor:pointer;background:#fff;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}.color-input-preview:hover:not(:disabled){border-color:rgba(124,58,237,.45)}.color-input-preview:disabled{opacity:.55;cursor:not-allowed}.color-input-preview-mark{font-size:14px;font-weight:800;color:var(--muted);line-height:1}.color-input-preview.has-color .color-input-preview-mark{display:none}.color-palette-pop{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:3;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff;box-shadow:var(--shadow)}.color-palette{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}.color-palette-btn{width:100%;aspect-ratio:1;border-radius:999px;border:2px solid transparent;padding:0;cursor:pointer;background:var(--swatch-color);box-shadow:inset 0 0 0 1px rgba(15,23,42,.08);transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}.color-palette-btn:hover:not(:disabled){transform:scale(1.06)}.color-palette-btn.active{border-color:#0f172a;box-shadow:0 0 0 3px rgba(124,58,237,.18),inset 0 0 0 1px rgba(15,23,42,.08)}.color-palette-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}.org-picker-wrap{display:none;margin-bottom:12px}.org-picker-wrap label{display:block;margin:0 0 6px;font-size:12px;font-weight:800;color:var(--muted)}.org-picker-wrap select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:12px;font:inherit;background:#fff}@media(max-width:900px){.grid{grid-template-columns:1fr}.org-list-desktop{display:none!important}.org-picker-wrap{display:block}}
+  </style>
+</head>
+<body>
+<header><div id="appChromeMount"></div></header>
+<main class="wrap app-page hidden" id="appRoot">
+  <div class="grid">
+    <section class="card">
+      <div class="head"><div><b>Organizations</b><div class="sub">Lab IAM</div></div><button class="btn primary" id="newClinicBtn" type="button">New clinic</button></div>
+      <div class="body">
+        <div class="toolbar" style="margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)"><input id="includeInactive" type="checkbox"> Show inactive</label>
+          <button class="btn" id="reloadBtn" type="button">Refresh</button>
+        </div>
+        <div id="orgPickerWrap" class="org-picker-wrap">
+          <label for="orgPicker">Organization</label>
+          <select id="orgPicker"></select>
+        </div>
+        <div id="orgList" class="list org-list-desktop"></div>
+        <div id="orgListEmpty" class="empty hidden">No organizations found.</div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="head"><div><b id="orgTitle">Organization details</b><div class="sub" id="orgSub"></div></div><div class="actions" id="orgActions"></div></div>
+      <div class="body">
+        <div id="orgKv" class="kv"></div>
+        <h3 id="orgMembersTitle" style="margin:18px 0 10px">Members</h3>
+        <div class="toolbar" style="margin:18px 0 10px"><span></span><button class="btn small" id="addMemberBtn" type="button">Add member</button></div>
+        <table><thead><tr><th>Member</th><th>Status</th><th>PIN fingerprint</th><th>Actions</th></tr></thead><tbody id="orgMembers"></tbody></table>
+        <div id="iamMsg" class="msg hidden"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<section id="login" class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-card-head"><img src="/images/logo.png" alt="" aria-hidden="true"><div><h1 style="margin:0;font-size:18px;">Spark3Dent IAM</h1></div></div>
+    <div class="auth-card-body">
+      <label for="organizationCode">Organization code</label>
+      <input id="organizationCode" value="LAB" autocomplete="username">
+      <label for="pin">Password</label>
+      <input id="pin" type="password" value="654321" autocomplete="current-password">
+      <button class="btn primary" id="loginBtn" type="button" style="width:100%;margin-top:16px;">Enter</button>
+      <div id="loginMsg" class="msg err hidden"></div>
+    </div>
+  </div>
+</section>
+<div id="addMemberPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="addMemberTitle">
+  <div class="card add-member-card">
+    <div class="body">
+      <h2 id="addMemberTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">Add member</h2>
+      <label for="addMemberId">Member id</label>
+      <input id="addMemberId" autocomplete="off" spellcheck="false">
+      <label for="addMemberLabel">Member label</label>
+      <input id="addMemberLabel" autocomplete="off">
+      <label for="addMemberSecret">Member secret</label>
+      <input id="addMemberSecret" autocomplete="off" spellcheck="false">
+      <div id="addMemberMsg" class="msg err hidden"></div>
+    </div>
+    <div class="add-member-actions">
+      <button class="btn" id="addMemberCancelBtn" type="button">Cancel</button>
+      <button class="btn primary" id="addMemberSubmitBtn" type="button">Add member</button>
+    </div>
+  </div>
+</div>
+<div id="editMemberPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="editMemberTitle">
+  <div class="card add-member-card">
+    <div class="body">
+      <h2 id="editMemberTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">Edit member</h2>
+      <label for="editMemberId">Member id</label>
+      <input id="editMemberId" readonly>
+      <label for="editMemberLabel">Member label</label>
+      <input id="editMemberLabel" autocomplete="off">
+      <label for="editMemberStatus">Status</label>
+      <input id="editMemberStatus" readonly>
+      <label for="editMemberPinFingerprint">PIN fingerprint</label>
+      <input id="editMemberPinFingerprint" class="mono" readonly>
+      <div id="editMemberMsg" class="msg err hidden"></div>
+    </div>
+    <div class="add-member-actions">
+      <button class="btn" id="editMemberCancelBtn" type="button">Cancel</button>
+      <button class="btn primary" id="editMemberSubmitBtn" type="button">Save changes</button>
+    </div>
+  </div>
+</div>
+<div id="editClinicPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="editClinicTitle">
+  <div class="card add-member-card">
+    <div class="body">
+      <h2 id="editClinicTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">Edit clinic</h2>
+      <label for="editClinicCode">Clinic code</label>
+      <input id="editClinicCode" class="mono" readonly>
+      <label for="editClinicDisplayName">Clinic display name</label>
+      <input id="editClinicDisplayName" autocomplete="off">
+      <label for="editClinicLinkedClient">Linked invoicing client</label>
+      <select id="editClinicLinkedClient">
+        <option value="">No client link</option>
+      </select>
+      <label for="editClinicDisplayColor">Display color</label>
+      <div class="color-field">
+        <div class="color-input-wrap">
+          <input id="editClinicDisplayColor" autocomplete="off" spellcheck="false" placeholder="#7c3aed">
+          <button type="button" id="editClinicDisplayColorPreview" class="color-input-preview" aria-label="Choose display color" aria-haspopup="listbox" aria-expanded="false">
+            <span class="color-input-preview-mark" aria-hidden="true">?</span>
+          </button>
+          <div id="editClinicColorPalettePop" class="color-palette-pop hidden">
+            <div id="editClinicColorPalette" class="color-palette" role="listbox" aria-label="Display color presets"></div>
+          </div>
+        </div>
+      </div>
+      <div id="editClinicMsg" class="msg err hidden"></div>
+    </div>
+    <div class="add-member-actions">
+      <button class="btn" id="editClinicCancelBtn" type="button">Cancel</button>
+      <button class="btn primary" id="editClinicSubmitBtn" type="button">Save changes</button>
+    </div>
+  </div>
+</div>
+<div id="rotateSecretPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rotateSecretTitle">
+  <div class="card add-member-card">
+    <div class="body">
+      <h2 id="rotateSecretTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">Rotate secret</h2>
+      <label for="rotateSecretMemberId">Member id</label>
+      <input id="rotateSecretMemberId" readonly>
+      <label for="rotateSecretMemberLabel">Member label</label>
+      <input id="rotateSecretMemberLabel" readonly>
+      <label for="rotateSecretValue">New secret</label>
+      <input id="rotateSecretValue" autocomplete="off" spellcheck="false">
+      <div id="rotateSecretMsg" class="msg err hidden"></div>
+    </div>
+    <div class="add-member-actions">
+      <button class="btn" id="rotateSecretCancelBtn" type="button">Cancel</button>
+      <button class="btn primary" id="rotateSecretSubmitBtn" type="button">Rotate secret</button>
+    </div>
+  </div>
+</div>
+<div id="statusConfirmPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="statusConfirmTitle">
+  <div class="card confirm-popup-card">
+    <div class="body">
+      <h2 id="statusConfirmTitle" style="margin:0 0 10px;font-size:18px;font-weight:900"></h2>
+      <p id="statusConfirmText" class="confirm-popup-text"></p>
+      <div id="statusConfirmMsg" class="msg err hidden"></div>
+    </div>
+    <div class="confirm-popup-actions">
+      <button class="btn" id="statusConfirmBackBtn" type="button">Cancel</button>
+      <button class="btn" id="statusConfirmYesBtn" type="button"></button>
+    </div>
+  </div>
+</div>
+<div id="newClinicPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="newClinicTitle">
+  <div class="card add-member-card">
+    <div class="body">
+      <h2 id="newClinicTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">New clinic</h2>
+      <label for="newClinicLinkedClient">Linked invoicing client</label>
+      <select id="newClinicLinkedClient">
+        <option value="">No client link</option>
+      </select>
+      <div class="sub" style="margin-top:4px">Select a client to prefill clinic details.</div>
+      <label for="newClinicCode">Clinic code</label>
+      <input id="newClinicCode" autocomplete="off" spellcheck="false">
+      <label for="newClinicDisplayName">Clinic display name</label>
+      <input id="newClinicDisplayName" autocomplete="off">
+      <label for="newClinicDisplayColor">Display color</label>
+      <div class="color-field">
+        <div class="color-input-wrap">
+          <input id="newClinicDisplayColor" autocomplete="off" spellcheck="false" placeholder="#7c3aed">
+          <button type="button" id="newClinicDisplayColorPreview" class="color-input-preview" aria-label="Choose display color" aria-haspopup="listbox" aria-expanded="false">
+            <span class="color-input-preview-mark" aria-hidden="true">?</span>
+          </button>
+          <div id="newClinicColorPalettePop" class="color-palette-pop hidden">
+            <div id="newClinicColorPalette" class="color-palette" role="listbox" aria-label="Display color presets"></div>
+          </div>
+        </div>
+      </div>
+      <label for="newClinicMemberId">Initial member id</label>
+      <input id="newClinicMemberId" autocomplete="off" spellcheck="false">
+      <label for="newClinicMemberLabel">Initial member label</label>
+      <input id="newClinicMemberLabel" autocomplete="off">
+      <label for="newClinicSecret">Initial member secret</label>
+      <input id="newClinicSecret" autocomplete="off" spellcheck="false">
+      <div id="newClinicMsg" class="msg err hidden"></div>
+    </div>
+    <div class="add-member-actions">
+      <button class="btn" id="newClinicCancelBtn" type="button">Cancel</button>
+      <button class="btn primary" id="newClinicSubmitBtn" type="button">Create clinic</button>
+    </div>
+  </div>
+</div>
+<div id="secretConfirmPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="secretConfirmTitle">
+  <div class="card add-member-card">
+    <div class="body">
+      <h2 id="secretConfirmTitle" style="margin:0 0 10px;font-size:18px;font-weight:900"></h2>
+      <p id="secretConfirmWarning" class="sub" style="margin:0 0 12px"></p>
+      <label for="secretConfirmValue" id="secretConfirmLabel">Secret</label>
+      <div class="secret-input-row">
+        <input id="secretConfirmValue" class="mono" readonly>
+        <button class="btn circle-icon" id="secretConfirmCopyBtn" type="button" aria-label="Copy secret" title="Copy to clipboard">
+          <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+        </button>
+      </div>
+      <div id="secretConfirmMsg" class="msg err hidden"></div>
+    </div>
+    <div class="add-member-actions">
+      <button class="btn" id="secretConfirmBackBtn" type="button">Back</button>
+      <button class="btn primary" id="secretConfirmYesBtn" type="button"></button>
+    </div>
+  </div>
+</div>
+<div id="addMemberCopyPop" class="copy-feedback-pop hidden" role="status" aria-live="polite">Copied</div>
+<script src="/js/app-chrome.js"></script>
+<script>
+const $=id=>document.getElementById(id), api=(u,o={})=>fetch(u,{headers:{'content-type':'application/json',...(o.headers||{})},...o});
+let actor=null, selectedCode=null, selectedOrg=null, orgs=[], iamClients=[], addMemberBusy=false, addMemberCopyPopTimer=null, editMemberBusy=false, editingMemberId=null, editClinicBusy=false, editClinicColorPaletteOpen=false, rotateSecretBusy=false, rotatingMemberId=null, statusConfirmBusy=false, statusConfirmRequest=null, secretConfirmBusy=false, secretConfirmAction=null, newClinicBusy=false, newClinicPrefillBusy=false, newClinicColorPaletteOpen=false;
+const appChrome=AppChrome.mount(document.getElementById('appChromeMount'),{product:'iam',logoSrc:'images/logo.png',brandClick:()=>loadAll(),menuButtonClass:'btn'});
+appChrome.onLogout(async()=>{await api('/api/scheduling/auth/logout',{method:'POST',body:'{}'});actor=null;showLogin()});
+function esc(v){return String(v??'').replace(/[&<>\"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]))}
+function statusChip(active){return `<span class="chip ${active?'active':'inactive'}">${active?'Active':'Inactive'}</span>`}
+function orgTypeLabel(type){return type==='lab'?'Lab':'Clinic'}
+function formatDateTimeBulgarian(value){if(!value)return '—';const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value);const date=new Intl.DateTimeFormat('bg-BG',{day:'2-digit',month:'2-digit',year:'numeric'}).format(d);const time=new Intl.DateTimeFormat('bg-BG',{hour:'2-digit',minute:'2-digit',hour12:false}).format(d);return `${date}, ${time}`}
+function orgTitleLabel(type){return type==='lab'?'Lab profile':'Clinic organization'}
+function orgMembersTitleLabel(type){return type==='lab'?'Lab members':'Clinic members'}
+function genSecret(){return String(Math.floor(100000+Math.random()*900000))}
+const CLINIC_COLOR_PALETTE=['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#10b981','#14b8a6','#06b6d4','#0ea5e9','#3b82f6','#6366f1','#8b5cf6','#a855f7','#d946ef','#ec4899','#f43f5e','#fb7185','#fdba74','#fcd34d','#bef264','#4ade80','#2dd4bf','#22d3ee','#38bdf8','#60a5fa','#818cf8','#a78bfa','#c084fc','#e879f9','#f472b6','#7c3aed'];
+const HEX_COLOR_RE=/^#[0-9A-Fa-f]{6}$/;
+function normalizeHexColor(value){const v=(value||'').trim();if(!HEX_COLOR_RE.test(v))return null;return v.toLowerCase()}
+function closeNewClinicColorPalette(){newClinicColorPaletteOpen=false;const pop=$('newClinicColorPalettePop');const btn=$('newClinicDisplayColorPreview');if(pop)pop.classList.add('hidden');if(btn)btn.setAttribute('aria-expanded','false')}
+function openNewClinicColorPalette(){if(newClinicBusy)return;newClinicColorPaletteOpen=true;$('newClinicColorPalettePop').classList.remove('hidden');$('newClinicDisplayColorPreview').setAttribute('aria-expanded','true')}
+function toggleNewClinicColorPalette(){if(newClinicColorPaletteOpen)closeNewClinicColorPalette();else openNewClinicColorPalette()}
+function syncNewClinicColorUi(){const color=normalizeHexColor($('newClinicDisplayColor').value);const preview=$('newClinicDisplayColorPreview');if(color){preview.style.background=color;preview.classList.add('has-color')}else{preview.style.background='#fff';preview.classList.remove('has-color')}preview.disabled=!!newClinicBusy;const palette=$('newClinicColorPalette');if(palette){palette.querySelectorAll('.color-palette-btn').forEach(btn=>btn.classList.toggle('active',!!color&&btn.dataset.color===color));palette.querySelectorAll('.color-palette-btn').forEach(btn=>{btn.disabled=!!newClinicBusy})}}
+function renderNewClinicColorPalette(){const root=$('newClinicColorPalette');if(!root)return;root.innerHTML=CLINIC_COLOR_PALETTE.map(c=>`<button type="button" class="color-palette-btn" data-color="${c}" style="--swatch-color:${c}" aria-label="${c}" title="${c}"></button>`).join('');root.querySelectorAll('.color-palette-btn').forEach(btn=>{btn.onclick=()=>{if(newClinicBusy)return;$('newClinicDisplayColor').value=btn.dataset.color;syncNewClinicColorUi();closeNewClinicColorPalette()}})}
+function setNewClinicDisplayColor(value){$('newClinicDisplayColor').value=value||'';syncNewClinicColorUi()}
+function closeEditClinicColorPalette(){editClinicColorPaletteOpen=false;const pop=$('editClinicColorPalettePop');const btn=$('editClinicDisplayColorPreview');if(pop)pop.classList.add('hidden');if(btn)btn.setAttribute('aria-expanded','false')}
+function openEditClinicColorPalette(){if(editClinicBusy)return;editClinicColorPaletteOpen=true;$('editClinicColorPalettePop').classList.remove('hidden');$('editClinicDisplayColorPreview').setAttribute('aria-expanded','true')}
+function toggleEditClinicColorPalette(){if(editClinicColorPaletteOpen)closeEditClinicColorPalette();else openEditClinicColorPalette()}
+function syncEditClinicColorUi(){const color=normalizeHexColor($('editClinicDisplayColor').value);const preview=$('editClinicDisplayColorPreview');if(color){preview.style.background=color;preview.classList.add('has-color')}else{preview.style.background='#fff';preview.classList.remove('has-color')}preview.disabled=!!editClinicBusy;const palette=$('editClinicColorPalette');if(palette){palette.querySelectorAll('.color-palette-btn').forEach(btn=>btn.classList.toggle('active',!!color&&btn.dataset.color===color));palette.querySelectorAll('.color-palette-btn').forEach(btn=>{btn.disabled=!!editClinicBusy})}}
+function renderEditClinicColorPalette(){const root=$('editClinicColorPalette');if(!root)return;root.innerHTML=CLINIC_COLOR_PALETTE.map(c=>`<button type="button" class="color-palette-btn" data-color="${c}" style="--swatch-color:${c}" aria-label="${c}" title="${c}"></button>`).join('');root.querySelectorAll('.color-palette-btn').forEach(btn=>{btn.onclick=()=>{if(editClinicBusy)return;$('editClinicDisplayColor').value=btn.dataset.color;syncEditClinicColorUi();closeEditClinicColorPalette()}})}
+function setEditClinicDisplayColor(value){$('editClinicDisplayColor').value=value||'';syncEditClinicColorUi()}
+function renderEditClinicClientSelect(selected=''){const sel=$('editClinicLinkedClient');sel.innerHTML=`<option value="">No client link</option>${iamClients.map(c=>`<option value="${esc(c.nickname)}">${esc(c.nickname)} — ${esc(c.name||c.nickname)}</option>`).join('')}`;sel.value=selected}
+function suggestMemberDefaults(){const n=(selectedOrg?.members||[]).length+1;return{id:`assistant-${n}`,label:`Assistant ${n}`,secret:genSecret()}}
+function hideAddMemberCopyPop(){clearTimeout(addMemberCopyPopTimer);const pop=$('addMemberCopyPop');if(!pop)return;pop.classList.add('hidden');pop.classList.remove('fade-out')}
+async function copyText(text){if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return}const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}finally{document.body.removeChild(ta)}}
+function showAddMemberCopyPop(message,anchor){const pop=$('addMemberCopyPop');if(!pop||!anchor)return;hideAddMemberCopyPop();pop.textContent=message;const rect=anchor.getBoundingClientRect();pop.style.left=`${rect.left+rect.width/2}px`;pop.style.top=`${rect.top-8}px`;pop.style.transform='translate(-50%, -100%)';pop.classList.remove('hidden','fade-out');addMemberCopyPopTimer=setTimeout(()=>{pop.classList.add('fade-out');addMemberCopyPopTimer=setTimeout(hideAddMemberCopyPop,300)},2000)}
+async function copySecretConfirmValue(){const secret=($('secretConfirmValue').value||'').trim();if(!secret)return;try{await copyText(secret);showAddMemberCopyPop('Copied',$('secretConfirmCopyBtn'))}catch{showAddMemberCopyPop('Copy failed',$('secretConfirmCopyBtn'))}}
+function secretConfirmConfig(action){if(action==='add-member')return{title:'Add member?',label:'Member secret',warning:'Copy the secret before submitting — it will not be shown again.',yes:'Add member',loading:'Adding…'};if(action==='new-clinic')return{title:'Create clinic?',label:'Initial member secret',warning:'Copy the secret before submitting — it will not be shown again.',yes:'Create clinic',loading:'Creating…'};return{title:'Rotate secret?',label:'New secret',warning:'Copy the new secret before submitting — active sessions will be revoked.',yes:'Rotate secret',loading:'Rotating…'}}
+function openSecretConfirmPopup(action,secret){secretConfirmAction=action;const copy=secretConfirmConfig(action);$('secretConfirmTitle').textContent=copy.title;$('secretConfirmWarning').textContent=copy.warning;$('secretConfirmLabel').textContent=copy.label;$('secretConfirmValue').value=secret;$('secretConfirmYesBtn').textContent=copy.yes;$('secretConfirmYesBtn').className='btn primary';$('secretConfirmMsg').classList.add('hidden');$('secretConfirmPopup').classList.remove('hidden');setTimeout(()=>$('secretConfirmCopyBtn').focus(),0)}
+function closeSecretConfirmPopup(force=false){if(secretConfirmBusy&&!force)return;secretConfirmBusy=false;secretConfirmAction=null;hideAddMemberCopyPop();$('secretConfirmPopup').classList.add('hidden');$('secretConfirmMsg').classList.add('hidden');$('secretConfirmYesBtn').disabled=false;$('secretConfirmBackBtn').disabled=false}
+async function loadIamClients(force=false){if(iamClients.length&&!force)return iamClients;const r=await api('/api/iam/clients?limit=200');const j=await r.json().catch(()=>({items:[]}));if(!r.ok)throw new Error(j.error||'Could not load clients.');iamClients=(j.items||[]).slice().sort((a,b)=>String(a.name||a.nickname).localeCompare(String(b.name||b.nickname),undefined,{sensitivity:'base'}));return iamClients}
+function renderNewClinicClientSelect(selected=''){const sel=$('newClinicLinkedClient');sel.innerHTML=`<option value="">No client link</option>${iamClients.map(c=>`<option value="${esc(c.nickname)}">${esc(c.nickname)} — ${esc(c.name||c.nickname)}</option>`).join('')}`;sel.value=selected}
+function resetNewClinicForm(){closeNewClinicColorPalette();renderNewClinicClientSelect('');$('newClinicCode').value='';$('newClinicDisplayName').value='';setNewClinicDisplayColor('#7c3aed');$('newClinicMemberId').value='assistant-1';$('newClinicMemberLabel').value='Assistant 1';$('newClinicSecret').value=genSecret();$('newClinicMsg').classList.add('hidden')}
+async function openNewClinicPopup(){if(newClinicBusy)return;closeSecretConfirmPopup();closeStatusConfirmPopup();closeEditClinicPopup();closeAddMemberPopup();closeEditMemberPopup();closeRotateSecretPopup();hideAddMemberCopyPop();resetNewClinicForm();const sel=$('newClinicLinkedClient');sel.disabled=true;sel.innerHTML='<option value="">Loading clients…</option>';$('newClinicPopup').classList.remove('hidden');try{await loadIamClients();renderNewClinicClientSelect('')}catch(err){const msg=$('newClinicMsg');msg.textContent=err?.message||'Could not load clients.';msg.className='msg err';msg.classList.remove('hidden');renderNewClinicClientSelect('')}finally{sel.disabled=newClinicBusy||newClinicPrefillBusy;syncNewClinicColorUi()}setTimeout(()=>$('newClinicLinkedClient').focus(),0)}
+function closeNewClinicPopup(){if(newClinicBusy)return;closeSecretConfirmPopup();closeNewClinicColorPalette();hideAddMemberCopyPop();$('newClinicPopup').classList.add('hidden');$('newClinicMsg').classList.add('hidden')}
+async function prefillNewClinicFromClient(){if(newClinicBusy||newClinicPrefillBusy)return;const nickname=($('newClinicLinkedClient').value||'').trim();$('newClinicMsg').classList.add('hidden');if(!nickname)return;newClinicPrefillBusy=true;$('newClinicLinkedClient').disabled=true;try{const r=await api(`/api/iam/clients/${encodeURIComponent(nickname)}/prefill`);const j=await r.json().catch(()=>({}));if(!r.ok){const msg=$('newClinicMsg');msg.textContent=j.error||'Client not found.';msg.className='msg err';msg.classList.remove('hidden');return}$('newClinicCode').value=j.suggestedClinicCode||'';$('newClinicDisplayName').value=j.displayName||'';setNewClinicDisplayColor(j.displayColor||'#7c3aed')}finally{newClinicPrefillBusy=false;$('newClinicLinkedClient').disabled=newClinicBusy}}
+function closeStatusConfirmPopup(force=false){if(statusConfirmBusy&&!force)return;statusConfirmBusy=false;statusConfirmRequest=null;$('statusConfirmPopup').classList.add('hidden');$('statusConfirmMsg').classList.add('hidden');$('statusConfirmYesBtn').disabled=false;$('statusConfirmBackBtn').disabled=false}
+function statusConfirmCopy(req){if(req.kind==='rotate-secret-precheck'){const member=(selectedOrg?.members||[]).find(m=>m.id===rotatingMemberId);const label=esc(member?.label||rotatingMemberId||'this member');const id=esc(rotatingMemberId||'');return{title:'Rotate lab member secret?',text:`Are you sure you want to rotate the secret for lab member <span class="confirm-popup-name">${label}</span>${id?` <span class="sub mono">(${id})</span>`:''}? Active sessions will be revoked. You will copy the new secret on the next step.`,yes:'Continue',danger:true}}if(req.kind==='clinic'){const name=esc(selectedOrg?.displayName||selectedOrg?.code||'this clinic');return req.active?{title:'Reactivate clinic?',text:`Are you sure you want to reactivate <span class="confirm-popup-name">${name}</span>?`,yes:'Yes, reactivate',danger:false}:{title:'Deactivate clinic?',text:`Are you sure you want to deactivate <span class="confirm-popup-name">${name}</span>? Active sessions will be revoked.`,yes:'Yes, deactivate',danger:true}}const member=(selectedOrg?.members||[]).find(m=>m.id===req.memberId);const label=esc(member?.label||req.memberId||'this member');const id=esc(req.memberId||'');return req.active?{title:'Reactivate member?',text:`Are you sure you want to reactivate member <span class="confirm-popup-name">${label}</span>${id?` <span class="sub mono">(${id})</span>`:''}?`,yes:'Yes, reactivate',danger:false}:{title:'Deactivate member?',text:`Are you sure you want to deactivate member <span class="confirm-popup-name">${label}</span>${id?` <span class="sub mono">(${id})</span>`:''}? Active sessions will be revoked.`,yes:'Yes, deactivate',danger:true}}
+function openRotateSecretPrecheckPopup(){if(!selectedOrg||selectedOrg.organizationType!=='lab'||!rotatingMemberId||statusConfirmBusy)return;closeSecretConfirmPopup();hideAddMemberCopyPop();const copy=statusConfirmCopy({kind:'rotate-secret-precheck'});statusConfirmRequest={kind:'rotate-secret-precheck'};$('statusConfirmTitle').textContent=copy.title;$('statusConfirmText').innerHTML=copy.text;$('statusConfirmYesBtn').textContent=copy.yes;$('statusConfirmYesBtn').className=`btn${copy.danger?' danger':' primary'}`;$('statusConfirmMsg').classList.add('hidden');$('statusConfirmPopup').classList.remove('hidden');setTimeout(()=>$('statusConfirmBackBtn').focus(),0)}
+async function openEditClinicPopup(){if(!selectedOrg||selectedOrg.organizationType!=='clinic'||editClinicBusy)return;closeSecretConfirmPopup();closeStatusConfirmPopup();closeNewClinicPopup();closeAddMemberPopup();closeEditMemberPopup();closeRotateSecretPopup();hideAddMemberCopyPop();closeEditClinicColorPalette();$('editClinicCode').value=selectedOrg.code||'';$('editClinicDisplayName').value=selectedOrg.displayName||'';setEditClinicDisplayColor(selectedOrg.displayColor||'');$('editClinicMsg').classList.add('hidden');const sel=$('editClinicLinkedClient');sel.disabled=true;sel.innerHTML='<option value="">Loading clients…</option>';$('editClinicPopup').classList.remove('hidden');try{await loadIamClients();renderEditClinicClientSelect(selectedOrg.linkedClientNickname||'')}catch(err){const msg=$('editClinicMsg');msg.textContent=err?.message||'Could not load clients.';msg.className='msg err';msg.classList.remove('hidden');renderEditClinicClientSelect(selectedOrg.linkedClientNickname||'')}finally{sel.disabled=editClinicBusy;syncEditClinicColorUi()}setTimeout(()=>{$('editClinicDisplayName').focus();$('editClinicDisplayName').select()},0)}
+function closeEditClinicPopup(){if(editClinicBusy)return;closeEditClinicColorPalette();$('editClinicPopup').classList.add('hidden');$('editClinicMsg').classList.add('hidden')}
+function openStatusConfirmPopup(req){if(!selectedOrg||statusConfirmBusy)return;closeSecretConfirmPopup();closeNewClinicPopup();closeEditClinicPopup();closeAddMemberPopup();closeEditMemberPopup();closeRotateSecretPopup();hideAddMemberCopyPop();const copy=statusConfirmCopy(req);statusConfirmRequest=req;$('statusConfirmTitle').textContent=copy.title;$('statusConfirmText').innerHTML=copy.text;$('statusConfirmYesBtn').textContent=copy.yes;$('statusConfirmYesBtn').className=`btn${copy.danger?' danger':' primary'}`;$('statusConfirmMsg').classList.add('hidden');$('statusConfirmPopup').classList.remove('hidden');setTimeout(()=>$('statusConfirmBackBtn').focus(),0)}
+function openAddMemberPopup(){if(!selectedOrg||addMemberBusy)return;closeSecretConfirmPopup();closeStatusConfirmPopup();closeNewClinicPopup();closeEditClinicPopup();closeEditMemberPopup();closeRotateSecretPopup();hideAddMemberCopyPop();const d=suggestMemberDefaults();$('addMemberId').value=d.id;$('addMemberLabel').value=d.label;$('addMemberSecret').value=d.secret;$('addMemberMsg').classList.add('hidden');$('addMemberPopup').classList.remove('hidden');setTimeout(()=>{$('addMemberId').focus();$('addMemberId').select()},0)}
+function closeAddMemberPopup(){if(addMemberBusy)return;closeSecretConfirmPopup();hideAddMemberCopyPop();$('addMemberPopup').classList.add('hidden');$('addMemberMsg').classList.add('hidden')}
+function openEditMemberPopup(id){if(!selectedOrg||editMemberBusy)return;const member=(selectedOrg.members||[]).find(m=>m.id===id);if(!member)return;closeSecretConfirmPopup();closeStatusConfirmPopup();closeNewClinicPopup();closeEditClinicPopup();closeAddMemberPopup();closeRotateSecretPopup();editingMemberId=id;$('editMemberId').value=member.id;$('editMemberLabel').value=member.label||'';$('editMemberStatus').value=member.isActive?'Active':'Inactive';$('editMemberPinFingerprint').value=member.pinFingerprint||'';$('editMemberMsg').classList.add('hidden');$('editMemberPopup').classList.remove('hidden');setTimeout(()=>{$('editMemberLabel').focus();$('editMemberLabel').select()},0)}
+function closeEditMemberPopup(){if(editMemberBusy)return;editingMemberId=null;$('editMemberPopup').classList.add('hidden');$('editMemberMsg').classList.add('hidden')}
+function openRotateSecretPopup(id){if(!selectedOrg||rotateSecretBusy)return;const member=(selectedOrg.members||[]).find(m=>m.id===id);if(!member)return;closeSecretConfirmPopup();closeStatusConfirmPopup();closeNewClinicPopup();closeEditClinicPopup();closeAddMemberPopup();closeEditMemberPopup();hideAddMemberCopyPop();rotatingMemberId=id;$('rotateSecretMemberId').value=member.id;$('rotateSecretMemberLabel').value=member.label||'';$('rotateSecretValue').value=genSecret();$('rotateSecretMsg').classList.add('hidden');$('rotateSecretPopup').classList.remove('hidden');setTimeout(()=>{$('rotateSecretValue').focus();$('rotateSecretValue').select()},0)}
+function closeRotateSecretPopup(){if(rotateSecretBusy)return;if(statusConfirmRequest?.kind==='rotate-secret-precheck')closeStatusConfirmPopup();closeSecretConfirmPopup();rotatingMemberId=null;hideAddMemberCopyPop();$('rotateSecretPopup').classList.add('hidden');$('rotateSecretMsg').classList.add('hidden')}
+function toast(msg,kind='ok'){const el=$('iamMsg');el.textContent=msg;el.className=`msg ${kind}`;setTimeout(()=>el.classList.add('hidden'),6000)}
+function rowHtml(member){return `<tr><td><b>${esc(member.label)}</b><div class="sub mono">${esc(member.id)}</div></td><td>${statusChip(!!member.isActive)}</td><td class="mono">${esc(member.pinFingerprint||'')}</td><td><div class="actions"><button class="btn small" data-member-action="edit" data-member="${esc(member.id)}">Edit</button><button class="btn small" data-member-action="secret" data-member="${esc(member.id)}">Rotate secret</button>${member.isActive?`<button class="btn small danger" data-member-action="deactivate" data-member="${esc(member.id)}">Deactivate</button>`:`<button class="btn small" data-member-action="reactivate" data-member="${esc(member.id)}">Reactivate</button>`}</div></td></tr>`}
+function setKv(root,items){root.innerHTML=items.map(i=>`<div><span class="label">${esc(i.label)}</span><span>${i.html||esc(i.value||'—')}</span></div>`).join('')}
+function showLogin(msg=''){document.body.classList.add('auth-locked');$('login').classList.remove('hidden');$('appRoot').classList.add('hidden');closeNewClinicColorPalette();closeEditClinicColorPalette();$('newClinicPopup').classList.add('hidden');$('newClinicMsg').classList.add('hidden');$('editClinicPopup').classList.add('hidden');$('editClinicMsg').classList.add('hidden');$('addMemberPopup').classList.add('hidden');$('addMemberMsg').classList.add('hidden');$('editMemberPopup').classList.add('hidden');$('editMemberMsg').classList.add('hidden');$('rotateSecretPopup').classList.add('hidden');$('rotateSecretMsg').classList.add('hidden');$('secretConfirmPopup').classList.add('hidden');$('secretConfirmMsg').classList.add('hidden');$('statusConfirmPopup').classList.add('hidden');$('statusConfirmMsg').classList.add('hidden');editingMemberId=null;rotatingMemberId=null;statusConfirmRequest=null;statusConfirmBusy=false;secretConfirmAction=null;secretConfirmBusy=false;editClinicBusy=false;editClinicColorPaletteOpen=false;newClinicBusy=false;newClinicPrefillBusy=false;newClinicColorPaletteOpen=false;hideAddMemberCopyPop();appChrome.sync(null);$('loginMsg').textContent=msg;$('loginMsg').classList.toggle('hidden',!msg);$('loginBtn').disabled=false;$('loginBtn').textContent='Enter'}
+async function requireLab(){const r=await api('/api/scheduling/auth/me');const j=await r.json().catch(()=>({}));if(!r.ok)return showLogin();if(!j.isLab){window.location.replace('/orders');return false}document.body.classList.remove('auth-locked');actor=j;appChrome.sync(actor);$('login').classList.add('hidden');$('appRoot').classList.remove('hidden');return true}
+function orgPickerLabel(org){const type=orgTypeLabel(org.organizationType||'clinic');const inactive=org.isActive?'':' · Inactive';return `${org.displayName||org.code} (${type} · ${org.code})${inactive}`}
+function renderOrgList(){const root=$('orgList');root.innerHTML='';$('orgListEmpty').classList.toggle('hidden',orgs.length>0);const picker=$('orgPicker');if(picker){picker.innerHTML=orgs.length?orgs.map(org=>`<option value="${esc(org.code)}">${esc(orgPickerLabel(org))}</option>`).join(''):'<option value="">No organizations</option>';picker.disabled=!orgs.length;if(selectedCode&&orgs.some(x=>x.code===selectedCode))picker.value=selectedCode;else if(!orgs.length)picker.value=''}for(const org of orgs){const b=document.createElement('button');b.type='button';b.className=`org-btn${org.organizationType==='lab'?' lab':''}${org.code===selectedCode?' active':''}`;b.innerHTML=`<b>${esc(org.displayName)}</b><span class="meta">${esc(orgTypeLabel(org.organizationType||'clinic'))}</span><span class="meta mono">${esc(org.code)}</span><span class="meta">${org.activeMemberCount}/${org.memberCount} active members</span>${org.isActive?'':'<span class="meta">Inactive</span>'}`;b.onclick=()=>loadOrganization(org.code);root.appendChild(b)}}
+async function loadOrganizations(){const include=$('includeInactive').checked;const r=await api(`/api/iam/organizations?includeInactive=${include?'true':'false'}`);const j=await r.json();if(!r.ok)throw new Error(j.error||'Could not load organizations.');orgs=(j.items||[]).slice().sort((a,b)=>{const aLab=a.organizationType==='lab'?0:1,bLab=b.organizationType==='lab'?0:1;return aLab-bLab||String(a.displayName||a.code).localeCompare(String(b.displayName||b.code))});if(!selectedCode||!orgs.some(x=>x.code===selectedCode))selectedCode=orgs[0]?.code||null;renderOrgList();if(selectedCode)await loadOrganization(selectedCode);else{$('orgTitle').textContent='Organization details';$('orgSub').textContent='';$('orgKv').innerHTML='';$('orgActions').innerHTML='';$('orgMembersTitle').textContent='Members';$('orgMembers').innerHTML='<tr><td colspan="4" class="empty">No organization selected.</td></tr>'}}
+function renderActions(org){const root=$('orgActions');root.innerHTML='';$('addMemberBtn').disabled=!org;if(!org)return;if(org.organizationType==='clinic'){root.innerHTML=`<button class="btn small" id="editClinicBtn" type="button">Edit</button>${org.isActive?'<button class="btn small danger" id="deactivateClinicBtn" type="button">Deactivate</button>':'<button class="btn small" id="reactivateClinicBtn" type="button">Reactivate</button>'}`;$('editClinicBtn').onclick=openEditClinicPopup;if($('deactivateClinicBtn'))$('deactivateClinicBtn').onclick=()=>openStatusConfirmPopup({kind:'clinic',active:false});if($('reactivateClinicBtn'))$('reactivateClinicBtn').onclick=()=>openStatusConfirmPopup({kind:'clinic',active:true})}}
+async function loadOrganization(code){selectedCode=code;renderOrgList();const r=await api(`/api/iam/organizations/${encodeURIComponent(code)}`);const j=await r.json();if(!r.ok)throw new Error(j.error||'Could not load organization.');selectedOrg=j;const type=j.organizationType||'clinic';$('orgTitle').textContent=orgTitleLabel(type);$('orgSub').textContent=`${j.displayName||j.code} (${orgTypeLabel(type)})`;$('orgMembersTitle').textContent=orgMembersTitleLabel(type);const items=[{label:'Type',value:orgTypeLabel(type)},{label:'Code',value:j.code},{label:'Display name',value:j.displayName},{label:'Status',html:statusChip(!!j.isActive)}];if(type==='clinic'){items.push({label:'Linked client',value:j.linkedClientNickname||'—'},{label:'Display color',html:j.displayColor?`<span class="swatch"><i style="background:${esc(j.displayColor)}"></i><span class="mono">${esc(j.displayColor)}</span></span>`:'—'})}items.push({label:'Updated',value:formatDateTimeBulgarian(j.updatedAt)});setKv($('orgKv'),items);renderActions(j);$('orgMembers').innerHTML=(j.members||[]).map(rowHtml).join('')||'<tr><td colspan="4" class="empty">No members.</td></tr>'}
+async function loadAll(){try{if(!await requireLab())return;await Promise.all([loadOrganizations(),loadIamClients().catch(()=>{})])}catch(err){showLogin(err?.message||'Could not load IAM.')}}
+function requestNewClinic(){if(newClinicBusy||secretConfirmBusy||newClinicPrefillBusy)return;const code=($('newClinicCode').value||'').trim();const displayName=($('newClinicDisplayName').value||'').trim();const displayColor=($('newClinicDisplayColor').value||'').trim();const id=($('newClinicMemberId').value||'').trim();const label=($('newClinicMemberLabel').value||'').trim();const secret=($('newClinicSecret').value||'').trim();const msg=$('newClinicMsg');if(!code||!displayName||!displayColor||!id||!label||!secret){msg.textContent='Clinic code, display name, display color, and initial member details are required.';msg.className='msg err';msg.classList.remove('hidden');return}msg.classList.add('hidden');openSecretConfirmPopup('new-clinic',secret)}
+async function submitNewClinic(){if(newClinicBusy||secretConfirmAction!=='new-clinic')return;const linkedClientNickname=($('newClinicLinkedClient').value||'').trim();const code=($('newClinicCode').value||'').trim();const displayName=($('newClinicDisplayName').value||'').trim();const displayColor=($('newClinicDisplayColor').value||'').trim();const id=($('newClinicMemberId').value||'').trim();const label=($('newClinicMemberLabel').value||'').trim();const secret=($('secretConfirmValue').value||'').trim();const msg=$('secretConfirmMsg');const yesBtn=$('secretConfirmYesBtn');const backBtn=$('secretConfirmBackBtn');const defaultYes=secretConfirmConfig('new-clinic').yes;newClinicBusy=true;secretConfirmBusy=true;$('newClinicSubmitBtn').disabled=true;$('newClinicCancelBtn').disabled=true;$('newClinicLinkedClient').disabled=true;yesBtn.disabled=true;backBtn.disabled=true;yesBtn.textContent='Creating…';syncNewClinicColorUi();msg.classList.add('hidden');try{const r=await api('/api/iam/organizations',{method:'POST',body:JSON.stringify({code,displayName,linkedClientNickname:linkedClientNickname||null,displayColor,initialMember:{id,label,secret}})});const j=await r.json().catch(()=>({}));if(!r.ok){msg.textContent=j.error||'Create failed.';msg.className='msg err';msg.classList.remove('hidden');return}closeSecretConfirmPopup(true);hideAddMemberCopyPop();$('newClinicPopup').classList.add('hidden');selectedCode=j.organization.code;await loadOrganizations();toast(`Clinic created. Share this one-time secret with ${label}: ${secret}`)}finally{newClinicBusy=false;secretConfirmBusy=false;$('newClinicSubmitBtn').disabled=false;$('newClinicCancelBtn').disabled=false;$('newClinicLinkedClient').disabled=false;yesBtn.disabled=false;backBtn.disabled=false;yesBtn.textContent=defaultYes;syncNewClinicColorUi()}}
+async function submitEditClinic(){if(!selectedOrg||editClinicBusy||selectedOrg.organizationType!=='clinic')return;const displayName=($('editClinicDisplayName').value||'').trim();const linkedClientNickname=($('editClinicLinkedClient').value||'').trim();const displayColor=($('editClinicDisplayColor').value||'').trim();const msg=$('editClinicMsg');if(!displayName){msg.textContent='Display name is required.';msg.className='msg err';msg.classList.remove('hidden');return}if(displayColor&&!normalizeHexColor(displayColor)){msg.textContent='Display color must be #RRGGBB.';msg.className='msg err';msg.classList.remove('hidden');return}editClinicBusy=true;$('editClinicSubmitBtn').disabled=true;$('editClinicCancelBtn').disabled=true;$('editClinicLinkedClient').disabled=true;$('editClinicSubmitBtn').textContent='Saving…';syncEditClinicColorUi();msg.classList.add('hidden');try{const r=await api(`/api/iam/organizations/${encodeURIComponent(selectedOrg.code)}`,{method:'PUT',body:JSON.stringify({displayName,linkedClientNickname:linkedClientNickname||null,displayColor:displayColor||null})});const j=await r.json().catch(()=>({}));if(!r.ok){msg.textContent=j.error||'Update failed.';msg.className='msg err';msg.classList.remove('hidden');return}$('editClinicPopup').classList.add('hidden');await loadOrganizations();toast('Clinic updated.')}finally{editClinicBusy=false;$('editClinicSubmitBtn').disabled=false;$('editClinicCancelBtn').disabled=false;$('editClinicLinkedClient').disabled=false;$('editClinicSubmitBtn').textContent='Save changes';syncEditClinicColorUi()}}
+async function submitStatusConfirm(){if(!selectedOrg||statusConfirmBusy||!statusConfirmRequest)return;const req=statusConfirmRequest;if(req.kind==='rotate-secret-precheck'){const secret=($('rotateSecretValue').value||'').trim();const msg=$('statusConfirmMsg');if(!secret||!rotatingMemberId){msg.textContent='New secret is required.';msg.className='msg err';msg.classList.remove('hidden');return}closeStatusConfirmPopup(true);openSecretConfirmPopup('rotate-secret',secret);return}const active=req.active;const msg=$('statusConfirmMsg');const yesBtn=$('statusConfirmYesBtn');const backBtn=$('statusConfirmBackBtn');const defaultYes=statusConfirmCopy(req).yes;statusConfirmBusy=true;yesBtn.disabled=true;backBtn.disabled=true;yesBtn.textContent=active?'Reactivating…':'Deactivating…';msg.classList.add('hidden');try{let url=`/api/iam/organizations/${encodeURIComponent(selectedOrg.code)}`;let method=active?'POST':'DELETE';let body=active?'{}':undefined;if(req.kind==='member'){url+=`/members/${encodeURIComponent(req.memberId)}`;if(active)url+='/reactivate';else{method='DELETE';body=undefined}}else if(active){url+='/reactivate'}const r=await api(url,{method,body});const j=await r.json().catch(()=>({}));if(!r.ok){msg.textContent=j.error||'Status change failed.';msg.className='msg err';msg.classList.remove('hidden');return}closeStatusConfirmPopup(true);if(req.kind==='clinic')$('includeInactive').checked=true;await loadOrganization(selectedOrg.code);await loadOrganizations();if(req.kind==='clinic')toast(active?'Clinic reactivated.':'Clinic deactivated and sessions revoked.');else toast(active?'Member reactivated.':'Member deactivated and sessions revoked.')}finally{statusConfirmBusy=false;yesBtn.disabled=false;backBtn.disabled=false;yesBtn.textContent=defaultYes}}
+function requestAddMember(){if(!selectedOrg||addMemberBusy||secretConfirmBusy)return;const id=($('addMemberId').value||'').trim();const label=($('addMemberLabel').value||'').trim();const secret=($('addMemberSecret').value||'').trim();const msg=$('addMemberMsg');if(!id||!label||!secret){msg.textContent='Member id, label, and secret are required.';msg.className='msg err';msg.classList.remove('hidden');return}msg.classList.add('hidden');openSecretConfirmPopup('add-member',secret)}
+function requestRotateSecret(){if(!selectedOrg||rotateSecretBusy||secretConfirmBusy||!rotatingMemberId||statusConfirmBusy)return;const secret=($('rotateSecretValue').value||'').trim();const msg=$('rotateSecretMsg');if(!secret){msg.textContent='New secret is required.';msg.className='msg err';msg.classList.remove('hidden');return}msg.classList.add('hidden');if(selectedOrg.organizationType==='lab')return openRotateSecretPrecheckPopup();openSecretConfirmPopup('rotate-secret',secret)}
+async function confirmSecretSubmit(){if(secretConfirmBusy||!secretConfirmAction)return;if(secretConfirmAction==='new-clinic')return submitNewClinic();if(!selectedOrg)return;if(secretConfirmAction==='add-member')return submitAddMember();if(secretConfirmAction==='rotate-secret')return submitRotateSecret()}
+async function submitAddMember(){if(!selectedOrg||addMemberBusy||secretConfirmAction!=='add-member')return;const id=($('addMemberId').value||'').trim();const label=($('addMemberLabel').value||'').trim();const secret=($('secretConfirmValue').value||'').trim();const msg=$('secretConfirmMsg');const yesBtn=$('secretConfirmYesBtn');const backBtn=$('secretConfirmBackBtn');const defaultYes=secretConfirmConfig('add-member').yes;addMemberBusy=true;secretConfirmBusy=true;yesBtn.disabled=true;backBtn.disabled=true;yesBtn.textContent='Adding…';msg.classList.add('hidden');try{const r=await api(`/api/iam/organizations/${encodeURIComponent(selectedOrg.code)}/members`,{method:'POST',body:JSON.stringify({id,label,secret})});const j=await r.json().catch(()=>({}));if(!r.ok){msg.textContent=j.error||'Add member failed.';msg.className='msg err';msg.classList.remove('hidden');return}closeSecretConfirmPopup(true);$('addMemberPopup').classList.add('hidden');await loadOrganization(selectedOrg.code);await loadOrganizations();toast(`Member created. Share this one-time secret with ${label}: ${secret}`)}finally{addMemberBusy=false;secretConfirmBusy=false;yesBtn.disabled=false;backBtn.disabled=false;yesBtn.textContent=defaultYes}}
+async function submitEditMember(){if(!selectedOrg||editMemberBusy||!editingMemberId)return;const label=($('editMemberLabel').value||'').trim();const msg=$('editMemberMsg');if(!label){msg.textContent='Member label is required.';msg.className='msg err';msg.classList.remove('hidden');return}editMemberBusy=true;$('editMemberSubmitBtn').disabled=true;$('editMemberCancelBtn').disabled=true;$('editMemberSubmitBtn').textContent='Saving…';msg.classList.add('hidden');try{const r=await api(`/api/iam/organizations/${encodeURIComponent(selectedOrg.code)}/members/${encodeURIComponent(editingMemberId)}`,{method:'PUT',body:JSON.stringify({label})});const j=await r.json().catch(()=>({}));if(!r.ok){msg.textContent=j.error||'Member update failed.';msg.className='msg err';msg.classList.remove('hidden');return}$('editMemberPopup').classList.add('hidden');editingMemberId=null;await loadOrganization(selectedOrg.code);await loadOrganizations();toast('Member updated.')}finally{editMemberBusy=false;$('editMemberSubmitBtn').disabled=false;$('editMemberCancelBtn').disabled=false;$('editMemberSubmitBtn').textContent='Save changes'}}
+async function submitRotateSecret(){if(!selectedOrg||rotateSecretBusy||secretConfirmAction!=='rotate-secret'||!rotatingMemberId)return;const secret=($('secretConfirmValue').value||'').trim();const msg=$('secretConfirmMsg');const yesBtn=$('secretConfirmYesBtn');const backBtn=$('secretConfirmBackBtn');const defaultYes=secretConfirmConfig('rotate-secret').yes;rotateSecretBusy=true;secretConfirmBusy=true;yesBtn.disabled=true;backBtn.disabled=true;yesBtn.textContent='Rotating…';msg.classList.add('hidden');try{const r=await api(`/api/iam/organizations/${encodeURIComponent(selectedOrg.code)}/members/${encodeURIComponent(rotatingMemberId)}/secret`,{method:'POST',body:JSON.stringify({secret})});const j=await r.json().catch(()=>({}));if(!r.ok){msg.textContent=j.error||'Secret rotation failed.';msg.className='msg err';msg.classList.remove('hidden');return}closeSecretConfirmPopup(true);$('rotateSecretPopup').classList.add('hidden');rotatingMemberId=null;await loadOrganization(selectedOrg.code);await loadOrganizations();toast('Secret rotated and sessions revoked.')}finally{rotateSecretBusy=false;secretConfirmBusy=false;yesBtn.disabled=false;backBtn.disabled=false;yesBtn.textContent=defaultYes}}
+async function updateMember(action,id){if(!selectedOrg)return;if(action==='edit')return openEditMemberPopup(id);if(action==='secret')return openRotateSecretPopup(id);if(action==='deactivate')return openStatusConfirmPopup({kind:'member',active:false,memberId:id});if(action==='reactivate')return openStatusConfirmPopup({kind:'member',active:true,memberId:id})}
+$('loginBtn').onclick=async()=>{if($('loginBtn').disabled)return;$('loginBtn').disabled=true;$('loginBtn').textContent='Signing in…';$('loginMsg').classList.add('hidden');try{const r=await api('/api/scheduling/auth/login',{method:'POST',body:JSON.stringify({organizationCode:$('organizationCode').value,pin:$('pin').value})});const j=await r.json().catch(()=>({error:'Login failed.'}));if(!r.ok)return showLogin(j.error||'Login failed.');if(!j.isLab){window.location.replace('/orders');return}actor=j;await loadAll()}catch{showLogin('Login failed.')}};
+['organizationCode','pin'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').click()}));
+$('reloadBtn').onclick=()=>loadAll();
+$('newClinicBtn').onclick=openNewClinicPopup;
+$('newClinicSubmitBtn').onclick=requestNewClinic;
+$('newClinicCancelBtn').onclick=closeNewClinicPopup;
+$('newClinicLinkedClient').addEventListener('change',prefillNewClinicFromClient);
+$('newClinicDisplayColorPreview').onclick=e=>{e.stopPropagation();toggleNewClinicColorPalette()};
+$('newClinicDisplayColor').addEventListener('input',syncNewClinicColorUi);
+$('newClinicDisplayColor').addEventListener('focus',closeNewClinicColorPalette);
+document.addEventListener('click',e=>{if(newClinicColorPaletteOpen&&!e.target.closest('.color-input-wrap'))closeNewClinicColorPalette();if(editClinicColorPaletteOpen&&!e.target.closest('.color-input-wrap'))closeEditClinicColorPalette()});
+$('newClinicPopup').onclick=e=>{if(e.target===$('newClinicPopup'))closeNewClinicPopup()};
+renderNewClinicColorPalette();
+renderEditClinicColorPalette();
+$('editClinicSubmitBtn').onclick=submitEditClinic;
+$('editClinicCancelBtn').onclick=closeEditClinicPopup;
+$('editClinicDisplayColorPreview').onclick=e=>{e.stopPropagation();toggleEditClinicColorPalette()};
+$('editClinicDisplayColor').addEventListener('input',syncEditClinicColorUi);
+$('editClinicDisplayColor').addEventListener('focus',closeEditClinicColorPalette);
+$('editClinicPopup').onclick=e=>{if(e.target===$('editClinicPopup'))closeEditClinicPopup()};
+$('addMemberBtn').onclick=openAddMemberPopup;
+$('addMemberSubmitBtn').onclick=requestAddMember;
+$('addMemberCancelBtn').onclick=closeAddMemberPopup;
+$('editMemberSubmitBtn').onclick=submitEditMember;
+$('editMemberCancelBtn').onclick=closeEditMemberPopup;
+$('rotateSecretSubmitBtn').onclick=requestRotateSecret;
+$('rotateSecretCancelBtn').onclick=closeRotateSecretPopup;
+$('secretConfirmBackBtn').onclick=closeSecretConfirmPopup;
+$('secretConfirmYesBtn').onclick=confirmSecretSubmit;
+$('secretConfirmCopyBtn').onclick=copySecretConfirmValue;
+$('secretConfirmPopup').onclick=e=>{if(e.target===$('secretConfirmPopup'))closeSecretConfirmPopup()};
+$('statusConfirmBackBtn').onclick=closeStatusConfirmPopup;
+$('statusConfirmYesBtn').onclick=submitStatusConfirm;
+$('statusConfirmPopup').onclick=e=>{if(e.target===$('statusConfirmPopup'))closeStatusConfirmPopup()};
+$('addMemberPopup').onclick=e=>{if(e.target===$('addMemberPopup'))closeAddMemberPopup()};
+$('editMemberPopup').onclick=e=>{if(e.target===$('editMemberPopup'))closeEditMemberPopup()};
+$('rotateSecretPopup').onclick=e=>{if(e.target===$('rotateSecretPopup'))closeRotateSecretPopup()};
+['addMemberId','addMemberLabel','addMemberSecret'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();requestAddMember()}}));
+$('editMemberLabel').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitEditMember()}});
+$('rotateSecretValue').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();requestRotateSecret()}});
+['editClinicDisplayName','editClinicDisplayColor'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitEditClinic()}}));
+['newClinicCode','newClinicDisplayName','newClinicDisplayColor','newClinicMemberId','newClinicMemberLabel','newClinicSecret'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();requestNewClinic()}}));
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('secretConfirmPopup').classList.contains('hidden')){e.preventDefault();closeSecretConfirmPopup();return}if(!$('statusConfirmPopup').classList.contains('hidden')){e.preventDefault();closeStatusConfirmPopup();return}if(!$('newClinicPopup').classList.contains('hidden')){if(newClinicColorPaletteOpen){e.preventDefault();closeNewClinicColorPalette();return}e.preventDefault();closeNewClinicPopup();return}if(!$('editClinicPopup').classList.contains('hidden')){if(editClinicColorPaletteOpen){e.preventDefault();closeEditClinicColorPalette();return}e.preventDefault();closeEditClinicPopup();return}if(!$('rotateSecretPopup').classList.contains('hidden')){e.preventDefault();closeRotateSecretPopup();return}if(!$('editMemberPopup').classList.contains('hidden')){e.preventDefault();closeEditMemberPopup();return}if(!$('addMemberPopup').classList.contains('hidden')){e.preventDefault();closeAddMemberPopup()}});
+$('includeInactive').addEventListener('change',()=>loadOrganizations());
+$('orgPicker').addEventListener('change',()=>{const code=($('orgPicker').value||'').trim();if(code)loadOrganization(code)});
+$('orgMembers').addEventListener('click',e=>{const b=e.target.closest('button[data-member-action]');if(b)updateMember(b.dataset.memberAction,b.dataset.member)});
+loadAll();
+</script>
+</body>
+</html>

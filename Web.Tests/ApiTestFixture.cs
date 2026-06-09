@@ -7,8 +7,12 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Database;
+using Database.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
+using Orders;
 using Utilities;
 using Web;
 
@@ -25,6 +29,9 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly string? _openAiKey;
     private readonly IInvoiceImporter? _invoiceImporterOverride;
     private readonly Utilities.ILogger? _loggerOverride;
+    private readonly bool _autoLoginAsLab;
+    private readonly bool _seedIdentity;
+    private bool _identitySeeded;
 
     public ApiTestFixture(
         string startInvoiceNumber = "1",
@@ -32,7 +39,9 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         string? runtimePort = "0",
         string? openAiKey = null,
         IInvoiceImporter? invoiceImporterOverride = null,
-        Utilities.ILogger? loggerOverride = null)
+        Utilities.ILogger? loggerOverride = null,
+        bool autoLoginAsLab = false,
+        bool seedIdentity = true)
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
@@ -44,9 +53,32 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _openAiKey = openAiKey;
         _invoiceImporterOverride = invoiceImporterOverride;
         _loggerOverride = loggerOverride;
+        _autoLoginAsLab = autoLoginAsLab;
+        _seedIdentity = seedIdentity;
     }
 
-    public HttpClient Client => CreateClient();
+    public string DbPath => _dbPath;
+
+    public HttpClient Client
+    {
+        get
+        {
+            var client = CreateClient();
+            if (_autoLoginAsLab)
+                LoginAsLabAsync(client).GetAwaiter().GetResult();
+            return client;
+        }
+    }
+
+    public static async Task LoginAsLabAsync(HttpClient client)
+    {
+        var response = await client.PostAsync(
+            "/api/scheduling/auth/login",
+            new StringContent("{\"organizationCode\":\"LAB\",\"pin\":\"654321\"}", System.Text.Encoding.UTF8, "application/json"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var cookie = response.Headers.GetValues("Set-Cookie").First(v => v.StartsWith("s3d_order_session="));
+        client.DefaultRequestHeaders.Add("Cookie", cookie.Split(';')[0]);
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -105,7 +137,74 @@ public class ApiTestFixture : WebApplicationFactory<Program>
                 inMemory["App:OpenAiKey"] = _openAiKey;
             config.AddInMemoryCollection(inMemory);
         });
-        return base.CreateHost(builder);
+        var host = base.CreateHost(builder);
+        if (_seedIdentity && !_identitySeeded)
+        {
+            SeedSchedulingIdentityAsync(_dbPath).GetAwaiter().GetResult();
+            _identitySeeded = true;
+        }
+        return host;
+    }
+
+    public static async Task SeedSchedulingIdentityAsync(string dbPath)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using var ctx = new AppDbContext(options);
+        await ctx.Database.MigrateAsync();
+        var now = DateTimeOffset.UtcNow;
+        var hasher = new PinHasher();
+
+        if (!await ctx.SchedulingLabs.AnyAsync())
+        {
+            ctx.SchedulingLabs.Add(new SchedulingLabEntity
+            {
+                Id = 1,
+                Code = "LAB",
+                DisplayName = "Spark3Dent Lab",
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        await EnsureClinicAsync(ctx, "DEMO", "Demo Dental Clinic", "demo-client", "#7c3aed", now);
+        await EnsureClinicAsync(ctx, "OTHER", "Other Clinic", null, "#0ea5e9", now);
+        await EnsureMemberAsync(ctx, OrganizationType.Lab, "LAB", "lab-1", "Lab Member 1", "654321", hasher, now);
+        await EnsureMemberAsync(ctx, OrganizationType.Clinic, "DEMO", "assistant-1", "Assistant 1", "123456", hasher, now);
+        await ctx.SaveChangesAsync();
+    }
+
+    private static async Task EnsureClinicAsync(AppDbContext ctx, string code, string displayName, string? linkedClientNickname, string? displayColor, DateTimeOffset now)
+    {
+        if (await ctx.SchedulingClinics.AnyAsync(x => x.Code == code)) return;
+        ctx.SchedulingClinics.Add(new SchedulingClinicEntity
+        {
+            Code = code,
+            DisplayName = displayName,
+            LinkedClientNickname = linkedClientNickname,
+            DisplayColor = displayColor,
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+    }
+
+    private static async Task EnsureMemberAsync(AppDbContext ctx, OrganizationType organizationType, string organizationCode, string id, string label, string secret, PinHasher hasher, DateTimeOffset now)
+    {
+        if (await ctx.SchedulingMembers.AnyAsync(x => x.OrganizationType == organizationType && x.OrganizationCode == organizationCode && x.Id == id)) return;
+        ctx.SchedulingMembers.Add(new SchedulingMemberEntity
+        {
+            OrganizationType = organizationType,
+            OrganizationCode = organizationCode,
+            Id = id,
+            Label = label,
+            PinHash = hasher.Hash(secret, iterations: 10_000),
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
     }
 
     protected override void Dispose(bool disposing)

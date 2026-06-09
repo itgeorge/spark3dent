@@ -1,9 +1,12 @@
 using System.Text.Json;
 using Accounting;
 using Configuration;
+using Database;
 using Invoices;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Utilities;
 
 namespace Web;
 
@@ -28,8 +31,46 @@ public static class Api
         var config = app.Services.GetRequiredService<Config>();
         var logger = app.Services.GetRequiredService<Utilities.ILogger>();
 
+        var invoicing = app.MapGroup("/api/invoicing")
+            .AddEndpointFilter(SchedulingEndpointAuth.RequireLabActorAsync);
+
+        invoicing.MapGet("/audit", async (Func<AppDbContext> contextFactory, string? entityType, string? entityId, int? limit) =>
+        {
+            await using var ctx = contextFactory();
+            var query = ctx.AuditEvents.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(entityType))
+                query = query.Where(e => e.EntityType == entityType.Trim());
+            if (!string.IsNullOrWhiteSpace(entityId))
+                query = query.Where(e => e.EntityId == entityId.Trim());
+            var take = Math.Clamp(limit ?? 100, 1, 500);
+            var items = await query
+                .OrderByDescending(e => e.OccurredAtUnixTimeMilliseconds)
+                .ThenByDescending(e => e.Id)
+                .Take(take)
+                .Select(e => new
+                {
+                    e.Id,
+                    e.ServiceName,
+                    e.Operation,
+                    e.EntityType,
+                    e.EntityId,
+                    e.EntityDisplay,
+                    e.ActorOrganizationType,
+                    e.ActorOrganizationCode,
+                    e.ActorMemberId,
+                    e.ActorMemberLabel,
+                    e.ActorSessionId,
+                    e.OccurredAt,
+                    e.Ip,
+                    e.UserAgent,
+                    e.MetadataJson
+                })
+                .ToListAsync();
+            return Results.Json(new { items }, JsonOptions);
+        });
+
         // --- Clients API ---
-        app.MapGet("/api/clients", async (int? limit, string? startAfter) =>
+        invoicing.MapGet("/clients", async (int? limit, string? startAfter) =>
         {
             var l = limit ?? 100;
             var result = await clientRepo.ListAsync(l, startAfter);
@@ -37,7 +78,7 @@ public static class Api
             return Results.Json(new { items, nextStartAfter = result.NextStartAfter }, JsonOptions);
         });
 
-        app.MapGet("/api/clients/latest", async (int? limit) =>
+        invoicing.MapGet("/clients/latest", async (int? limit) =>
         {
             var l = limit ?? 10;
             var result = await clientRepo.LatestAsync(l);
@@ -45,7 +86,7 @@ public static class Api
             return Results.Json(new { items }, JsonOptions);
         });
 
-        app.MapGet("/api/clients/{nickname}", async (string nickname) =>
+        invoicing.MapGet("/clients/{nickname}", async (string nickname) =>
         {
             try
             {
@@ -58,7 +99,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/clients", async (HttpContext ctx) =>
+        invoicing.MapPost("/clients", async (HttpContext ctx, IAuditLog auditLog, IClock clock) =>
         {
             var body = await ReadJson<ClientCreateRequest>(ctx);
             if (body == null)
@@ -83,6 +124,16 @@ public static class Api
             try
             {
                 await clientRepo.AddAsync(client);
+                await AppendAuditAsync(
+                    auditLog,
+                    clock,
+                    ctx,
+                    "Clients",
+                    "ClientCreated",
+                    "Client",
+                    client.Nickname,
+                    client.Address.Name,
+                    new { nickname = client.Nickname, companyIdentifier = client.Address.CompanyIdentifier, city = client.Address.City });
                 return Results.Json(ToClientDto(client), statusCode: 201, options: JsonOptions);
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
@@ -91,7 +142,7 @@ public static class Api
             }
         });
 
-        app.MapPut("/api/clients/{nickname}", async (string nickname, HttpContext ctx) =>
+        invoicing.MapPut("/clients/{nickname}", async (string nickname, HttpContext ctx, IAuditLog auditLog, IClock clock) =>
         {
             var body = await ReadJson<ClientUpdateRequest>(ctx);
             if (body == null)
@@ -133,10 +184,26 @@ public static class Api
             await clientRepo.UpdateAsync(nickname, update);
 
             var updated = new Client(newNickname, mergedAddress);
+            await AppendAuditAsync(
+                auditLog,
+                clock,
+                ctx,
+                "Clients",
+                "ClientUpdated",
+                "Client",
+                updated.Nickname,
+                updated.Address.Name,
+                new
+                {
+                    oldNickname = nickname,
+                    newNickname = updated.Nickname,
+                    companyIdentifier = updated.Address.CompanyIdentifier,
+                    renamed = !string.Equals(nickname, updated.Nickname, StringComparison.OrdinalIgnoreCase)
+                });
             return Results.Json(ToClientDto(updated), JsonOptions);
         });
 
-        app.MapMethods("/api/clients/{nickname}/rename", new[] { "PATCH" }, async (string nickname, HttpContext ctx) =>
+        invoicing.MapMethods("/clients/{nickname}/rename", new[] { "PATCH" }, async (string nickname, HttpContext ctx, IAuditLog auditLog, IClock clock) =>
         {
             var body = await ReadJson<ClientRenameRequest>(ctx);
             if (body == null)
@@ -152,6 +219,16 @@ public static class Api
                 var update = new IClientRepo.ClientUpdate(newNickname, null);
                 await clientRepo.UpdateAsync(nickname, update);
                 var updated = new Client(newNickname, existing.Address);
+                await AppendAuditAsync(
+                    auditLog,
+                    clock,
+                    ctx,
+                    "Clients",
+                    "ClientUpdated",
+                    "Client",
+                    updated.Nickname,
+                    updated.Address.Name,
+                    new { oldNickname = nickname, newNickname = updated.Nickname, renamed = true });
                 return Results.Json(ToClientDto(updated), JsonOptions);
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
@@ -165,7 +242,7 @@ public static class Api
         });
 
         // --- Invoices API ---
-        app.MapGet("/api/invoices", async (int? limit, string? startAfter) =>
+        invoicing.MapGet("/invoices", async (int? limit, string? startAfter) =>
         {
             var limitOrDefault = limit ?? 100;
             var invoices = await invMgmt.ListInvoicesAsync(limitOrDefault, startAfter);
@@ -197,7 +274,7 @@ public static class Api
             return Results.Json(new { items, nextStartAfter = invoices.NextStartAfter }, JsonOptions);
         });
 
-        app.MapGet("/api/invoices/{number}", async (string number) =>
+        invoicing.MapGet("/invoices/{number}", async (string number) =>
         {
             try
             {
@@ -210,7 +287,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/invoices/issue", async (HttpContext ctx) =>
+        invoicing.MapPost("/invoices/issue", async (HttpContext ctx, IAuditLog auditLog, IClock clock) =>
         {
             var body = await ReadJson<IssueInvoiceRequest>(ctx);
             if (body == null)
@@ -235,6 +312,22 @@ public static class Api
             try
             {
                 var result = await invMgmt.IssueInvoiceAsync(body.ClientNickname!.Trim(), body.AmountCents.Value, date, pdfExporter);
+                await AppendAuditAsync(
+                    auditLog,
+                    clock,
+                    ctx,
+                    "Invoicing",
+                    "InvoiceIssued",
+                    "Invoice",
+                    result.Invoice.Number,
+                    result.Invoice.Number,
+                    new
+                    {
+                        invoiceNumber = result.Invoice.Number,
+                        clientNickname = body.ClientNickname!.Trim(),
+                        totalCents = result.Invoice.TotalAmount.Cents,
+                        date = result.Invoice.Content.Date.ToString("yyyy-MM-dd")
+                    });
 
                 return Results.Json(new
                 {
@@ -249,7 +342,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/invoices/correct", async (HttpContext ctx) =>
+        invoicing.MapPost("/invoices/correct", async (HttpContext ctx, IAuditLog auditLog, IClock clock) =>
         {
             var body = await ReadJson<CorrectInvoiceRequest>(ctx);
             if (body == null)
@@ -291,6 +384,21 @@ public static class Api
                 var result = await invMgmt.CorrectInvoiceAsync(body.InvoiceNumber!.Trim(), amountCents, date, pdfExporter);
                 if (imageExporter != null)
                     _ = invMgmt.ReExportInvoiceAsync(result.Invoice.Number, imageExporter);
+                await AppendAuditAsync(
+                    auditLog,
+                    clock,
+                    ctx,
+                    "Invoicing",
+                    "InvoiceCorrected",
+                    "Invoice",
+                    result.Invoice.Number,
+                    result.Invoice.Number,
+                    new
+                    {
+                        invoiceNumber = result.Invoice.Number,
+                        totalCents = result.Invoice.TotalAmount.Cents,
+                        date = result.Invoice.Content.Date.ToString("yyyy-MM-dd")
+                    });
 
                 return Results.Json(new
                 {
@@ -305,7 +413,7 @@ public static class Api
             }
         });
 
-        app.MapPost("/api/invoices/preview", async (HttpContext ctx) =>
+        invoicing.MapPost("/invoices/preview", async (HttpContext ctx) =>
         {
             var body = await ReadJson<PreviewInvoiceRequest>(ctx);
             if (body == null)
@@ -380,7 +488,7 @@ public static class Api
         });
 
         // --- Invoice Import API (legacy PDF) ---
-        app.MapPost("/api/invoices/import/analyze", async (HttpContext ctx, IInvoiceImporter importer) =>
+        invoicing.MapPost("/invoices/import/analyze", async (HttpContext ctx, IInvoiceImporter importer) =>
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -416,7 +524,7 @@ public static class Api
             return Results.Json(response, JsonOptions);
         });
 
-        app.MapPost("/api/invoices/import/commit", async (HttpContext ctx, IInvoiceImporter importer) =>
+        invoicing.MapPost("/invoices/import/commit", async (HttpContext ctx, IInvoiceImporter importer, IAuditLog auditLog, IClock clock) =>
         {
             var apiKey = ResolveOpenAiKey(config);
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -430,10 +538,29 @@ public static class Api
                 return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400);
 
             var response = await importer.CommitAsync(body, ctx.RequestAborted);
+            if (!body.DryRun)
+            {
+                await AppendAuditAsync(
+                    auditLog,
+                    clock,
+                    ctx,
+                    "Invoicing",
+                    "InvoiceImportCommitted",
+                    "InvoiceImport",
+                    Guid.NewGuid().ToString("N"),
+                    "Legacy invoice import",
+                    new
+                    {
+                        imported = response.Imported,
+                        skipped = response.Skipped,
+                        failed = response.Failed,
+                        itemCount = body.Items?.Length ?? 0
+                    });
+            }
             return Results.Json(response, JsonOptions);
         });
 
-        app.MapGet("/api/invoices/{number}/pdf", async (string number) =>
+        invoicing.MapGet("/invoices/{number}/pdf", async (string number) =>
         {
             try
             {
@@ -449,6 +576,44 @@ public static class Api
                 return Results.Json(new { error = $"PDF for invoice '{number}' not found." }, statusCode: 404);
             }
         });
+    }
+
+    private static Task AppendAuditAsync(
+        IAuditLog auditLog,
+        IClock clock,
+        HttpContext ctx,
+        string serviceName,
+        string operation,
+        string entityType,
+        string entityId,
+        string? entityDisplay,
+        object metadata)
+    {
+        var actor = SchedulingEndpointAuth.CurrentActor(ctx);
+        var auditEvent = new AuditEvent(
+            0,
+            serviceName,
+            operation,
+            entityType,
+            entityId,
+            entityDisplay,
+            actor?.OrganizationType.ToString() ?? "Unknown",
+            actor?.OrganizationCode,
+            actor?.MemberId,
+            actor?.MemberLabel,
+            actor?.SessionId,
+            clock.UtcNow,
+            RemoteIp(ctx),
+            UserAgent(ctx),
+            JsonSerializer.Serialize(metadata, JsonOptions));
+        return auditLog.AppendAsync(auditEvent, ctx.RequestAborted);
+    }
+
+    private static string? RemoteIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString();
+    private static string? UserAgent(HttpContext ctx)
+    {
+        var userAgent = ctx.Request.Headers.UserAgent.ToString();
+        return string.IsNullOrWhiteSpace(userAgent) ? null : userAgent;
     }
 
     private static object ToClientDto(Client c) => new

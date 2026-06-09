@@ -14,7 +14,7 @@ public class ClientApiTests
     [SetUp]
     public void SetUp()
     {
-        _fixture = new ApiTestFixture();
+        _fixture = new ApiTestFixture(autoLoginAsLab: true);
         _client = _fixture.Client;
     }
 
@@ -24,7 +24,7 @@ public class ClientApiTests
     [Test]
     public async Task GetClients_WhenEmptyDb_Returns200WithEmptyItems()
     {
-        var response = await _client.GetAsync("/api/clients?limit=10");
+        var response = await _client.GetAsync("/api/invoicing/clients?limit=10");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
@@ -50,7 +50,7 @@ public class ClientApiTests
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
@@ -74,9 +74,9 @@ public class ClientApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await _client.PostAsync("/api/invoicing/clients", content);
 
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.Conflict);
     }
@@ -97,7 +97,7 @@ public class ClientApiTests
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
     }
@@ -119,14 +119,14 @@ public class ClientApiTests
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
         Assert.That(doc.RootElement.GetProperty("representativeName").GetString(), Is.EqualTo(""));
         Assert.That(doc.RootElement.GetProperty("postalCode").GetString(), Is.EqualTo(""));
 
-        var getResponse = await _client.GetAsync("/api/clients/acme");
+        var getResponse = await _client.GetAsync("/api/invoicing/clients/acme");
         Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var getDoc = JsonDocument.Parse(await getResponse.Content.ReadAsStringAsync());
         Assert.That(getDoc.RootElement.GetProperty("representativeName").GetString(), Is.EqualTo(""));
@@ -150,7 +150,7 @@ public class ClientApiTests
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
@@ -174,7 +174,7 @@ public class ClientApiTests
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        var response = await _client.PostAsync("/api/clients", content);
+        var response = await _client.PostAsync("/api/invoicing/clients", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
     }
@@ -195,9 +195,9 @@ public class ClientApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await _client.PostAsync("/api/invoicing/clients", content);
 
-        var response = await _client.GetAsync("/api/clients/acme");
+        var response = await _client.GetAsync("/api/invoicing/clients/acme");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
@@ -208,7 +208,7 @@ public class ClientApiTests
     [Test]
     public async Task GetClient_WhenNotExists_Returns404()
     {
-        var response = await _client.GetAsync("/api/clients/nonexistent");
+        var response = await _client.GetAsync("/api/invoicing/clients/nonexistent");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.NotFound);
     }
@@ -229,11 +229,11 @@ public class ClientApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await _client.PostAsync("/api/invoicing/clients", content);
 
         var updateBody = new { name = "ACME Updated" };
         var updateContent = new StringContent(JsonSerializer.Serialize(updateBody), Encoding.UTF8, "application/json");
-        var response = await _client.PutAsync("/api/clients/acme", updateContent);
+        var response = await _client.PutAsync("/api/invoicing/clients/acme", updateContent);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
@@ -257,11 +257,11 @@ public class ClientApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await _client.PostAsync("/api/invoicing/clients", content);
 
         var updateBody = new { representativeName = "", postalCode = "" };
         var updateContent = new StringContent(JsonSerializer.Serialize(updateBody), Encoding.UTF8, "application/json");
-        var response = await _client.PutAsync("/api/clients/acme", updateContent);
+        var response = await _client.PutAsync("/api/invoicing/clients/acme", updateContent);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
@@ -275,7 +275,7 @@ public class ClientApiTests
     {
         var updateBody = new { name = "Updated" };
         var content = new StringContent(JsonSerializer.Serialize(updateBody), Encoding.UTF8, "application/json");
-        var response = await _client.PutAsync("/api/clients/nonexistent", content);
+        var response = await _client.PutAsync("/api/invoicing/clients/nonexistent", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.NotFound);
     }
@@ -297,10 +297,10 @@ public class ClientApiTests
                 country = "BG"
             };
             var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            await _client.PostAsync("/api/clients", content);
+            await _client.PostAsync("/api/invoicing/clients", content);
         }
 
-        var response = await _client.GetAsync("/api/clients?limit=10");
+        var response = await _client.GetAsync("/api/invoicing/clients?limit=10");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
         var doc = JsonDocument.Parse(json);
@@ -325,10 +325,10 @@ public class ClientApiTests
                 country = "BG"
             };
             var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            await _client.PostAsync("/api/clients", content);
+            await _client.PostAsync("/api/invoicing/clients", content);
         }
 
-        var first = await _client.GetAsync("/api/clients?limit=2");
+        var first = await _client.GetAsync("/api/invoicing/clients?limit=2");
         Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var firstJson = await first.Content.ReadAsStringAsync();
         var firstDoc = JsonDocument.Parse(firstJson);
@@ -339,7 +339,7 @@ public class ClientApiTests
         var nextStartAfter = firstDoc.RootElement.GetProperty("nextStartAfter").GetString();
         Assert.That(nextStartAfter, Is.EqualTo("b"));
 
-        var second = await _client.GetAsync($"/api/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter!)}");
+        var second = await _client.GetAsync($"/api/invoicing/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter!)}");
         Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var secondJson = await second.Content.ReadAsStringAsync();
         var secondDoc = JsonDocument.Parse(secondJson);
@@ -350,7 +350,7 @@ public class ClientApiTests
         var nextStartAfter2 = secondDoc.RootElement.GetProperty("nextStartAfter").GetString();
         Assert.That(nextStartAfter2, Is.EqualTo("d"));
 
-        var third = await _client.GetAsync($"/api/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter2!)}");
+        var third = await _client.GetAsync($"/api/invoicing/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter2!)}");
         Assert.That(third.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var thirdJson = await third.Content.ReadAsStringAsync();
         var thirdDoc = JsonDocument.Parse(thirdJson);
@@ -360,7 +360,7 @@ public class ClientApiTests
         var nextStartAfter3 = thirdDoc.RootElement.GetProperty("nextStartAfter").GetString();
         Assert.That(nextStartAfter3, Is.EqualTo("e"));
 
-        var fourth = await _client.GetAsync($"/api/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter3!)}");
+        var fourth = await _client.GetAsync($"/api/invoicing/clients?limit=2&startAfter={Uri.EscapeDataString(nextStartAfter3!)}");
         Assert.That(fourth.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var fourthDoc = JsonDocument.Parse(await fourth.Content.ReadAsStringAsync());
         Assert.That(fourthDoc.RootElement.GetProperty("items").GetArrayLength(), Is.EqualTo(0));
@@ -383,11 +383,11 @@ public class ClientApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await _client.PostAsync("/api/invoicing/clients", content);
 
         var renameBody = new { newNickname = "acme-corp" };
         var renameContent = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
-        var response = await _client.PatchAsync("/api/clients/acme/rename", renameContent);
+        var response = await _client.PatchAsync("/api/invoicing/clients/acme/rename", renameContent);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var json = await response.Content.ReadAsStringAsync();
@@ -395,10 +395,10 @@ public class ClientApiTests
         Assert.That(doc.RootElement.GetProperty("nickname").GetString(), Is.EqualTo("acme-corp"));
         Assert.That(doc.RootElement.GetProperty("name").GetString(), Is.EqualTo("ACME EOOD"));
 
-        var getOld = await _client.GetAsync("/api/clients/acme");
+        var getOld = await _client.GetAsync("/api/invoicing/clients/acme");
         Assert.That(getOld.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
 
-        var getNew = await _client.GetAsync("/api/clients/acme-corp");
+        var getNew = await _client.GetAsync("/api/invoicing/clients/acme-corp");
         Assert.That(getNew.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
@@ -407,7 +407,7 @@ public class ClientApiTests
     {
         var renameBody = new { newNickname = "newname" };
         var content = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
-        var response = await _client.PatchAsync("/api/clients/nonexistent/rename", content);
+        var response = await _client.PatchAsync("/api/invoicing/clients/nonexistent/rename", content);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.NotFound);
     }
@@ -428,11 +428,11 @@ public class ClientApiTests
             country = "Bulgaria"
         };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        await _client.PostAsync("/api/clients", content);
+        await _client.PostAsync("/api/invoicing/clients", content);
 
         var renameBody = new { newNickname = "" };
         var renameContent = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
-        var response = await _client.PatchAsync("/api/clients/acme/rename", renameContent);
+        var response = await _client.PatchAsync("/api/invoicing/clients/acme/rename", renameContent);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.BadRequest);
     }
@@ -454,12 +454,12 @@ public class ClientApiTests
                 country = "BG"
             };
             var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            await _client.PostAsync("/api/clients", content);
+            await _client.PostAsync("/api/invoicing/clients", content);
         }
 
         var renameBody = new { newNickname = "beta" };
         var renameContent = new StringContent(JsonSerializer.Serialize(renameBody), Encoding.UTF8, "application/json");
-        var response = await _client.PatchAsync("/api/clients/acme/rename", renameContent);
+        var response = await _client.PatchAsync("/api/invoicing/clients/acme/rename", renameContent);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         await ApiTestFixture.AssertJsonErrorAsync(response, HttpStatusCode.Conflict);
     }
