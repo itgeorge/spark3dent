@@ -7,8 +7,7 @@
 
   function actorLabel(actor) {
     if (!actor) return "";
-    const role = actor.isLab ? "Lab" : "Clinic";
-    return `${actor.organizationName || actor.organizationCode} / ${actor.memberLabel} (${role})`;
+    return `${actor.organizationName || actor.organizationCode} / ${actor.memberLabel}`;
   }
 
   function productMenuHtml(activeProduct) {
