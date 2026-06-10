@@ -22,9 +22,10 @@ public sealed record ToothRange
         if (!IsValidFdiTooth(Start)) throw new InvalidOperationException($"Invalid FDI tooth number: {Start}.");
         if (!IsValidFdiTooth(End)) throw new InvalidOperationException($"Invalid FDI tooth number: {End}.");
 
-        if (constructionType == ConstructionType.Crown)
+        if (constructionType is ConstructionType.Crown or ConstructionType.InlayOverlay)
         {
-            if (!IsSingle) throw new InvalidOperationException("Crown orders must select exactly one tooth.");
+            var label = constructionType == ConstructionType.Crown ? "Crown" : "Inlay/overlay";
+            if (!IsSingle) throw new InvalidOperationException($"{label} orders must select exactly one tooth.");
             return;
         }
 
@@ -32,7 +33,7 @@ public sealed record ToothRange
         if (teeth.Length == 0)
             throw new InvalidOperationException("Tooth ranges must be contiguous within the same jaw.");
         if (teeth.Length < 2)
-            throw new InvalidOperationException("Bridge/facet orders must span at least two teeth.");
+            throw new InvalidOperationException("Bridge orders must span at least two teeth.");
     }
 
     public static bool IsValidFdiTooth(int tooth)

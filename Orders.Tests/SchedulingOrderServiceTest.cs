@@ -260,7 +260,7 @@ public class SchedulingOrderServiceTest
             fixture.CreateOrderDraft("empty") with { WorkItems = [] },
             fixture.CreateOrderDraft("crown range") with { WorkItems = [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 12))] },
             fixture.CreateOrderDraft("bridge single") with { WorkItems = [new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 11))] },
-            fixture.CreateOrderDraft("cross jaw") with { WorkItems = [new OrderWorkItem(ConstructionType.Facet, new ToothRange(28, 31))] },
+            fixture.CreateOrderDraft("cross jaw") with { WorkItems = [new OrderWorkItem(ConstructionType.InlayOverlay, new ToothRange(28, 31))] },
             fixture.CreateOrderDraft("overlap") with { WorkItems = [new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)), new OrderWorkItem(ConstructionType.Crown, new ToothRange(12, 12))] }
         };
 
@@ -278,7 +278,7 @@ public class SchedulingOrderServiceTest
         {
             new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.Crown, 2),
             new(ProductCategory.Permanent, WorkType.Bridge, Material.FullContourZirconia, ConstructionType.Bridge, 4),
-            new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.Facet, 3)
+            new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.InlayOverlay, 3)
         };
         var fixture = new Fixture(["A"], configProvider: TestSchedulingConfigProvider.Create(workRules: rules));
         var draft = fixture.CreateOrderDraft("Lead") with
@@ -287,7 +287,7 @@ public class SchedulingOrderServiceTest
             [
                 new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
                 new OrderWorkItem(ConstructionType.Crown, new ToothRange(23, 23)),
-                new OrderWorkItem(ConstructionType.Facet, new ToothRange(31, 32))
+                new OrderWorkItem(ConstructionType.InlayOverlay, new ToothRange(31, 31))
             ]
         };
 

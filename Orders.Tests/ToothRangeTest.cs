@@ -38,12 +38,12 @@ public class ToothRangeTest
     }
 
     [Test]
-    public void Validate_GivenFacetAcrossMultipleSectorsInSameJaw_DoesNotThrow()
+    public void Validate_GivenInlayOverlayWithSingleTooth_DoesNotThrow()
     {
-        var range = new ToothRange(12, 22);
+        var range = new ToothRange(12, 12);
 
-        Assert.DoesNotThrow(() => range.Validate(ConstructionType.Facet));
-        Assert.That(range.Teeth, Is.EqualTo(new[] { 12, 11, 21, 22 }));
+        Assert.DoesNotThrow(() => range.Validate(ConstructionType.InlayOverlay));
+        Assert.That(range.Teeth, Is.EqualTo(new[] { 12 }));
     }
 
     [TestCase(18, 28, new[] { 18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28 })]

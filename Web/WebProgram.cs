@@ -111,8 +111,11 @@ app.UseStaticFiles();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 var webAssembly = Assembly.GetExecutingAssembly();
-app.MapGet("/", async (Config cfg) =>
+app.MapGet("/", async (HttpContext ctx, Config cfg, SchedulingAuthService auth) =>
 {
+    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
+        return denied;
+
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("index.html", webAssembly);
     if (cfg.Runtime.HostingMode != HostingMode.HetznerDocker)
     {
@@ -128,8 +131,11 @@ app.MapGet("/orders", async () =>
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
-app.MapGet("/iam", async () =>
+app.MapGet("/iam", async (HttpContext ctx, SchedulingAuthService auth) =>
 {
+    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
+        return denied;
+
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("iam.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });

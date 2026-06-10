@@ -27,6 +27,16 @@ public static class SchedulingEndpointAuth
         return await next(context);
     }
 
+    public const string LabOnlyPageRedirectPath = "/orders";
+
+    public static async Task<IResult?> RequireLabActorOrRedirectAsync(HttpContext ctx, SchedulingAuthService auth, string redirectPath = LabOnlyPageRedirectPath)
+    {
+        var actor = await AuthenticateAsync(ctx, auth);
+        if (actor is not { IsLab: true })
+            return Results.Redirect(redirectPath);
+        return null;
+    }
+
     public static AuthenticatedActor? CurrentActor(HttpContext ctx) =>
         ctx.Items.TryGetValue(ActorItemKey, out var actor) ? actor as AuthenticatedActor : null;
 }
