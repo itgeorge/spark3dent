@@ -174,6 +174,7 @@ public class IamApiTests
     {
         using var fixture = new ApiTestFixture();
         using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
 
         var response = await client.GetAsync("/iam");
 
