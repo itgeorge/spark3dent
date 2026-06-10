@@ -36,17 +36,17 @@ public class DescriptiveOrderCodeGeneratorTest
     }
 
     [Test]
-    public void Generate_GivenZirconiaFacetFor13November_UsesToothCountNotConstructionType()
+    public void Generate_GivenZirconiaInlayOverlayFor13November_UsesToothCountNotConstructionType()
     {
         var draft = CreateDraft(
             Material.FullContourZirconia,
-            ConstructionType.Facet,
-            new ToothRange(12, 22),
+            ConstructionType.InlayOverlay,
+            new ToothRange(12, 12),
             new DateOnly(2026, 11, 13));
 
         var code = _generator.Generate(draft);
 
-        AssertDescriptiveCode(code, "26-1311-Z4");
+        AssertDescriptiveCode(code, "26-1311-Z1");
     }
 
     [TestCase(Material.Pfm, 'M')]
