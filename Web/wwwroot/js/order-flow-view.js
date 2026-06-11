@@ -9,6 +9,7 @@
     const getActor = options.getActor || (() => null);
     const getClinics = options.getClinics || (() => []);
     const OrdersTeeth = S3DOrders.Teeth;
+    const Format = S3DOrders.Format;
     const upperTeeth = OrdersTeeth.upper;
     const lowerTeeth = OrdersTeeth.lower;
     const teeth = OrdersTeeth.all;
@@ -47,14 +48,14 @@
     function actor(){return getActor()}
     function esc(v){return S3DDom.esc(v)}
     function activeWorkItem(){return workItems[activeWorkItemIndex] || workItems[workItems.length-1]}
-    function constructionLabel(c){return ({crown:'Crown',bridge:'Bridge',inlayOverlay:'Inlay/Overlay'})[c] || 'Construction'}
+    function constructionLabel(c){return Format.constructionLabel(c)}
     function jawForTooth(t){return OrdersTeeth.jawFor(t)}
     function fdiRangeTeeth(a,b){return OrdersTeeth.range(a,b)}
     function normalizeToothRange(a,b){return OrdersTeeth.normalizeRange(a,b)}
-    function toIsoDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+    function toIsoDate(d){return Format.toIsoDate(d)}
     function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
     function isWeekendDate(d){const day=d.getDay();return day===0||day===6}
-    function monthForIso(iso){const [y,m]=iso.split('-').map(Number);return new Date(y,m-1,1)}
+    function monthForIso(iso){return Format.monthForIso(iso)}
     function syncImpressionToday(){if(impression)impression.value=toIsoDate(new Date())}
     function syncGlobalsFromActive(){const item=activeWorkItem();construction=item?.construction||'';if(item?.toothStart){const seq=jawForTooth(+item.toothStart);selectedJaw=seq===lowerTeeth?'lower':'upper'}}
     function syncActiveFromInputs(){const item=activeWorkItem();if(!item)return;item.construction=construction;item.toothStart=$('ts')?.value||'';item.toothEnd=$('te')?.value||item.toothStart||''}
@@ -75,7 +76,7 @@
     function ensureStartToothSelected(){const ts=$('ts');if(ts?.value!=='')return false;clearErr();resetForwardProgress(1);rangePick=0;if(!construction)setConstruction('crown');selectedJaw='upper';syncJawToggle();if(isRangeConstruction())setToothRange('11','21');else setToothRange('11','11');updateSummary();return true}
     function nudgeTooth(part,delta){const ts=$('ts'),te=$('te');if(!ts||!te)return;const isStart=part==='start';let raw=isStart?ts.value:te.value;if(isStart&&raw===''){if(!ensureStartToothSelected())return;raw=ts.value}if(raw==='')return;resetForwardProgress(1);rangePick=0;const seq=jawSeq();const idx=seq.indexOf(+raw)+delta;if(idx<0||idx>=seq.length)return;const next=seq[idx];if(!isRangeConstruction())setToothRange(next,next);else setToothRange(String(isStart?next:ts.value),String(isStart?te.value:next),part,delta);updateSummary()}
     function workItemLabel(item){if(!item?.construction||!item.toothStart)return `${constructionLabel(item?.construction)} —`;return item.toothStart===item.toothEnd?`${constructionLabel(item.construction)} ${item.toothStart}`:`${constructionLabel(item.construction)} ${item.toothStart}-${item.toothEnd}`}
-    function orderWorkItemLabel(i){const c=i.constructionType||i.construction||'case';return +i.toothStart===+i.toothEnd?`${constructionLabel(c)} ${i.toothStart||'—'}`:`${constructionLabel(c)} ${i.toothStart||'—'}-${i.toothEnd||'—'}`}
+    function orderWorkItemLabel(i){return Format.orderWorkItemLabel(i)}
     function workItemRemoveBtnHtml(){const label=workItems.length<=1?'Clear construction':'Remove construction',icon=window.S3DIcons?S3DIcons.closeHtml({className:'work-item-remove-icon'}):'<svg class="work-item-remove-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></path></svg>';return `<button type="button" class="work-item-remove" data-remove-work-item aria-label="${label}" title="${label}">${icon}</button>`}
     function renderWorkItemReadouts(){syncGlobalsFromActive();const removeBtn=workItemRemoveBtnHtml();toothReadouts.innerHTML=workItems.map((wi,i)=>{if(i!==activeWorkItemIndex)return `<div class="order-work-item-line locked" data-index="${i}"><button class="btn construction-cycle" type="button" disabled>${esc(constructionLabel(wi.construction))}</button><span class="locked-work-item-summary">${esc(workItemLabel(wi))}</span>${removeBtn}</div>`;return `<div class="order-work-item-line active" data-index="${i}"><button class="btn construction-cycle" type="button" data-cycle-construction aria-label="Cycle construction type">${esc(constructionLabel(wi.construction))}</button><div class="tooth-readout-field" id="toothJawField"><div class="tooth-readout-center"><label>Jaw</label><button type="button" class="jaw-toggle" id="jawToggle" aria-label="No jaw selected. Select a tooth" title="No jaw selected">-</button></div></div><div class="tooth-readout-field" id="toothStartField"><div class="tooth-readout-center"><label id="toothStartLabel">Tooth</label><div class="tooth-stepper" role="group" aria-label="Start tooth"><button type="button" class="tooth-nudge" data-part="start" data-nudge="-1" aria-label="Previous start tooth">←</button><input id="ts" class="tooth-readout" type="text" readonly value="${esc(wi.toothStart||'')}" tabindex="-1" aria-readonly="true" placeholder="—"><button type="button" class="tooth-nudge" data-part="start" data-nudge="1" aria-label="Next start tooth">→</button></div></div></div><div class="tooth-readout-field hidden" id="toothEndField"><div class="tooth-readout-center"><label id="toothEndLabel">End</label><div class="tooth-stepper" role="group" aria-label="End tooth"><button type="button" class="tooth-nudge" data-part="end" data-nudge="-1" aria-label="Previous end tooth">←</button><input id="te" class="tooth-readout" type="text" readonly value="${esc(wi.toothEnd||wi.toothStart||'')}" tabindex="-1" aria-readonly="true" placeholder="—"><button type="button" class="tooth-nudge" data-part="end" data-nudge="1" aria-label="Next end tooth">→</button></div></div></div>${removeBtn}</div>`}).join('');syncToothDisplayLayout();syncToothPickerHighlight()}
     function currentToothPickerRange(){const startEl=$('ts'),endEl=$('te');if(!startEl||!endEl||startEl.value===''||endEl.value==='')return [];const start=+startEl.value,end=+endEl.value;return Number.isFinite(start)&&Number.isFinite(end)?(fdiRangeTeeth(start,end)||[]):[]}
@@ -94,8 +95,7 @@
     function productCategory(){return material==='pmma'?'temporary':'permanent'}
     function updateSummary(){const ts=$('ts'),te=$('te');if(construction){if(!isRangeConstruction()&&ts?.value!=='')setToothRange(ts.value,ts.value);else if(ts?.value!==''&&te?.value!=='')setToothRange(ts.value,te.value);else syncToothDisplayLayout()}else syncToothDisplayLayout();syncToothPickerHighlight()}
     function pickTooth(t){clearErr();if(lockedTeethSet().has(t)){showErr('That tooth is already used by a previous construction.');return}if(!construction)setConstruction('crown');resetForwardProgress(1);const seq=jawForTooth(t);if(seq===upperTeeth)selectedJaw='upper';else if(seq===lowerTeeth)selectedJaw='lower';syncJawToggle();if(!isRangeConstruction()){rangePick=0;setToothRange(t,t);updateSummary();return}if(rangePick===0){rangePick=1;setToothRange(t,t);updateSummary();return}setToothRange($('ts')?.value||t,t);rangePick=0;updateSummary()}
-    function formatDateBulgarian(iso){if(!iso)return '';const [y,m,d]=iso.split('-');const date=new Date(parseInt(y,10),parseInt(m,10)-1,parseInt(d,10));return new Intl.DateTimeFormat('bg-BG',{day:'2-digit',month:'2-digit',year:'numeric'}).format(date)}
-    function formatDateBulgarianWithWeekday(iso){if(!iso)return '';const [y,m,d]=iso.split('-');const date=new Date(parseInt(y,10),parseInt(m,10)-1,parseInt(d,10));const weekday=new Intl.DateTimeFormat('bg-BG',{weekday:'long'}).format(date);const dateStr=formatDateBulgarian(iso);const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);return `${cap(weekday)}, ${dateStr}`}
+    function formatDateBulgarianWithWeekday(iso){return Format.formatDateBulgarianWithWeekday(iso)}
     function updateSelectedDeliveryDisplay(){const el=$('selectedDeliveryDate');if(!el)return;const iso=deadline.value||selectedDate;if(iso){el.textContent=formatDateBulgarianWithWeekday(iso);el.classList.remove('date-display-placeholder')}else{el.textContent='Select a delivery date';el.classList.add('date-display-placeholder')}}
     function overviewMaterialLabel(){return material?({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'Glass ceramic',pmma:'Temporary PMMA'})[material]:'Material'}
     function overviewOrderBaseText(){const mat=overviewMaterialLabel();const items=workItems.map(workItemLabel).join(', ');return `${mat} · ${items||'—'}`}
