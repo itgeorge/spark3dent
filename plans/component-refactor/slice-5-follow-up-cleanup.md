@@ -10,7 +10,7 @@ todos:
     status: pending
   - id: consolidate-orders-api-access
     content: Route remaining raw Orders api(...) calls in orders-page.js through S3DOrders.Api so screen modules can depend on a stable API facade.
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -61,7 +61,7 @@ Follow-up target:
 
 ### 3. Consolidate Orders API access through `S3DOrders.Api`
 
-Slice 4 added `Web/wwwroot/js/orders-api.js`, but `orders-page.js` still has remaining direct `api(...)` calls for some order, date, find, and cancel operations. This is acceptable for the initial screen split, but later module extraction will be cleaner if all browser API access goes through the shared Orders API facade.
+Slice 4 added `Web/wwwroot/js/orders-api.js`, and the follow-up cleanup routed the remaining direct Orders `api(...)` calls in `orders-page.js` through the `S3DOrders.Api` facade.
 
 Follow-up target:
 
