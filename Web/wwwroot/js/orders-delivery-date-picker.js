@@ -13,9 +13,11 @@
     var status = options.status || { date: iso, isSelectable: false, reason: 'Unavailable' };
     var selectedIso = options.selectedIso || '';
     var impressionIso = options.impressionIso || '';
+    var dayOrders = options.dayOrders || [];
     var labOverride = !!(options.isLabOverride && options.isLabOverride(status));
     var isImpression = iso === impressionIso;
     cell.classList.add('delivery-calendar-cell');
+    if(dayOrders.length) cell.classList.add('delivery-calendar-cell-has-orders');
     cell.replaceChildren();
     var button = document.createElement('button');
     button.className = [
@@ -39,11 +41,33 @@
     weekday.className = 'delivery-calendar-date-weekday';
     weekday.textContent = (ctx.weekdayLabel || '').slice(0, 3);
     main.append(num, weekday);
-    button.append(main);
-    button.insertAdjacentHTML('beforeend', selectedMarkHtml());
+
+    var orders = document.createElement('div');
+    orders.className = 'delivery-calendar-orders';
+    if(S3DOrders.CalendarCells && dayOrders.length){
+      S3DOrders.CalendarCells.renderDayOrders(orders, dayOrders, {
+        iso: iso,
+        orderClinics: options.orderClinics || {},
+        isLab: !!options.isLab,
+        orderClicksEnabled: options.orderClicksEnabled !== false,
+        onOpenOrder: options.onOpenOrder,
+        onOpenDay: options.onOpenDay
+      });
+    }
+
+    var foot = document.createElement('div');
+    foot.className = 'delivery-calendar-selected-foot';
+    foot.insertAdjacentHTML('beforeend', selectedMarkHtml());
+
+    button.append(main, orders, foot);
     if(iso === selectedIso) button.classList.add('sel');
     if(status.isSelectable || labOverride){
-      button.onclick = function(){ if(options.onSelect) options.onSelect(iso, status); };
+      var orderClicksEnabled = options.orderClicksEnabled !== false;
+      button.onclick = function(e){
+        if(e.target.closest('.orders-calendar-more,.orders-calendar-count')) return;
+        if(orderClicksEnabled && e.target.closest('.orders-calendar-chip')) return;
+        if(options.onSelect) options.onSelect(iso, status);
+      };
     }
     if(options.bindReason){
       if(isImpression) options.bindReason(cell, 'impression');
