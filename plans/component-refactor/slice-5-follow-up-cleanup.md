@@ -5,6 +5,12 @@ todos:
   - id: consolidate-escape-handling
     content: Remove or simplify the legacy centralized Orders Escape-key handler once all modals are fully migrated to S3DModal/modal stack handling.
     status: pending
+  - id: deepen-orders-screen-modules
+    content: Move the remaining Orders screen implementation internals out of orders-page.js into the Slice 4 Root/Review/Flow/Created modules once route-level wrapper boundaries have stabilized.
+    status: pending
+  - id: consolidate-orders-api-access
+    content: Route remaining raw Orders api(...) calls in orders-page.js through S3DOrders.Api so screen modules can depend on a stable API facade.
+    status: pending
 isProject: false
 ---
 
@@ -39,6 +45,36 @@ Validation:
 - Discard changes confirm closes with Escape.
 - Orders day popup closes with Escape.
 - Escape on review screen still performs the intended action, if retained.
+- Orders replay tests pass.
+
+### 2. Deepen Orders screen modules
+
+Slice 4 introduced route-level screen modules and moved Orders bootstrap into `orders-page.js`, but the lowest-risk implementation intentionally kept most screen internals in the page coordinator and exposed them through Root/Review/Flow/Created wrappers.
+
+Follow-up target:
+
+- Move root list/calendar/find rendering internals from `orders-page.js` into `orders-root-view.js`.
+- Move review rendering/cancel internals into `order-review-view.js`.
+- Move order flow state, validation, dirty baseline, and save behavior into `order-flow-view.js`.
+- Move created-confirmation-specific rendering into `order-created-confirmation-view.js` or share a small overview renderer with Flow.
+- Keep route grammar and existing DOM ids/classes unchanged while doing this.
+
+### 3. Consolidate Orders API access through `S3DOrders.Api`
+
+Slice 4 added `Web/wwwroot/js/orders-api.js`, but `orders-page.js` still has remaining direct `api(...)` calls for some order, date, find, and cancel operations. This is acceptable for the initial screen split, but later module extraction will be cleaner if all browser API access goes through the shared Orders API facade.
+
+Follow-up target:
+
+- Replace remaining raw `api(...)` calls in Orders screen code with methods on `S3DOrders.Api`.
+- Add API facade methods only where they represent reusable Orders operations, not one-off UI concerns.
+- Preserve legacy request semantics, auth handling, response/error behavior, and endpoint URLs.
+- Keep screen/view modules depending on the facade rather than on low-level fetch details.
+
+Validation:
+
+- Login/logout still works.
+- List and calendar loading still work.
+- Find order, review, edit, create, and cancel flows still work.
 - Orders replay tests pass.
 
 ## Standard Validation
