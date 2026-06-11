@@ -2,24 +2,221 @@
   'use strict';
   var S3DOrders = global.S3DOrders = global.S3DOrders || {};
 
-  function call(fn, args){ return typeof fn === 'function' ? fn.apply(null, args || []) : undefined; }
-
   function create(options){
     options = options || {};
+    const $ = id => document.getElementById(id);
+    const ordersApi = options.api;
+    const getActor = options.getActor || (() => null);
+    const getClinics = options.getClinics || (() => []);
+    const OrdersTeeth = S3DOrders.Teeth;
+    const upperTeeth = OrdersTeeth.upper;
+    const lowerTeeth = OrdersTeeth.lower;
+    const teeth = OrdersTeeth.all;
+    const CONSTRUCTION_SEQUENCE = ['crown','bridge','inlayOverlay'];
+    const SHADE_GROUPS = [{label:'A',shades:['A1','A2','A3','A3.5','A4']},{label:'B',shades:['B1','B2','B3','B4']},{label:'C',shades:['C1','C2','C3','C4']},{label:'D',shades:['D2','D3','D4']},{label:'BL',shades:['BL1','BL2','BL3','BL4']}];
+    const UNSPECIFIED_SHADE = 'unspecified';
+    const CROP_PAD = OrdersTeeth.CROP_PAD;
+    const completedSteps = new Set();
+
+    const app = $('app'), list = $('list'), reviewCard = $('reviewCard');
+    const targetClinic = $('targetClinic'), techClinicPicker = $('techClinicPicker'), materialChoices = $('materialChoices'), shadeChoices = $('shadeChoices');
+    const toothReadouts = $('toothReadouts'), quickTeeth = $('quickTeeth'), addWorkItemBtn = $('addWorkItemBtn');
+    const caseName = $('caseName'), extraNote = $('extraNote'), shade = $('shade'), deadline = $('deadline'), impression = $('impression');
+    const err = $('err'), codeEl = $('code'), deliveryCalendar = $('deliveryCalendar'), dateMsg = $('dateMsg');
+    const overviewText = $('overviewText'), overviewShade = $('overviewShade'), overviewDate = $('overviewDate'), overviewTeeth = $('overviewTeeth');
+    const finalOverviewText = $('finalOverviewText'), finalOverviewShade = $('finalOverviewShade'), finalOverviewDate = $('finalOverviewDate'), finalOverviewTeeth = $('finalOverviewTeeth'), finalCaseName = $('finalCaseName'), finalExtraNote = $('finalExtraNote');
+    const cancelCreateBtn = $('cancelCreateBtn'), cancelCreateCloseBtn = $('cancelCreateCloseBtn');
+    const beforeMinimumConfirmPopup = $('beforeMinimumConfirmPopup'), beforeMinimumConfirmText = $('beforeMinimumConfirmText'), beforeMinimumConfirmBackBtn = $('beforeMinimumConfirmBackBtn'), beforeMinimumConfirmYesBtn = $('beforeMinimumConfirmYesBtn');
+    const discardOrderFlowPopup = $('discardOrderFlowPopup'), discardOrderFlowBackBtn = $('discardOrderFlowBackBtn'), discardOrderFlowYesBtn = $('discardOrderFlowYesBtn');
+
+    let step = 1, orderCreated = false, construction = '', material = '', selectedDate = '', rangePick = 0, selectedJaw = 'upper';
+    let workItems = [{construction:'',toothStart:'',toothEnd:''}], activeWorkItemIndex = 0;
+    let createdOrder = null, editingOrder = null, editMode = false, orderFlowBaselineState = '';
+    let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calendarRequest = 0, deliveryPickSkips = 0, deliveryCalendarInstance = null, deliveryMinimumDate = '', pendingBeforeMinimumDate = '';
+    let pendingRouteAfterDiscard = null;
+
+    function openUiModal(name, overlay, focusTarget){
+      if(options.openUiModal)return options.openUiModal(name, overlay, focusTarget);
+      S3DDom.setHidden(overlay,false);
+      if(focusTarget)S3DDom.deferFocus(focusTarget);
+    }
+    function closeUiModal(name, overlay){
+      if(options.closeUiModal)return options.closeUiModal(name, overlay);
+      S3DDom.setHidden(overlay,true);
+    }
+    function actor(){return getActor()}
+    function esc(v){return S3DDom.esc(v)}
+    function activeWorkItem(){return workItems[activeWorkItemIndex] || workItems[workItems.length-1]}
+    function constructionLabel(c){return ({crown:'Crown',bridge:'Bridge',inlayOverlay:'Inlay/Overlay'})[c] || 'Construction'}
+    function jawForTooth(t){return OrdersTeeth.jawFor(t)}
+    function fdiRangeTeeth(a,b){return OrdersTeeth.range(a,b)}
+    function normalizeToothRange(a,b){return OrdersTeeth.normalizeRange(a,b)}
+    function toIsoDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+    function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+    function isWeekendDate(d){const day=d.getDay();return day===0||day===6}
+    function monthForIso(iso){const [y,m]=iso.split('-').map(Number);return new Date(y,m-1,1)}
+    function syncImpressionToday(){if(impression)impression.value=toIsoDate(new Date())}
+    function syncGlobalsFromActive(){const item=activeWorkItem();construction=item?.construction||'';if(item?.toothStart){const seq=jawForTooth(+item.toothStart);selectedJaw=seq===lowerTeeth?'lower':'upper'}}
+    function syncActiveFromInputs(){const item=activeWorkItem();if(!item)return;item.construction=construction;item.toothStart=$('ts')?.value||'';item.toothEnd=$('te')?.value||item.toothStart||''}
+    function workItemTeeth(item){const start=+item.toothStart,end=+item.toothEnd;if(!Number.isFinite(start)||!Number.isFinite(end))return [];const range=fdiRangeTeeth(start,end);return range||[]}
+    function lockedTeethSet(){const s=new Set();workItems.slice(0,activeWorkItemIndex).forEach(i=>workItemTeeth(i).forEach(t=>s.add(t)));return s}
+    function activeSelectionOverlaps(start,end){const range=fdiRangeTeeth(+start,+end);if(!range)return false;const locked=lockedTeethSet();return range.some(t=>locked.has(t))}
+    function allSelectedTeeth(){const s=new Set();workItems.forEach(i=>workItemTeeth(i).forEach(t=>s.add(t)));return [...s]}
+    function isRangeConstruction(){return construction==='bridge'}
+    function jawSeq(){return selectedJaw==='upper'?upperTeeth:lowerTeeth}
+    function enforceMinRange(start,end,movedPart,delta){if(!isRangeConstruction())return normalizeToothRange(start,end);let [s,e]=normalizeToothRange(start,end);if(+s!==+e)return[s,e];const seq=jawForTooth(+s)||jawSeq();const idx=seq.indexOf(+s);if(idx<0)return[s,e];if(movedPart&&delta){const otherIdx=idx+delta;if(otherIdx>=0&&otherIdx<seq.length){const other=String(seq[otherIdx]);return movedPart==='start'?normalizeToothRange(s,other):normalizeToothRange(other,s)}}if(idx+1<seq.length)return normalizeToothRange(s,String(seq[idx+1]));if(idx-1>=0)return normalizeToothRange(String(seq[idx-1]),s);return[s,e]}
+    function setToothRange(a,b,movedPart,delta,enforceMin){const startEl=$('ts'),endEl=$('te');if(!startEl||!endEl)return;if(a===''||b===''){startEl.value=a;endEl.value=b;syncActiveFromInputs();syncToothDisplayLayout();return}let [start,end]=normalizeToothRange(a,b);if(isRangeConstruction()&&(enforceMin||movedPart))[start,end]=enforceMinRange(start,end,movedPart,delta);if(activeSelectionOverlaps(start,end)){showErr('That tooth is already used by a previous construction.');syncJawToggle();return}startEl.value=start;endEl.value=end;syncActiveFromInputs();syncToothDisplayLayout()}
+    function syncJawFromSelection(){const startEl=$('ts');if(!startEl||startEl.value==='')return;const seq=jawForTooth(+startEl.value);if(seq===upperTeeth)selectedJaw='upper';else if(seq===lowerTeeth)selectedJaw='lower'}
+    function syncJawToggle(){const b=$('jawToggle'),startEl=$('ts');if(!b)return;if(!startEl||startEl.value===''){b.textContent='-';b.title='No jaw selected';b.setAttribute('aria-label','No jaw selected. Select a tooth');return}syncJawFromSelection();const upper=selectedJaw==='upper';b.textContent=upper?'∩':'∪';b.title=upper?'Upper jaw':'Lower jaw';b.setAttribute('aria-label',upper?'Selected jaw: upper. Switch to lower jaw':'Selected jaw: lower. Switch to upper jaw')}
+    function mapToothToJaw(tooth,jaw){return OrdersTeeth.mapToJaw(tooth,jaw)}
+    function setJaw(j){const startEl=$('ts'),endEl=$('te');if(j===selectedJaw)return;resetForwardProgress(1);rangePick=0;selectedJaw=j;syncJawToggle();if(startEl?.value!==''){const newStart=mapToothToJaw(startEl.value,j),newEnd=endEl?.value!==''?mapToothToJaw(endEl.value,j):'';if(!isRangeConstruction())setToothRange(newStart,newStart);else setToothRange(newStart,newEnd,undefined,undefined,!!newEnd)}updateSummary()}
+    function syncToothNudgeState(){const ts=$('ts'),te=$('te'),toothStartField=$('toothStartField'),toothEndField=$('toothEndField');if(!ts||!te||!toothStartField||!toothEndField)return;const single=!isRangeConstruction();[{part:'start',field:toothStartField,val:ts.value,hide:false},{part:'end',field:toothEndField,val:te.value,hide:single}].forEach(({part,field,val,hide})=>{if(hide)return;const left=field.querySelector('[data-nudge="-1"]'),right=field.querySelector('[data-nudge="1"]');if(part==='start'&&val===''){left.disabled=false;right.disabled=false;return}if(val===''){left.disabled=right.disabled=true;return}const cur=+val,seq=jawForTooth(cur);if(!seq||!seq.includes(cur)){left.disabled=right.disabled=true;return}const idx=seq.indexOf(cur);left.disabled=idx<=0;right.disabled=idx>=seq.length-1})}
+    function syncToothDisplayLayout(){const endField=$('toothEndField'),startLabel=$('toothStartLabel'),startEl=$('ts'),endEl=$('te');if(!startEl||!endEl)return;const single=!isRangeConstruction();const showEnd=!!construction&&!single;if(endField)endField.classList.toggle('hidden',!showEnd);if(startLabel)startLabel.textContent=!construction||single?'Tooth':'Start';if(single&&startEl.value!=='')endEl.value=startEl.value;syncActiveFromInputs();syncJawToggle();syncToothNudgeState()}
+    function ensureStartToothSelected(){const ts=$('ts');if(ts?.value!=='')return false;clearErr();resetForwardProgress(1);rangePick=0;if(!construction)setConstruction('crown');selectedJaw='upper';syncJawToggle();if(isRangeConstruction())setToothRange('11','21');else setToothRange('11','11');updateSummary();return true}
+    function nudgeTooth(part,delta){const ts=$('ts'),te=$('te');if(!ts||!te)return;const isStart=part==='start';let raw=isStart?ts.value:te.value;if(isStart&&raw===''){if(!ensureStartToothSelected())return;raw=ts.value}if(raw==='')return;resetForwardProgress(1);rangePick=0;const seq=jawSeq();const idx=seq.indexOf(+raw)+delta;if(idx<0||idx>=seq.length)return;const next=seq[idx];if(!isRangeConstruction())setToothRange(next,next);else setToothRange(String(isStart?next:ts.value),String(isStart?te.value:next),part,delta);updateSummary()}
+    function workItemLabel(item){if(!item?.construction||!item.toothStart)return `${constructionLabel(item?.construction)} —`;return item.toothStart===item.toothEnd?`${constructionLabel(item.construction)} ${item.toothStart}`:`${constructionLabel(item.construction)} ${item.toothStart}-${item.toothEnd}`}
+    function orderWorkItemLabel(i){const c=i.constructionType||i.construction||'case';return +i.toothStart===+i.toothEnd?`${constructionLabel(c)} ${i.toothStart||'—'}`:`${constructionLabel(c)} ${i.toothStart||'—'}-${i.toothEnd||'—'}`}
+    function workItemRemoveBtnHtml(){const label=workItems.length<=1?'Clear construction':'Remove construction',icon=window.S3DIcons?S3DIcons.closeHtml({className:'work-item-remove-icon'}):'<svg class="work-item-remove-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></path></svg>';return `<button type="button" class="work-item-remove" data-remove-work-item aria-label="${label}" title="${label}">${icon}</button>`}
+    function renderWorkItemReadouts(){syncGlobalsFromActive();const removeBtn=workItemRemoveBtnHtml();toothReadouts.innerHTML=workItems.map((wi,i)=>{if(i!==activeWorkItemIndex)return `<div class="order-work-item-line locked" data-index="${i}"><button class="btn construction-cycle" type="button" disabled>${esc(constructionLabel(wi.construction))}</button><span class="locked-work-item-summary">${esc(workItemLabel(wi))}</span>${removeBtn}</div>`;return `<div class="order-work-item-line active" data-index="${i}"><button class="btn construction-cycle" type="button" data-cycle-construction aria-label="Cycle construction type">${esc(constructionLabel(wi.construction))}</button><div class="tooth-readout-field" id="toothJawField"><div class="tooth-readout-center"><label>Jaw</label><button type="button" class="jaw-toggle" id="jawToggle" aria-label="No jaw selected. Select a tooth" title="No jaw selected">-</button></div></div><div class="tooth-readout-field" id="toothStartField"><div class="tooth-readout-center"><label id="toothStartLabel">Tooth</label><div class="tooth-stepper" role="group" aria-label="Start tooth"><button type="button" class="tooth-nudge" data-part="start" data-nudge="-1" aria-label="Previous start tooth">←</button><input id="ts" class="tooth-readout" type="text" readonly value="${esc(wi.toothStart||'')}" tabindex="-1" aria-readonly="true" placeholder="—"><button type="button" class="tooth-nudge" data-part="start" data-nudge="1" aria-label="Next start tooth">→</button></div></div></div><div class="tooth-readout-field hidden" id="toothEndField"><div class="tooth-readout-center"><label id="toothEndLabel">End</label><div class="tooth-stepper" role="group" aria-label="End tooth"><button type="button" class="tooth-nudge" data-part="end" data-nudge="-1" aria-label="Previous end tooth">←</button><input id="te" class="tooth-readout" type="text" readonly value="${esc(wi.toothEnd||wi.toothStart||'')}" tabindex="-1" aria-readonly="true" placeholder="—"><button type="button" class="tooth-nudge" data-part="end" data-nudge="1" aria-label="Next end tooth">→</button></div></div></div>${removeBtn}</div>`}).join('');syncToothDisplayLayout();syncToothPickerHighlight()}
+    function currentToothPickerRange(){const startEl=$('ts'),endEl=$('te');if(!startEl||!endEl||startEl.value===''||endEl.value==='')return [];const start=+startEl.value,end=+endEl.value;return Number.isFinite(start)&&Number.isFinite(end)?(fdiRangeTeeth(start,end)||[]):[]}
+    function renderToothChart(){S3DOrders.ToothChart.render(quickTeeth,{getActiveRange:currentToothPickerRange,getLockedItems:()=>workItems.slice(0,activeWorkItemIndex),getItemTeeth:workItemTeeth,getItemLabel:workItemLabel});syncToothPickerHighlight()}
+    function syncToothPickerHighlight(){S3DOrders.ToothChart.syncHighlight(quickTeeth,{range:currentToothPickerRange(),lockedItems:workItems.slice(0,activeWorkItemIndex),getItemTeeth:workItemTeeth,getItemLabel:workItemLabel})}
+    function cycleActiveConstruction(){const cur=construction||'inlayOverlay';const next=CONSTRUCTION_SEQUENCE[(CONSTRUCTION_SEQUENCE.indexOf(cur)+1)%CONSTRUCTION_SEQUENCE.length];setConstruction(next)}
+    function setConstruction(c){if(c===construction)return;resetForwardProgress(1);rangePick=0;construction=c;activeWorkItem().construction=c;const ts=$('ts'),te=$('te');if(!isRangeConstruction()&&ts?.value!=='')setToothRange(ts.value,ts.value);else if(isRangeConstruction()&&ts?.value&&te?.value)setToothRange(ts.value,te.value,undefined,undefined,true);else syncToothDisplayLayout();const cycle=toothReadouts.querySelector('[data-cycle-construction]');if(cycle)cycle.textContent=constructionLabel(c);updateSummary()}
+    function setMaterial(m){if(m===material)return;resetForwardProgress(2);material=m;S3DOrders.MaterialPicker.sync(materialChoices,m);updateSummary()}
+    function setShade(code){if(code===shade.value)return;resetForwardProgress(2);shade.value=code;S3DOrders.ShadePicker.sync(shadeChoices,code);updateSummary()}
+    function renderShadeChoices(){S3DOrders.ShadePicker.render(shadeChoices,{value:shade.value,groups:SHADE_GROUPS,unspecifiedValue:UNSPECIFIED_SHADE,onChange:setShade})}
+    function clinicChoiceLabel(c){const parts=[c.clinicDisplayName||c.clinicCode,c.clinicCode!==(c.clinicDisplayName||'')?`(${c.clinicCode})`:null].filter(Boolean);return parts.join(' · ')}
+    function normalizeClinicColor(c){const raw=String(c||'').trim();if(/^#[0-9a-fA-F]{6}$/.test(raw))return raw;if(/^#[0-9a-fA-F]{3}$/.test(raw)){const h=raw.slice(1);return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`}return null}
+    function clinicSwatchHtml(o){const name=o?.clinicDisplayName||o?.clinicCode||'Clinic',color=normalizeClinicColor(o?.clinicDisplayColor),cls=`clinic-swatch${color?'':' clinic-swatch-neutral'}`,style=color?` style="--clinic-color:${color}"`:'';return `<span class="${cls}"${style} title="${esc(name)}"><span class="clinic-swatch-dot" aria-hidden="true"></span><span class="clinic-swatch-label" title="${esc(name)}">${esc(name)}</span></span>`}
+    function renderTargetClinicPreview(){const preview=$('targetClinicPreview');if(!preview||!targetClinic)return;const selected=getClinics().find(c=>c.clinicCode===targetClinic.value);if(!selected||!targetClinic.value){preview.classList.add('hidden');preview.innerHTML='';return}preview.classList.remove('hidden');preview.innerHTML=clinicSwatchHtml(selected)}
+    function renderClinicChoices(){if(!targetClinic)return;const previous=targetClinic.value;const clinics=getClinics();targetClinic.innerHTML=`<option value="">Please select a clinic</option>${clinics.map(c=>`<option value="${esc(c.clinicCode)}">${esc(clinicChoiceLabel(c))}</option>`).join('')}`;targetClinic.value=clinics.some(c=>c.clinicCode===previous)?previous:'';renderTargetClinicPreview()}
+    function productCategory(){return material==='pmma'?'temporary':'permanent'}
+    function updateSummary(){const ts=$('ts'),te=$('te');if(construction){if(!isRangeConstruction()&&ts?.value!=='')setToothRange(ts.value,ts.value);else if(ts?.value!==''&&te?.value!=='')setToothRange(ts.value,te.value);else syncToothDisplayLayout()}else syncToothDisplayLayout();syncToothPickerHighlight()}
+    function pickTooth(t){clearErr();if(lockedTeethSet().has(t)){showErr('That tooth is already used by a previous construction.');return}if(!construction)setConstruction('crown');resetForwardProgress(1);const seq=jawForTooth(t);if(seq===upperTeeth)selectedJaw='upper';else if(seq===lowerTeeth)selectedJaw='lower';syncJawToggle();if(!isRangeConstruction()){rangePick=0;setToothRange(t,t);updateSummary();return}if(rangePick===0){rangePick=1;setToothRange(t,t);updateSummary();return}setToothRange($('ts')?.value||t,t);rangePick=0;updateSummary()}
+    function formatDateBulgarian(iso){if(!iso)return '';const [y,m,d]=iso.split('-');const date=new Date(parseInt(y,10),parseInt(m,10)-1,parseInt(d,10));return new Intl.DateTimeFormat('bg-BG',{day:'2-digit',month:'2-digit',year:'numeric'}).format(date)}
+    function formatDateBulgarianWithWeekday(iso){if(!iso)return '';const [y,m,d]=iso.split('-');const date=new Date(parseInt(y,10),parseInt(m,10)-1,parseInt(d,10));const weekday=new Intl.DateTimeFormat('bg-BG',{weekday:'long'}).format(date);const dateStr=formatDateBulgarian(iso);const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);return `${cap(weekday)}, ${dateStr}`}
+    function updateSelectedDeliveryDisplay(){const el=$('selectedDeliveryDate');if(!el)return;const iso=deadline.value||selectedDate;if(iso){el.textContent=formatDateBulgarianWithWeekday(iso);el.classList.remove('date-display-placeholder')}else{el.textContent='Select a delivery date';el.classList.add('date-display-placeholder')}}
+    function overviewMaterialLabel(){return material?({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'Glass ceramic',pmma:'Temporary PMMA'})[material]:'Material'}
+    function overviewOrderBaseText(){const mat=overviewMaterialLabel();const items=workItems.map(workItemLabel).join(', ');return `${mat} · ${items||'—'}`}
+    function overviewShadeLine(){return shade.value&&shade.value!==UNSPECIFIED_SHADE?`shade ${shade.value}`:''}
+    function selectedTeethRange(){const nums=allSelectedTeeth();return nums.length?nums:null}
+    function selectedWorkItemsForPreview(){syncActiveFromInputs();return workItems.map(item=>({...item,constructionType:item.construction,locked:false}))}
+    function setOverviewField(el,text){if(!el)return;if('value' in el)el.value=text;else el.textContent=text}
+    function setOverviewShade(el,text){if(!el)return;const line=text||'';el.textContent=line;el.classList.toggle('hidden',!line)}
+    function syncOverviewBodyLayout(bodyEl,range){if(!bodyEl)return;const count=range?.length||0;bodyEl.classList.toggle('overview-body-compact',count>0&&count<=2)}
+    function renderSelectedTeethPreview(container,range,items){S3DOrders.SelectedTeethPreview.render(container,{teeth:range||[],items:items||[],labelPrefix:'Selected teeth',getItemLabel:orderWorkItemLabel})}
+    function renderOverviewInto(textEl,shadeEl,dateEl,teethEl){const range=selectedTeethRange(),previewItems=selectedWorkItemsForPreview();setOverviewField(textEl,overviewOrderBaseText());setOverviewShade(shadeEl,overviewShadeLine());setOverviewField(dateEl,deadline.value||selectedDate?formatDateBulgarianWithWeekday(deadline.value||selectedDate):'');syncOverviewBodyLayout(teethEl?.closest('.overview-body'),range);renderSelectedTeethPreview(teethEl,range,previewItems)}
+    function renderOverview(){renderOverviewInto(overviewText,overviewShade,overviewDate,overviewTeeth)}
+    function renderFinalOverview(){renderOverviewInto(finalOverviewText,finalOverviewShade,finalOverviewDate,finalOverviewTeeth);setOverviewField(finalCaseName,caseName.value.trim());const note=extraNote.value.trim();if(finalExtraNote){setOverviewField(finalExtraNote,note?`Note: ${note}`:'');finalExtraNote.classList.toggle('hidden',!note)}}
+    function resetForwardProgress(changedStage){clearErr();const resetFrom=changedStage<3?3:changedStage;if(changedStage<3){const currentDelivery=deadline.value||selectedDate;if(currentDelivery)calendarMonth=monthForIso(currentDelivery)}let didReset=false;for(const s of [...completedSteps]){if(s>=resetFrom){completedSteps.delete(s);didReset=true}}if(orderCreated){orderCreated=false;didReset=true;codeEl.textContent='—'}if(step===5&&!orderCreated)step=resetFrom;if(didReset)render()}
+    function workItemsPayload(){syncActiveFromInputs();return workItems.map(i=>({constructionType:i.construction,toothStart:+i.toothStart,toothEnd:+(i.toothEnd||i.toothStart)}))}
+    function draft(delivery=deadline.value||selectedDate||'',start=impression.value,end='2026-07-05'){const d={caseName:caseName.value,impressionDate:impression.value,productCategory:productCategory(),material,workItems:workItemsPayload(),requestedDeliveryDate:delivery,shade:shade.value,notes:extraNote.value,start,end};if(actor()?.isLab&&!editMode&&targetClinic.value)d.clinicCode=targetClinic.value;return d}
+    function showErr(t){err.textContent=t;err.classList.remove('hidden')}
+    function clearErr(){err.classList.add('hidden')}
+    function validateWorkItems(){syncActiveFromInputs();if(!workItems.length)return 'Add at least one construction.';const used=new Set();for(const item of workItems){if(!item.construction)return 'Select a type for each construction.';if(!item.toothStart||!item.toothEnd)return 'Select a tooth or range for each construction.';const t1=+item.toothStart,t2=+item.toothEnd;if(!teeth.includes(t1)||!teeth.includes(t2))return 'Select valid FDI tooth numbers.';if((item.construction==='crown'||item.construction==='inlayOverlay')&&t1!==t2)return `${constructionLabel(item.construction)} must be exactly one tooth.`;const range=fdiRangeTeeth(t1,t2);if(item.construction==='bridge'){if(!range)return 'Start and end must be a contiguous range on the same jaw (FDI).';if(range.length<2)return 'Bridge must span at least two teeth.'}for(const tooth of (range||[t1])){if(used.has(tooth))return 'Constructions must not overlap selected teeth.';used.add(tooth)}}return null}
+    function validateStep(s){if(s===1){if(actor()?.isLab&&!editMode&&!targetClinic.value)return 'Select a target clinic.';return validateWorkItems()}if(s===2){if(!material)return 'Select a material.';if(!shade.value)return 'Select a shade.';return null}if(s===3){const delivery=deadline.value||selectedDate;if(!delivery)return 'Select a deadline/delivery date.';return null}if(s===4){if(!caseName.value.trim())return 'Enter a case name.';return null}return null}
+    function maxCompletedStep(){return completedSteps.size?Math.max(...completedSteps):0}
+    function canGoToStep(target){if(target===step||target<1||target>5||step===5)return false;if(target<step)return true;const maxC=maxCompletedStep();if(completedSteps.has(target))return true;if(target!==maxC+1)return false;return target!==5||orderCreated}
+    function validateBeforeStep(target){for(let s=1;s<target;s++){const msg=validateStep(s);if(msg)return msg}return null}
+    function flowRoutePath(stepToOpen){if(editMode&&editingOrder)return `edit/${encodeURIComponent(editingOrder.orderCode)}/${stepToOpen}`;return `new/${stepToOpen}`}
+    function navigate(path,opts){return options.navigate?options.navigate(path,opts):undefined}
+    function replace(path,opts){return options.replace?options.replace(path,opts):undefined}
+    function goToStep(target){if(!canGoToStep(target)||target>4)return;navigate(flowRoutePath(target))}
+    function render(){clearErr();document.querySelectorAll('.pane').forEach((p,i)=>p.classList.toggle('hidden',i+1!==step));document.querySelectorAll('.step[data-s]').forEach(el=>{const s=+el.dataset.s;el.classList.toggle('active',s===step);el.classList.toggle('done',completedSteps.has(s));const clickable=canGoToStep(s);el.classList.toggle('clickable',clickable);el.classList.toggle('locked',!clickable&&!el.classList.contains('active'));el.setAttribute('role','button');el.tabIndex=clickable?0:-1;el.setAttribute('aria-disabled',clickable?'false':'true')});const nextLabel=step===4?(editMode?'Save changes':'Create order'):step===5?'Done':'Next';if(cancelCreateBtn)cancelCreateBtn.textContent=step===5?'Done':'Back to Orders';document.querySelectorAll('.nav-back').forEach(b=>{const hide=step===5;b.disabled=step===1||hide;b.classList.toggle('hidden',hide);b.setAttribute('aria-hidden',hide?'true':'false')});document.querySelectorAll('.nav-next').forEach(b=>{b.textContent=nextLabel;b.classList.toggle('hidden',step===5);b.disabled=step===5});if(techClinicPicker)techClinicPicker.classList.toggle('hidden',!(actor()?.isLab&&!editMode));updateSummary();updateSelectedDeliveryDisplay();if(step===3)loadDates();if(step===4)renderOverview();if(step===5)renderFinalOverview()}
+    function dateUnavailableReason(status,day){if(status?.isSelectable)return '';if(status?.reason)return status.reason;if(isWeekendDate(day))return 'Weekend';return 'Unavailable'}
+    function hideDateReasonPop(){const pop=$('dateReasonPop');if(pop&&!pop.classList.contains('hidden'))pop.classList.add('hidden')}
+    function showDateReasonPop(anchor,text){const pop=$('dateReasonPop');if(!pop||!text)return hideDateReasonPop();pop.textContent=text;pop.classList.remove('hidden');const ar=anchor.getBoundingClientRect();let left=ar.left+ar.width/2-pop.offsetWidth/2,top=ar.bottom+8;left=Math.max(8,Math.min(left,window.innerWidth-pop.offsetWidth-8));if(top+pop.offsetHeight>window.innerHeight-8)top=ar.top-pop.offsetHeight-8;pop.style.left=`${left}px`;pop.style.top=`${top}px`}
+    function bindDateCellPop(cell,text){if(!text)return;cell.tabIndex=0;const show=()=>showDateReasonPop(cell,text);const hide=()=>hideDateReasonPop();cell.addEventListener('mouseenter',show);cell.addEventListener('mouseleave',hide);cell.addEventListener('focusin',show);cell.addEventListener('focusout',hide)}
+    function bindDateReasonPop(cell,status,day){bindDateCellPop(cell,dateUnavailableReason(status,day))}
+    function firstSelectableDate(dates){return dates.find(d=>d.isSelectable)?.date||''}
+    function isIsoAfter(a,b){return !!a&&!!b&&a>b}
+    function isLabBeforeMinimumOverride(status){return !!actor()?.isLab&&!!status?.isBeforeMinimum&&!status?.isClosed&&!status?.isFirstBusinessDayAfterClosure}
+    function applyDeliveryDateSelection(iso){resetForwardProgress(3);selectedDate=iso;deadline.value=iso;document.querySelectorAll('.delivery-calendar-date').forEach(x=>x.classList.toggle('sel',x.dataset.iso===iso));updateSummary();updateSelectedDeliveryDisplay()}
+    function openBeforeMinimumConfirmPopup(iso){pendingBeforeMinimumDate=iso;beforeMinimumConfirmText.textContent=`This date (${formatDateBulgarianWithWeekday(iso)}) is before the calculated minimum delivery date${deliveryMinimumDate?` (${formatDateBulgarianWithWeekday(deliveryMinimumDate)})`:''}. Use it anyway?`;openUiModal('beforeMinimum',beforeMinimumConfirmPopup,beforeMinimumConfirmBackBtn)}
+    function closeBeforeMinimumConfirmPopup(){closeUiModal('beforeMinimum',beforeMinimumConfirmPopup);pendingBeforeMinimumDate=''}
+    function confirmBeforeMinimumDateSelection(){const iso=pendingBeforeMinimumDate;closeBeforeMinimumConfirmPopup();if(iso)applyDeliveryDateSelection(iso)}
+    function requestDeliveryDateSelection(iso,status){hideDateReasonPop();const current=deadline.value||selectedDate;if(isLabBeforeMinimumOverride(status)&&current&&iso<current){openBeforeMinimumConfirmPopup(iso);return}applyDeliveryDateSelection(iso)}
+    function syncDeliverySelection(dates){const current=deadline.value||selectedDate;const byDate=new Map(dates.map(d=>[d.date,d]));const next=firstSelectableDate(dates);if(current){const status=byDate.get(current);if(status?.isSelectable||isLabBeforeMinimumOverride(status)){selectedDate=current;deadline.value=current;return false}const mayMove=status||deliveryPickSkips>0;if(!next||!mayMove||!isIsoAfter(next,current))return false;deadline.value=next;selectedDate=next;updateSummary();return true}if(!next)return false;deadline.value=next;selectedDate=next;updateSummary();return true}
+    function renderDeliveryDateCell(ctx,byDate,month){const status=byDate.get(ctx.iso)||{date:ctx.iso,isSelectable:false,reason:'Unavailable'};S3DOrders.DeliveryDatePicker.renderDateCell(ctx,{status,selectedIso:deadline.value,impressionIso:impression.value,isLabOverride:isLabBeforeMinimumOverride,onSelect:requestDeliveryDateSelection,bindReason:(cell,statusOrText,date)=>typeof statusOrText==='string'?bindDateCellPop(cell,statusOrText):bindDateReasonPop(cell,statusOrText,date)})}
+    async function ensureDeliveryDate(){if(deadline.value||selectedDate)return;syncImpressionToday();const startIso=impression.value,endIso=toIsoDate(addDays(new Date(startIso),90));const result=await ordersApi.dateAvailability(draft(startIso,startIso,endIso));const j=result.data;if(result.ok&&j.dates){deliveryMinimumDate=j.minimumDate||'';syncDeliverySelection(j.dates)}}
+    async function loadDates(){if(!deliveryCalendar)return;hideDateReasonPop();syncImpressionToday();const request=++calendarRequest;const month=calendarMonth,bounds=MonthCalendar.bounds(month),startIso=toIsoDate(bounds.start),endIso=toIsoDate(bounds.end);const result=await ordersApi.dateAvailability(draft(deadline.value||selectedDate||startIso,startIso,endIso));const j=result.data;if(request!==calendarRequest)return;if(!result.ok){dateMsg.textContent=j.error;dateMsg.className='msg err';return}deliveryMinimumDate=j.minimumDate||'';const changed=syncDeliverySelection(j.dates);const picked=deadline.value||selectedDate;if(changed&&picked){deliveryPickSkips=0;const want=monthForIso(picked);if(want.getTime()!==calendarMonth.getTime()){calendarMonth=want;return loadDates()}}else if(!firstSelectableDate(j.dates)&&deliveryPickSkips<18){deliveryPickSkips++;calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+1,1);return loadDates()}deliveryPickSkips=0;dateMsg.textContent='';dateMsg.className='msg hidden';updateSelectedDeliveryDisplay();hideDateReasonPop();const byDate=new Map(j.dates.map(d=>[d.date,d]));const options={month,renderCell:ctx=>renderDeliveryDateCell(ctx,byDate,month),onMonthChange:m=>{calendarMonth=m;if(step===3)loadDates()}};if(!deliveryCalendarInstance)deliveryCalendarInstance=MonthCalendar.create(deliveryCalendar,options);else deliveryCalendarInstance.setOptions(options)}
+    async function createOrder(){const msg=validateBeforeStep(5);if(msg)return showErr(msg);await ensureDeliveryDate();const delivery=deadline.value||selectedDate;if(!delivery)return showErr('No delivery date available.');const result=editMode?await ordersApi.updateOrder(editingOrder.orderCode,draft(delivery)):await ordersApi.createOrder(draft(delivery));const j=result.data;if(!result.ok)return showErr(j.error||'Could not save order.');if(editMode){const savedCode=j.order.orderCode;editingOrder=null;editMode=false;orderFlowBaselineState='';if(options.onEditSaved)options.onEditSaved(savedCode);await navigate(`order/${encodeURIComponent(savedCode)}`,{skipDirtyGuard:true});return}createdOrder=j.order;codeEl.textContent=j.order.shortenedOrderCode||j.order.orderCode;completedSteps.add(3);completedSteps.add(4);completedSteps.add(5);orderCreated=true;orderFlowBaselineState='';await navigate(`created/${encodeURIComponent(j.order.orderCode)}`,{skipDirtyGuard:true})}
+    function orderFlowStateSnapshot(){syncActiveFromInputs();return JSON.stringify({editMode:!!editMode,targetClinic:targetClinic?.value||'',workItems:workItems.map(i=>({construction:i.construction||'',toothStart:i.toothStart||'',toothEnd:i.toothEnd||i.toothStart||''})),material:material||'',shade:shade.value||'',deadline:deadline.value||selectedDate||'',caseName:caseName.value||'',extraNote:extraNote.value||''})}
+    function rememberOrderFlowBaseline(){orderFlowBaselineState=orderFlowStateSnapshot()}
+    function isDirty(){if(orderCreated||app.classList.contains('hidden')||!orderFlowBaselineState)return false;return orderFlowStateSnapshot()!==orderFlowBaselineState}
+    function isOrderFlowRoute(ctx){return ctx&&(ctx.name==='newOrder'||ctx.name==='editOrder')}
+    function isSafeTransition(from,to){if(!isOrderFlowRoute(from)||!isOrderFlowRoute(to)||from.name!==to.name)return false;if(from.name==='newOrder')return true;return (from.params?.code||'')===(to.params?.code||'')}
+    function openDiscardOrderFlowPopup(targetRoute=null){pendingRouteAfterDiscard=targetRoute;openUiModal('discard',discardOrderFlowPopup,discardOrderFlowBackBtn)}
+    function closeDiscardOrderFlowPopup(){closeUiModal('discard',discardOrderFlowPopup);pendingRouteAfterDiscard=null}
+    async function requestBackToList(){await navigate('', undefined)}
+    async function confirmDiscardOrderFlow(){const pending=pendingRouteAfterDiscard;closeUiModal('discard',discardOrderFlowPopup);pendingRouteAfterDiscard=null;if(pending){await navigate(pending.path,{skipDirtyGuard:true});return}await navigate('',{skipDirtyGuard:true})}
+    async function showShell(){if(options.showAuthenticatedAppShell)options.showAuthenticatedAppShell();if(actor()?.isLab&&options.loadClinics)await options.loadClinics();renderClinicChoices();list?.classList.add('hidden');reviewCard?.classList.add('hidden');reviewCard?.setAttribute('aria-hidden','true');if(options.closeFindOrder)options.closeFindOrder();if(options.closeOrdersDay)options.closeOrdersDay();if(options.closeCancelOrder)options.closeCancelOrder();closeDiscardOrderFlowPopup();closeBeforeMinimumConfirmPopup();app?.classList.remove('hidden')}
+    function resetOrderForm(){editMode=false;editingOrder=null;createdOrder=null;orderCreated=false;step=1;construction='';workItems=[{construction:'',toothStart:'',toothEnd:''}];activeWorkItemIndex=0;material='';selectedDate='';rangePick=0;selectedJaw='upper';completedSteps.clear();caseName.value='';extraNote.value='';shade.value='';deadline.value='';deliveryMinimumDate='';if(targetClinic)targetClinic.value='';closeBeforeMinimumConfirmPopup();syncImpressionToday();calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);document.querySelectorAll('.choice.active,.shade-card.active').forEach(x=>x.classList.remove('active'));renderShadeChoices();renderClinicChoices();renderWorkItemReadouts();syncToothDisplayLayout();updateSummary();rememberOrderFlowBaseline()}
+    function addWorkItem(){const msg=validateWorkItems();if(msg)return showErr(msg);clearErr();resetForwardProgress(1);syncActiveFromInputs();const nextConstruction=activeWorkItem()?.construction||construction||'crown';workItems.push({construction:nextConstruction,toothStart:'',toothEnd:''});activeWorkItemIndex=workItems.length-1;construction=nextConstruction;rangePick=0;renderWorkItemReadouts();updateSummary()}
+    function removeWorkItemAt(index){if(index<0||index>=workItems.length)return;clearErr();resetForwardProgress(1);if(workItems.length<=1){workItems[0]={construction:'',toothStart:'',toothEnd:''};activeWorkItemIndex=0;construction='';rangePick=0;selectedJaw='upper'}else{syncActiveFromInputs();workItems.splice(index,1);if(index<activeWorkItemIndex)activeWorkItemIndex--;else if(index===activeWorkItemIndex)activeWorkItemIndex=Math.min(index,workItems.length-1);rangePick=0}syncGlobalsFromActive();renderWorkItemReadouts();updateSummary()}
+    function routeStepValue(raw){const n=Number.parseInt(raw,10);return Number.isFinite(n)?n:NaN}
+    function validOrderFlowStepOrReplace(kind,code,rawStep){const requested=routeStepValue(rawStep);if(!Number.isInteger(requested)||requested<1){replace(kind==='edit'?`edit/${encodeURIComponent(code)}/1`:'new/1',{skipGuard:true});return null}if(requested>4){const fallback=Math.min(Math.max(step||1,1),4);replace(kind==='edit'?`edit/${encodeURIComponent(code)}/${fallback}`:`new/${fallback}`,{skipGuard:true});return null}return requested}
+    function applyFlowRouteStep(requested){let target=requested, invalidMsg='';if(target>1){for(let s=1;s<target;s++){const msg=validateStep(s);if(msg){target=s;invalidMsg=msg;break}completedSteps.add(s)}}step=target;render();if(invalidMsg){showErr(invalidMsg);replace(flowRoutePath(target),{skipGuard:true})}}
+    async function loadOrderByCode(orderCode){const result=await ordersApi.getOrder(orderCode);const j=result.data;if(!result.ok)throw new Error(j.error||'Could not load order.');return j.order}
+    function orderWorkItems(o){return Array.isArray(o.workItems)?o.workItems:[]}
+    function populateOrderFlowFromOrder(o,{confirmation=false}={}){resetOrderForm();editMode=!confirmation;editingOrder=confirmation?null:o;createdOrder=confirmation?o:null;orderCreated=!!confirmation;workItems=orderWorkItems(o).map(i=>({construction:i.constructionType,toothStart:String(i.toothStart),toothEnd:String(i.toothEnd)}));if(!workItems.length)workItems=[{construction:'',toothStart:'',toothEnd:''}];activeWorkItemIndex=workItems.length-1;syncGlobalsFromActive();material=o.material;shade.value=o.shade||'';caseName.value=o.caseName||'';extraNote.value=o.notes||'';impression.value=o.impressionDate||toIsoDate(new Date());deadline.value=o.requestedDeliveryDate||'';selectedDate=deadline.value;if(selectedDate)calendarMonth=monthForIso(selectedDate);document.querySelectorAll('#materialChoices .choice').forEach(x=>x.classList.toggle('active',x.dataset.mat===material));renderShadeChoices();renderWorkItemReadouts();completedSteps.add(1);completedSteps.add(2);completedSteps.add(3);if(confirmation){completedSteps.add(4);completedSteps.add(5);step=5;codeEl.textContent=o.shortenedOrderCode||o.orderCode}else step=1;updateSummary();rememberOrderFlowBaseline()}
+    async function showNew(rawStep){if(!actor())return options.showLogin?options.showLogin():undefined;const requested=validOrderFlowStepOrReplace('new','',rawStep);if(requested==null)return;const didReset=app.classList.contains('hidden')||editMode||orderCreated;if(didReset)resetOrderForm();await showShell();editMode=false;editingOrder=null;applyFlowRouteStep(requested);if(didReset)rememberOrderFlowBaseline()}
+    async function showEdit(orderCode,rawStep){if(!actor())return options.showLogin?options.showLogin():undefined;const requested=validOrderFlowStepOrReplace('edit',orderCode,rawStep);if(requested==null)return;if(!(editMode&&editingOrder?.orderCode===orderCode&&!app.classList.contains('hidden'))){try{const o=await loadOrderByCode(orderCode);populateOrderFlowFromOrder(o)}catch(err){if(options.onRouteError)options.onRouteError(err.message||'Could not load order.');await replace('',{skipGuard:true});return}}await showShell();applyFlowRouteStep(requested)}
+    async function showCreated(orderCode){if(!actor())return options.showLogin?options.showLogin():undefined;try{const o=await loadOrderByCode(orderCode);populateOrderFlowFromOrder(o,{confirmation:true});await showShell();render()}catch(err){if(options.onRouteError)options.onRouteError(err.message||'Could not load order.');await replace('',{skipGuard:true})}}
+    function goBack(){if(step>1)return navigate(flowRoutePath(step-1))}
+    function goNext(){if(step===4)return createOrder();if(step===5)return navigate('', undefined);const msg=validateStep(step);if(msg)return showErr(msg);completedSteps.add(step);return navigate(flowRoutePath(step+1))}
+
+    function bind(){
+      const steps=document.querySelector('.steps');
+      steps.addEventListener('click',e=>{const el=e.target.closest('.step[data-s]');if(el)goToStep(+el.dataset.s)});
+      steps.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const el=e.target.closest('.step[data-s]');if(!el)return;e.preventDefault();goToStep(+el.dataset.s)});
+      document.querySelectorAll('.nav-back').forEach(b=>b.onclick=goBack);
+      document.querySelectorAll('.nav-next').forEach(b=>b.onclick=goNext);
+      if(targetClinic)targetClinic.onchange=()=>{resetForwardProgress(1);renderTargetClinicPreview();updateSummary()};
+      if(quickTeeth)quickTeeth.onclick=e=>{const b=e.target.closest('.tooth');if(!b)return;pickTooth(+b.dataset.t)};
+      if(toothReadouts)toothReadouts.onclick=e=>{const removeBtn=e.target.closest('[data-remove-work-item]');if(removeBtn){const line=removeBtn.closest('.order-work-item-line');const index=line?+line.dataset.index:NaN;if(Number.isFinite(index))removeWorkItemAt(index);return}const cycle=e.target.closest('[data-cycle-construction]');if(cycle){cycleActiveConstruction();return}const jaw=e.target.closest('#jawToggle');if(jaw){if(($('ts')?.value||'')===''){ensureStartToothSelected();return}setJaw(selectedJaw==='upper'?'lower':'upper');return}const btn=e.target.closest('.tooth-nudge');if(btn){if(btn.disabled)return;nudgeTooth(btn.dataset.part,+btn.dataset.nudge);return}if(e.target===$('ts'))ensureStartToothSelected()};
+      if(addWorkItemBtn)addWorkItemBtn.onclick=addWorkItem;
+      if(cancelCreateBtn)cancelCreateBtn.onclick=requestBackToList;
+      if(cancelCreateCloseBtn)cancelCreateCloseBtn.onclick=requestBackToList;
+      if(beforeMinimumConfirmBackBtn)beforeMinimumConfirmBackBtn.onclick=closeBeforeMinimumConfirmPopup;
+      if(beforeMinimumConfirmYesBtn)beforeMinimumConfirmYesBtn.onclick=confirmBeforeMinimumDateSelection;
+      if(beforeMinimumConfirmPopup)beforeMinimumConfirmPopup.onclick=e=>{if(e.target===beforeMinimumConfirmPopup)closeBeforeMinimumConfirmPopup()};
+      if(discardOrderFlowBackBtn)discardOrderFlowBackBtn.onclick=closeDiscardOrderFlowPopup;
+      if(discardOrderFlowYesBtn)discardOrderFlowYesBtn.onclick=confirmDiscardOrderFlow;
+      if(discardOrderFlowPopup)discardOrderFlowPopup.onclick=e=>{if(e.target===discardOrderFlowPopup)closeDiscardOrderFlowPopup()};
+      [caseName].forEach(el=>el&&el.addEventListener('input',()=>{resetForwardProgress(4);updateSummary();if(step===4)renderOverview()}));
+      if(extraNote)extraNote.addEventListener('input',()=>{resetForwardProgress(4);updateSummary();if(step===4)renderOverview()});
+      if(deadline)deadline.addEventListener('change',()=>{resetForwardProgress(3);updateSummary();updateSelectedDeliveryDisplay();if(step===3)loadDates()});
+      window.addEventListener('scroll',hideDateReasonPop,{passive:true});
+      S3DOrders.MaterialPicker.render(materialChoices,{value:()=>material,onChange:setMaterial});
+      renderShadeChoices();
+      syncImpressionToday();
+      renderToothChart();
+      renderWorkItemReadouts();
+      render();
+      syncToothDisplayLayout();
+    }
+
+    bind();
+
     return {
-      showNew: function(){ return call(options.showNew, arguments); },
-      showEdit: function(){ return call(options.showEdit, arguments); },
-      showShell: function(){ return call(options.showShell, arguments); },
-      reset: function(){ return call(options.reset, arguments); },
-      render: function(){ return call(options.render, arguments); },
-      goBack: function(){ return call(options.goBack, arguments); },
-      goNext: function(){ return call(options.goNext, arguments); },
-      requestBackToList: function(){ return call(options.requestBackToList, arguments); },
-      isDirty: function(){ return !!call(options.isDirty, arguments); },
-      isSafeTransition: function(){ return !!call(options.isSafeTransition, arguments); },
-      promptDiscard: function(){ return call(options.promptDiscard, arguments); },
-      closeDiscard: function(){ return call(options.closeDiscard, arguments); },
-      confirmDiscard: function(){ return call(options.confirmDiscard, arguments); }
+      showNew,
+      showEdit,
+      showCreated,
+      showShell,
+      reset: resetOrderForm,
+      render,
+      renderFinalOverview,
+      goBack,
+      goNext,
+      requestBackToList,
+      isDirty,
+      isSafeTransition,
+      promptDiscard: openDiscardOrderFlowPopup,
+      closeDiscard: closeDiscardOrderFlowPopup,
+      confirmDiscard: confirmDiscardOrderFlow,
+      closeBeforeMinimum: closeBeforeMinimumConfirmPopup
     };
   }
 
