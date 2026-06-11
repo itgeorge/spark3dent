@@ -60,7 +60,7 @@ builder.Services.AddSingleton<Func<AppDbContext>>(_ => () => new AppDbContext(db
 builder.Services.AddSingleton<ISchedulingConfigProvider>(_ => new JsonSchedulingConfigProvider(schedulingConfigPath));
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER")));
-builder.Services.AddSingleton<INonWorkingDayProvider, WeekendOnlyNonWorkingDayProvider>();
+builder.Services.AddSingleton<INonWorkingDayProvider, BulgariaHardcodedNonWorkingDayProvider>();
 builder.Services.AddSingleton<DateAvailabilityService>();
 builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();

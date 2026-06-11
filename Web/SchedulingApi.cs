@@ -185,6 +185,32 @@ public static class SchedulingApi
             return Results.Json(ToCalendarDto(start.Value, end.Value, days, clinics), JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/non-working-days", async (HttpContext ctx, SchedulingAuthService auth, INonWorkingDayProvider nonWorkingDayProvider, DateOnly? start, DateOnly? end) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (start == null || end == null)
+                return Results.Json(new { error = "Non-working day start and end query parameters are required." }, statusCode: 400, options: JsonOptions);
+            if (start > end)
+                return Results.Json(new { error = "Non-working day start date must be before or equal to end date." }, statusCode: 400, options: JsonOptions);
+            if (end.Value.DayNumber - start.Value.DayNumber + 1 > 93)
+                return Results.Json(new { error = "Non-working day date range cannot exceed 93 days." }, statusCode: 400, options: JsonOptions);
+
+            var dates = new List<string>();
+            for (var year = start.Value.Year; year <= end.Value.Year; year++)
+            {
+                var days = await nonWorkingDayProvider.GetNonWorkingDaysAsync(year, ctx.RequestAborted);
+                foreach (var day in days)
+                {
+                    if (day >= start && day <= end)
+                        dates.Add(day.ToString("yyyy-MM-dd"));
+                }
+            }
+
+            dates.Sort(StringComparer.Ordinal);
+            return Results.Json(new { start, end, dates }, JsonOptions);
+        });
+
         app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities) =>
         {
             var actor = await RequireActor(ctx, auth);

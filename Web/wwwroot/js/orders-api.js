@@ -38,6 +38,7 @@
       logout: function(){ return request('/api/scheduling/auth/logout', { method:'POST', body:'{}' }); },
       listOrders: function(options){ var query = qs({ limit: options && options.limit || '50', cursor: options && options.cursor }); return jsonRequest('/api/scheduling/orders?' + query, undefined, { error:'Could not load orders.' }); },
       calendarOrders: function(start, end){ return jsonRequest('/api/scheduling/orders/calendar?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end), undefined, { error:'Could not load calendar.' }); },
+      nonWorkingDays: function(start, end){ return jsonRequest('/api/scheduling/non-working-days?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end), undefined, { error:'Could not load non-working days.' }); },
       findOrder: function(code, limit){ return jsonRequest('/api/scheduling/orders/find?' + qs({ code: code, limit: limit || '50' }), undefined, { error:'Could not find order.' }); },
       getOrder: function(code){ return jsonRequest('/api/scheduling/orders/' + encodeURIComponent(code), undefined, { error:'Could not load order.' }); },
       createOrder: function(payload){ return jsonRequest('/api/scheduling/orders', { method:'POST', body: JSON.stringify(payload || {}) }, { error:'Could not save order.' }); },

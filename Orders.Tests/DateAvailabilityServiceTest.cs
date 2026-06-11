@@ -28,6 +28,49 @@ public class DateAvailabilityServiceTest
     }
 
     [Test]
+    public async Task GetNonWorkingDaysAsync_GivenBulgarianHoliday_ReturnsHolidayAsClosed()
+    {
+        var provider = new BulgariaHardcodedNonWorkingDayProvider();
+
+        var days = await provider.GetNonWorkingDaysAsync(2026);
+
+        Assert.That(days.Contains(new DateOnly(2026, 5, 1)), Is.True);
+        Assert.That(days.Contains(new DateOnly(2026, 6, 6)), Is.True);
+        Assert.That(days.Contains(new DateOnly(2026, 6, 2)), Is.False);
+    }
+
+    [TestCaseSource(nameof(BulgarianNonWorkingDates))]
+    public async Task GetStatusAsync_GivenBulgarianNonWorkingDate_ReturnsClosed(DateOnly date)
+    {
+        var availability = new DateAvailabilityService(new BulgariaHardcodedNonWorkingDayProvider());
+
+        var status = await availability.GetStatusAsync(date, date);
+
+        Assert.That(status.IsClosed, Is.True);
+    }
+
+    [TestCaseSource(nameof(BulgarianWorkingDates))]
+    public async Task GetStatusAsync_GivenBulgarianWorkingDate_ReturnsOpen(DateOnly date)
+    {
+        var availability = new DateAvailabilityService(new BulgariaHardcodedNonWorkingDayProvider());
+
+        var status = await availability.GetStatusAsync(date, date);
+
+        Assert.That(status.IsClosed, Is.False);
+    }
+
+    [Test]
+    public async Task GetNonWorkingDaysAsync_GivenYearOutsideHardcodedRange_DelegatesToFallback()
+    {
+        var provider = new BulgariaHardcodedNonWorkingDayProvider();
+
+        var days = await provider.GetNonWorkingDaysAsync(2030);
+        var fallbackDays = await new WeekendOnlyNonWorkingDayProvider().GetNonWorkingDaysAsync(2030);
+
+        Assert.That(days, Is.EquivalentTo(fallbackDays));
+    }
+
+    [Test]
     public async Task GetStatusesAsync_LoadsNonWorkingDaysOncePerYearForRange()
     {
         var provider = new CountingNonWorkingDayProvider();
@@ -39,6 +82,31 @@ public class DateAvailabilityServiceTest
             new DateOnly(2026, 6, 1));
 
         Assert.That(provider.CallsByYear[2026], Is.EqualTo(1));
+    }
+
+    private static IEnumerable<DateOnly> BulgarianNonWorkingDates()
+    {
+        yield return new DateOnly(2026, 3, 3);
+        yield return new DateOnly(2026, 5, 25);
+        yield return new DateOnly(2026, 9, 6);
+        yield return new DateOnly(2026, 9, 7);
+        yield return new DateOnly(2026, 12, 28);
+        yield return new DateOnly(2027, 5, 3);
+        yield return new DateOnly(2027, 5, 4);
+        yield return new DateOnly(2027, 5, 6);
+        yield return new DateOnly(2028, 5, 8);
+        yield return new DateOnly(2028, 9, 6);
+        yield return new DateOnly(2028, 9, 22);
+        yield return new DateOnly(2029, 9, 24);
+        yield return new DateOnly(2029, 12, 24);
+    }
+
+    private static IEnumerable<DateOnly> BulgarianWorkingDates()
+    {
+        yield return new DateOnly(2026, 3, 2);
+        yield return new DateOnly(2026, 5, 5);
+        yield return new DateOnly(2029, 9, 7);
+        yield return new DateOnly(2029, 12, 27);
     }
 
     private sealed class CountingNonWorkingDayProvider : INonWorkingDayProvider

@@ -23,7 +23,7 @@
     button.className = [
       'delivery-calendar-date',
       ctx.outsideMonth ? 'outside-month' : '',
-      ctx.isWeekend ? 'delivery-calendar-weekend' : '',
+      ctx.isNonWorkingDay ? 'delivery-calendar-non-working' : '',
       isImpression ? 'impression-day' : '',
       ctx.isToday ? 'delivery-calendar-today' : '',
       labOverride ? 'delivery-calendar-before-minimum' : ''

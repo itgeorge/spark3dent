@@ -238,6 +238,40 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task NonWorkingDaysEndpoint_ReturnsProviderDatesForRange()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.CreateClient();
+        await LoginAsync(client);
+
+        var response = await client.GetAsync("/api/scheduling/non-working-days?start=2026-05-01&end=2026-05-10");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var dates = doc.RootElement.GetProperty("dates").EnumerateArray().Select(x => x.GetString()).ToList();
+
+        Assert.That(dates, Does.Contain("2026-05-01"));
+        Assert.That(dates, Does.Contain("2026-05-06"));
+        Assert.That(dates, Does.Not.Contain("2026-05-05"));
+    }
+
+    [Test]
+    public async Task NonWorkingDaysEndpoint_RequiresAuthAndValidatesRange()
+    {
+        using var fixture = new ApiTestFixture();
+        using var anonymous = fixture.CreateClient();
+
+        var unauthenticated = await anonymous.GetAsync("/api/scheduling/non-working-days?start=2026-06-01&end=2026-06-30");
+        Assert.That(unauthenticated.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        using var client = fixture.CreateClient();
+        await LoginAsync(client);
+
+        var invalid = await client.GetAsync("/api/scheduling/non-working-days?start=2026-06-30&end=2026-06-01");
+        Assert.That(invalid.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
     public async Task SchedulingCalendarEndpoint_IsRoleAwareInclusiveAndExcludesCancelled()
     {
         using var fixture = new ApiTestFixture();

@@ -32,6 +32,13 @@
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
 
+  function normalizeNonWorkingDays(value) {
+    if (!value) return null;
+    if (value instanceof Set) return value;
+    if (Array.isArray(value)) return new Set(value);
+    return null;
+  }
+
   class MonthCalendar {
     constructor(root, options = {}) {
       if (!root) throw new Error('MonthCalendar root is required.');
@@ -78,6 +85,7 @@
     render() {
       const weekdays = this.options.weekdays || DEFAULT_WEEKDAYS;
       const titleFormatter = this.options.titleFormatter || DEFAULT_TITLE_FORMATTER;
+      const nonWorkingDays = normalizeNonWorkingDays(this.options.nonWorkingDays);
       this.titleEl.textContent = titleFormatter.format(this.month);
       const today = new Date();
       const b = bounds(this.month);
@@ -93,9 +101,9 @@
       for (let day = new Date(b.start); day <= b.end; day = addDays(day, 1)) {
         const iso = toIsoDate(day);
         const outsideMonth = !isSameMonth(day, this.month);
-        const weekend = day.getDay() === 0 || day.getDay() === 6;
+        const isNonWorkingDay = !!nonWorkingDays?.has(iso);
         const cell = document.createElement('div');
-        cell.className = ['month-calendar-cell', outsideMonth ? 'outside-month' : '', weekend ? 'weekend' : '', isSameDay(day, today) ? 'today' : ''].filter(Boolean).join(' ');
+        cell.className = ['month-calendar-cell', outsideMonth ? 'outside-month' : '', isNonWorkingDay ? 'non-working-day' : '', isSameDay(day, today) ? 'today' : ''].filter(Boolean).join(' ');
         cell.dataset.date = iso;
         const dayHead = document.createElement('div');
         dayHead.className = 'month-calendar-day-head';
@@ -117,7 +125,7 @@
             date: new Date(day),
             iso,
             outsideMonth,
-            isWeekend: weekend,
+            isNonWorkingDay,
             isToday: isSameDay(day, today),
             weekdayLabel: weekdays[(day.getDay() + 6) % 7]
           });
@@ -137,3 +145,4 @@
     isSameMonth
   };
 })();
+
