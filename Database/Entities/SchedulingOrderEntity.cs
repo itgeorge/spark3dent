@@ -20,6 +20,7 @@ public class SchedulingOrderEntity
     public string Status { get; set; } = string.Empty;
     public Shade Shade { get; set; }
     public string? Notes { get; set; }
+    public string? ColorNote { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public long CreatedAtUnixTimeMilliseconds { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

@@ -57,6 +57,26 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task CreateAndUpdateOrderAsync_TrimsAndPersistsColorNote()
+    {
+        var audit = new CapturingAuditLog();
+        var fixture = new Fixture(1, auditLog: audit);
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Color note") with
+        {
+            ColorNote = "  cervical third slightly warmer  "
+        }, "127.0.0.1", "test");
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Color note") with
+        {
+            ColorNote = "  incisal edge translucent  "
+        }, "10.0.0.1", "ua-edit");
+
+        Assert.That(created.ColorNote, Is.EqualTo("cervical third slightly warmer"));
+        Assert.That(updated.ColorNote, Is.EqualTo("incisal edge translucent"));
+        Assert.That(audit.Events[1].MetadataJson, Does.Contain("ColorNote"));
+    }
+
+    [Test]
     public async Task UpdateOrderAsync_GivenClinicOwnOrder_UpdatesFields()
     {
         var fixture = new Fixture(1);

@@ -78,6 +78,7 @@ public sealed class SchedulingOrderService
                 targetClinicCode = created.ClinicCode,
                 targetClinicDisplayName = created.ClinicDisplayName,
                 caseName = created.CaseName,
+                colorNote = created.ColorNote,
                 requestedDeliveryDate = created.RequestedDeliveryDate,
                 status = created.Status.ToString(),
                 workItems = WorkItemsAudit(created.WorkItems),
@@ -109,6 +110,7 @@ public sealed class SchedulingOrderService
             RequestedDeliveryDate = draft.RequestedDeliveryDate,
             Shade = draft.Shade,
             Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
+            ColorNote = string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
             UpdatedAt = _clock.UtcNow
         };
         var saved = await _orders.UpdateOrderAsync(updated, ct);
@@ -254,6 +256,7 @@ public sealed class SchedulingOrderService
         if (oldOrder.RequestedDeliveryDate != newOrder.RequestedDeliveryDate) changed.Add(nameof(OrderRecord.RequestedDeliveryDate));
         if (oldOrder.Shade != newOrder.Shade) changed.Add(nameof(OrderRecord.Shade));
         if (oldOrder.Notes != newOrder.Notes) changed.Add(nameof(OrderRecord.Notes));
+        if (oldOrder.ColorNote != newOrder.ColorNote) changed.Add(nameof(OrderRecord.ColorNote));
         return changed.ToArray();
     }
 
@@ -348,7 +351,8 @@ public sealed class SchedulingOrderService
             now,
             now,
             ip,
-            userAgent);
+            userAgent,
+            string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim());
     }
 
     private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, CancellationToken ct)

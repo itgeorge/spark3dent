@@ -44,6 +44,7 @@ public class SchedulingApiTests
           "material":"fullContourZirconia",
           "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "shade":"A3.5",
+          "colorNote":"incisal translucent, cervical A3.5",
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
@@ -55,12 +56,14 @@ public class SchedulingApiTests
         Assert.That(code, Is.Not.Null.And.Contains("-"));
         Assert.That(shortenedCode, Is.EqualTo(code![3..]));
         Assert.That(orderElement.GetProperty("shade").GetString(), Is.EqualTo("A3.5"));
+        Assert.That(orderElement.GetProperty("colorNote").GetString(), Is.EqualTo("incisal translucent, cervical A3.5"));
         Assert.That(orderElement.GetProperty("workItems").GetArrayLength(), Is.EqualTo(1));
 
         var list = await client.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var listText = await list.Content.ReadAsStringAsync();
         Assert.That(listText, Does.Contain(code));
+        Assert.That(listText, Does.Contain("incisal translucent, cervical A3.5"));
 
         var logout = await client.PostAsync("/api/scheduling/auth/logout", Json("{}"));
         Assert.That(logout.StatusCode, Is.EqualTo(HttpStatusCode.OK));

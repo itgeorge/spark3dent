@@ -20,7 +20,7 @@
     const Format = S3DOrders.Format;
 
     const app = $('app'), list = $('list'), reviewCard = $('reviewCard');
-    const reviewMsg = $('reviewMsg'), reviewCode = $('reviewCode'), reviewSub = $('reviewSub'), reviewOverviewText = $('reviewOverviewText'), reviewOverviewShade = $('reviewOverviewShade'), reviewOverviewDate = $('reviewOverviewDate');
+    const reviewMsg = $('reviewMsg'), reviewCode = $('reviewCode'), reviewSub = $('reviewSub'), reviewOverviewText = $('reviewOverviewText'), reviewOverviewShade = $('reviewOverviewShade'), reviewColorNote = $('reviewColorNote'), reviewOverviewDate = $('reviewOverviewDate');
     const reviewCaseName = $('reviewCaseName'), reviewExtraNote = $('reviewExtraNote'), reviewTeeth = $('reviewTeeth'), reviewBackTopBtn = $('reviewBackTopBtn'), reviewCloseTopBtn = $('reviewCloseTopBtn'), reviewEditBtn = $('reviewEditBtn'), reviewCancelBtn = $('reviewCancelBtn');
     const cancelOrderConfirmPopup = $('cancelOrderConfirmPopup'), cancelOrderConfirmText = $('cancelOrderConfirmText'), cancelOrderConfirmBackBtn = $('cancelOrderConfirmBackBtn'), cancelOrderConfirmYesBtn = $('cancelOrderConfirmYesBtn');
 
@@ -29,6 +29,7 @@
     function actor(){return getActor()}
     function esc(v){return S3DDom.esc(v)}
     function setOverviewShade(el,text){if(!el)return;const line=text||'';el.textContent=line;el.classList.toggle('hidden',!line)}
+    function setOverviewColorNote(el,text){if(!el)return;const note=(text||'').trim();el.textContent=note?`Color note: ${note}`:'';el.classList.toggle('hidden',!note)}
     function syncOverviewBodyLayout(bodyEl,range){if(!bodyEl)return;const count=range?.length||0;bodyEl.classList.toggle('overview-body-compact',count>0&&count<=2)}
     function reviewDateCompactMode(){return window.matchMedia('(max-width:900px)').matches&&!!reviewTeeth?.closest('.overview-body')?.classList.contains('overview-body-compact')}
     function formatReviewDeliveryDate(iso){if(!iso)return '';return reviewDateCompactMode()?Format.formatDateBulgarian(iso):Format.formatDateBulgarianWithWeekday(iso)}
@@ -69,6 +70,7 @@
       }
       reviewOverviewText.textContent=Format.orderOverviewBaseText(o);
       setOverviewShade(reviewOverviewShade,Format.orderOverviewShadeLine(o));
+      setOverviewColorNote(reviewColorNote,o.colorNote);
       reviewCaseName.textContent=o.caseName||'—';
       reviewExtraNote.textContent=o.notes?`Note: ${o.notes}`:'';
       reviewExtraNote.classList.toggle('hidden',!o.notes);

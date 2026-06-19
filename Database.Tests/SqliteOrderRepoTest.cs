@@ -97,6 +97,24 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_PersistsColorNote_WhenReadBackByCodeListAndCalendar()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("CLR-234", "color note", DateTimeOffset.Parse("2026-05-31T10:00:00Z")) with
+        {
+            ColorNote = "body A3, cervical A3.5"
+        });
+
+        var byCode = await repo.GetOrderByCodeAsync("CLR-234");
+        var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "CLR-234");
+        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "CLR-234");
+
+        Assert.That(byCode!.ColorNote, Is.EqualTo("body A3, cervical A3.5"));
+        Assert.That(fromList.ColorNote, Is.EqualTo("body A3, cervical A3.5"));
+        Assert.That(fromCalendar.ColorNote, Is.EqualTo("body A3, cervical A3.5"));
+    }
+
+    [Test]
     public async Task UpdateOrderAsync_PersistsChangedFieldsAndCancelledStatus()
     {
         var repo = new SqliteOrderRepo(_contextFactory);

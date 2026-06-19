@@ -187,6 +187,7 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.Status = order.Status.ToString();
         entity.Shade = order.Shade;
         entity.Notes = order.Notes;
+        entity.ColorNote = order.ColorNote;
         entity.CreatedAt = order.CreatedAt;
         entity.CreatedAtUnixTimeMilliseconds = order.CreatedAt.ToUnixTimeMilliseconds();
         entity.UpdatedAt = order.UpdatedAt;
@@ -216,7 +217,8 @@ public sealed class SqliteOrderRepo : IOrderRepository
             e.CreatedAt,
             e.UpdatedAt,
             e.CreatedIp,
-            e.CreatedUserAgent);
+            e.CreatedUserAgent,
+            e.ColorNote);
     }
 
     private static string SerializeWorkItems(IReadOnlyList<OrderWorkItem> items) =>

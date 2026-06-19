@@ -8,4 +8,5 @@ public sealed record OrderDraft(
     IReadOnlyList<OrderWorkItem> WorkItems,
     DateOnly RequestedDeliveryDate,
     Shade Shade,
-    string? Notes);
+    string? Notes,
+    string? ColorNote = null);

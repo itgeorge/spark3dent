@@ -298,7 +298,8 @@ public static class SchedulingApi
             workItems,
             deliveryDate,
             body.Shade,
-            body.Notes);
+            body.Notes,
+            body.ColorNote);
     }
 
     private static object ToPageDto(OrderPage page, Dictionary<string, object>? clinics = null)
@@ -378,6 +379,7 @@ public static class SchedulingApi
                 o.Status,
                 o.Shade,
                 o.Notes,
+                o.ColorNote,
                 o.CreatedAt,
                 o.UpdatedAt
             };
@@ -403,6 +405,7 @@ public static class SchedulingApi
             o.Status,
             o.Shade,
             o.Notes,
+            o.ColorNote,
             o.CreatedAt,
             o.UpdatedAt
         };
@@ -443,6 +446,7 @@ public static class SchedulingApi
         public IReadOnlyList<OrderWorkItemRequest>? WorkItems { get; init; }
         public Shade Shade { get; init; }
         public string? Notes { get; init; }
+        public string? ColorNote { get; init; }
     }
 
     public sealed record DateAvailabilityRequest : OrderShape

@@ -20,4 +20,5 @@ public sealed record OrderRecord(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string CreatedIp,
-    string CreatedUserAgent);
+    string CreatedUserAgent,
+    string? ColorNote = null);
