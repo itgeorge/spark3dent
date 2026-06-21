@@ -54,6 +54,7 @@ public class DescriptiveOrderCodeGeneratorTest
     [TestCase(Material.PfzLayeredZrCrown, 'L')]
     [TestCase(Material.GlassCeramics, 'G')]
     [TestCase(Material.Pmma, 'P')]
+    [TestCase(Material.PmmaTelio, 'T')]
     public void Generate_GivenKnownMaterial_IncludesExpectedMaterialLetter(Material material, char expected)
     {
         var draft = CreateDraft(
@@ -167,7 +168,7 @@ public class DescriptiveOrderCodeGeneratorTest
         new(
             "Case 42",
             new DateOnly(2026, 6, 2),
-            material == Material.Pmma ? ProductCategory.Temporary : ProductCategory.Permanent,
+            material is Material.Pmma or Material.PmmaTelio ? ProductCategory.Temporary : ProductCategory.Permanent,
             material,
             [new OrderWorkItem(constructionType, teethRange)],
             requestedDeliveryDate,

@@ -285,7 +285,7 @@ public sealed class SchedulingOrderService
 
     private static WorkType WorkTypeFor(ProductCategory productCategory, Material material, ConstructionType constructionType)
     {
-        if (material == Material.Pmma || productCategory == ProductCategory.Temporary)
+        if (material is Material.Pmma or Material.PmmaTelio || productCategory == ProductCategory.Temporary)
             return WorkType.TemporaryCrownBridge;
         return constructionType == ConstructionType.Bridge ? WorkType.Bridge : WorkType.Crown;
     }

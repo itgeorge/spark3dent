@@ -83,6 +83,25 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_PersistsPmmaTelioMaterial_WhenReadBackByCodeListAndCalendar()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("TEL-234", "telio", DateTimeOffset.Parse("2026-05-31T10:00:00Z")) with
+        {
+            Material = Material.PmmaTelio,
+            ProductCategory = ProductCategory.Temporary
+        });
+
+        var byCode = await repo.GetOrderByCodeAsync("TEL-234");
+        var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "TEL-234");
+        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "TEL-234");
+
+        Assert.That(byCode!.Material, Is.EqualTo(Material.PmmaTelio));
+        Assert.That(fromList.Material, Is.EqualTo(Material.PmmaTelio));
+        Assert.That(fromCalendar.Material, Is.EqualTo(Material.PmmaTelio));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_PersistsShade_WhenReadBackByCodeAndList()
     {
         var repo = new SqliteOrderRepo(_contextFactory);

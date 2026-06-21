@@ -70,6 +70,34 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingFlow_CreatePmmaTelioOrder_RoundTripsMaterial()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Telio Temp",
+          "impressionDate":"2026-06-02",
+          "productCategory":"temporary",
+          "material":"pmmaTelio",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var order = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        var code = order.GetProperty("orderCode").GetString();
+        Assert.That(order.GetProperty("material").GetString(), Is.EqualTo("pmmaTelio"));
+
+        var get = await client.GetAsync($"/api/scheduling/orders/{code}");
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var reloaded = JsonDocument.Parse(await get.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(reloaded.GetProperty("material").GetString(), Is.EqualTo("pmmaTelio"));
+    }
+
+    [Test]
     public async Task SchedulingFlow_UnauthenticatedOrderListReturns401()
     {
         using var fixture = new ApiTestFixture();

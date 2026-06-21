@@ -9,7 +9,8 @@
     { value:'pfzLayeredZrCrown', title:'Layered zirconia', description:'PFZ / ceramic layered on ZR' },
     { value:'pfm', title:'Metal-ceramic', description:'PFM crown/bridge' },
     { value:'glassCeramics', title:'Glass ceramics', description:'High-esthetic ceramic case' },
-    { value:'pmma', title:'Temporary PMMA', description:'Temporary crown/bridge' }
+    { value:'pmma', title:'Standard PMMA', description:'Temporary PMMA crown/bridge' },
+    { value:'pmmaTelio', title:'PMMA Telio', description:'Stronger cross-linked PMMA temporary' }
   ];
 
   function selectedMarkHtml(){

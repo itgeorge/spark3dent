@@ -4,7 +4,7 @@ namespace Orders;
 
 public enum ProductCategory { Permanent, Temporary }
 public enum WorkType { Crown, Bridge, TemporaryCrownBridge }
-public enum Material { GlassCeramics, FullContourZirconia, Pfm, PfzLayeredZrCrown, Pmma }
+public enum Material { GlassCeramics, FullContourZirconia, Pfm, PfzLayeredZrCrown, Pmma, PmmaTelio }
 public enum ConstructionType { Crown, InlayOverlay, Bridge }
 public enum OrderStatus { Created, Cancelled }
 

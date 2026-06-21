@@ -33,6 +33,7 @@ public sealed class DescriptiveOrderCodeGenerator : IOrderCodeGenerator
         Material.PfzLayeredZrCrown => 'L',
         Material.GlassCeramics => 'G',
         Material.Pmma => 'P',
+        Material.PmmaTelio => 'T',
         _ => throw new ArgumentOutOfRangeException(nameof(material), material, "Unsupported material for order code generation.")
     };
 
