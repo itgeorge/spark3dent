@@ -85,6 +85,133 @@ public class DeadlineRecommendationServiceTest
     }
 
     [Test]
+    public async Task CalculateCapacityUnitsAsync_UsesDistinctTeethAndDecimalMaterialCapacity()
+    {
+        var service = CreateService(configs:
+        [
+            TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pfm) with { CapacityUnitsPerTooth = 1.5m }
+        ]);
+        var workItems = new[]
+        {
+            new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+            new OrderWorkItem(ConstructionType.Crown, new ToothRange(21, 21))
+        };
+
+        var capacity = await service.CalculateCapacityUnitsAsync(Material.Pfm, workItems);
+
+        Assert.That(capacity, Is.EqualTo(6.0m));
+    }
+
+    [Test]
+    public async Task RecommendCapacityAwareDateAsync_GivenDailyCapacityFull_ReturnsNextSelectableDateAndMarksReason()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+        var existingOrders = new[]
+        {
+            BuildOrder(1, "EX-THU", new DateOnly(2026, 6, 4))
+        };
+        var service = CreateService(
+            orders: existingOrders,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+
+        var recommended = await service.RecommendCapacityAwareDateAsync(Input(Material.Pmma, createdAtUtc));
+        var statuses = await service.GetCapacityAwareDateStatusesAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 5));
+        var thursday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 4));
+        var friday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 5));
+
+        Assert.That(recommended, Is.EqualTo(new DateOnly(2026, 6, 5)));
+        Assert.That(thursday.IsSelectable, Is.False);
+        Assert.That(thursday.IsDailyCapacityExceeded, Is.True);
+        Assert.That(thursday.Reason, Is.EqualTo("Daily capacity exceeded"));
+        Assert.That(friday.IsSelectable, Is.True);
+    }
+
+    [Test]
+    public async Task RecommendCapacityAwareDateAsync_GivenWeeklyCapacityFull_ReturnsNextWeekSelectableDate()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+        var existingOrders = new[]
+        {
+            BuildOrder(1, "EX-WEEK", new DateOnly(2026, 6, 4))
+        };
+        var service = CreateService(
+            orders: existingOrders,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 10m, 1m)]);
+
+        var recommended = await service.RecommendCapacityAwareDateAsync(Input(Material.Pmma, createdAtUtc));
+        var statuses = await service.GetCapacityAwareDateStatusesAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 9));
+        var thursday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 4));
+        var friday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 5));
+
+        Assert.That(recommended, Is.EqualTo(new DateOnly(2026, 6, 9)));
+        Assert.That(thursday.IsWeeklyCapacityExceeded, Is.True);
+        Assert.That(friday.IsWeeklyCapacityExceeded, Is.True);
+    }
+
+    [Test]
+    public async Task RecommendCapacityAwareDateAsync_CancelledOrdersDoNotConsumeCapacity()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 3, 10, 30);
+        var existingOrders = new[]
+        {
+            BuildOrder(1, "CANCELLED", new DateOnly(2026, 6, 5)) with { Status = OrderStatus.Cancelled }
+        };
+        var service = CreateService(
+            orders: existingOrders,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+
+        var recommended = await service.RecommendCapacityAwareDateAsync(Input(Material.Pmma, createdAtUtc));
+
+        Assert.That(recommended, Is.EqualTo(new DateOnly(2026, 6, 5)));
+    }
+
+    [Test]
+    public async Task ValidateRequestedDateAsync_ExcludesCurrentOrderOnUpdate()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 3, 10, 30);
+        var existingOrders = new[]
+        {
+            BuildOrder(7, "SELF", new DateOnly(2026, 6, 5))
+        };
+        var service = CreateService(
+            orders: existingOrders,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+
+        var result = await service.ValidateRequestedDateAsync(
+            Input(Material.Pmma, createdAtUtc, excludedOrderId: 7),
+            new DateOnly(2026, 6, 5));
+
+        Assert.That(result.Status.IsSelectable, Is.True);
+    }
+
+    [Test]
+    public async Task RecommendCapacityAwareDateAsync_GivenExistingNullCapacity_FallsBackToCurrentMaterialConfig()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+        var existingOrders = new[]
+        {
+            BuildOrder(1, "LEGACY", new DateOnly(2026, 6, 4), [
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(12, 12))
+            ]) with { CalculatedCapacityUnits = null }
+        };
+        var service = CreateService(
+            orders: existingOrders,
+            configs:
+            [
+                TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { CapacityUnitsPerTooth = 1.5m }
+            ],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 4m, 10m)]);
+
+        var statuses = await service.GetCapacityAwareDateStatusesAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 5));
+        var thursday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 4));
+
+        Assert.That(thursday.IsSelectable, Is.False);
+        Assert.That(thursday.IsDailyCapacityExceeded, Is.True);
+        Assert.That(thursday.ExistingDailyCapacityUsed, Is.EqualTo(3.0m));
+    }
+
+    [Test]
     public async Task RecommendAsync_UsesProviderFixedLeadTimeInsteadOfHardcodedValues()
     {
         var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { FixedLeadTimeBusinessDays = 3 }]);
@@ -166,14 +293,47 @@ public class DeadlineRecommendationServiceTest
         Assert.That(ex!.Message, Does.Contain(expectedMessage).IgnoreCase);
     }
 
-    private static DeadlineRecommendationService CreateService(IEnumerable<DateOnly>? extraClosedDates = null, IReadOnlyList<MaterialSchedulingConfig>? configs = null)
+    private static DeadlineRecommendationService CreateService(
+        IEnumerable<DateOnly>? extraClosedDates = null,
+        IReadOnlyList<MaterialSchedulingConfig>? configs = null,
+        IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null,
+        IReadOnlyList<OrderRecord>? orders = null)
     {
         var availability = new DateAvailabilityService(new TestNonWorkingDayProvider(extraClosedDates ?? []));
-        return new DeadlineRecommendationService(availability, new TestMaterialSchedulingConfigProvider(configs));
+        return new DeadlineRecommendationService(
+            availability,
+            new TestMaterialSchedulingConfigProvider(configs),
+            new TestSchedulingCapacityConfigProvider(capacityConfigs),
+            new InMemoryOrderRepository(orders));
     }
 
-    private static OrderSchedulingInput Input(Material material, DateTimeOffset createdAtUtc) =>
-        new(material, [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))], createdAtUtc);
+    private static OrderSchedulingInput Input(Material material, DateTimeOffset createdAtUtc, long? excludedOrderId = null) =>
+        new(material, [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))], createdAtUtc, excludedOrderId);
+
+    private static OrderRecord BuildOrder(long id, string code, DateOnly requestedDeliveryDate, IReadOnlyList<OrderWorkItem>? workItems = null) =>
+        new(
+            id,
+            code,
+            "DEMO",
+            "Demo Clinic",
+            "seed",
+            "Seed",
+            "fingerprint",
+            code,
+            new DateOnly(2026, 6, 2),
+            ProductCategory.Permanent,
+            Material.Pmma,
+            workItems ?? [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))],
+            requestedDeliveryDate,
+            OrderStatus.Created,
+            Shade.Unspecified,
+            null,
+            DateTimeOffset.Parse("2026-06-02T07:30:00Z"),
+            DateTimeOffset.Parse("2026-06-02T07:30:00Z"),
+            "127.0.0.1",
+            "test",
+            null,
+            1m);
 
     private static DateTimeOffset SofiaLocal(int year, int month, int day, int hour, int minute)
     {
@@ -194,5 +354,29 @@ public class DeadlineRecommendationServiceTest
             var weekends = await new WeekendOnlyNonWorkingDayProvider().GetNonWorkingDaysAsync(year, ct);
             return weekends.Concat(_extraClosedDates.Where(d => d.Year == year)).ToHashSet();
         }
+    }
+
+    private sealed class InMemoryOrderRepository : IOrderRepository
+    {
+        private readonly IReadOnlyList<OrderRecord> _orders;
+
+        public InMemoryOrderRepository(IReadOnlyList<OrderRecord>? orders = null) => _orders = orders ?? [];
+
+        public Task<OrderRecord> CreateOrderAsync(OrderRecord order, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default) => throw new NotImplementedException();
+
+        public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersByDeadlineRangeAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<OrderRecord>>(_orders
+                .Where(o => o.Status != OrderStatus.Cancelled && o.RequestedDeliveryDate >= start && o.RequestedDeliveryDate <= end)
+                .OrderBy(o => o.RequestedDeliveryDate)
+                .ThenBy(o => o.Id)
+                .ToList());
     }
 }

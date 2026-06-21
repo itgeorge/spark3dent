@@ -3,13 +3,20 @@ namespace Orders;
 public sealed record OrderSchedulingInput(
     Material Material,
     IReadOnlyList<OrderWorkItem> WorkItems,
-    DateTimeOffset ImpressionTimestampUtc);
+    DateTimeOffset ImpressionTimestampUtc,
+    long? ExcludedOrderId = null);
 
 public sealed record DeadlineRecommendationResult(
     DateOnly EffectiveIntakeBusinessDate,
     int LeadTimeBusinessDays,
     DateOnly PostLeadTimeCandidateDate,
     DateOnly EarliestSelectableDeadline);
+
+public sealed record DeadlineDateStatusesResult(
+    DateOnly MinimumDate,
+    DateOnly? RecommendedDate,
+    decimal OrderCapacityUnits,
+    IReadOnlyList<DeliveryDateStatus> Statuses);
 
 public sealed class DeadlineRecommendationService
 {
@@ -18,11 +25,19 @@ public sealed class DeadlineRecommendationService
 
     private readonly DateAvailabilityService _availability;
     private readonly IMaterialSchedulingConfigProvider _materialConfigs;
+    private readonly ISchedulingCapacityConfigProvider _capacityConfigs;
+    private readonly IOrderRepository _orders;
 
-    public DeadlineRecommendationService(DateAvailabilityService availability, IMaterialSchedulingConfigProvider materialConfigs)
+    public DeadlineRecommendationService(
+        DateAvailabilityService availability,
+        IMaterialSchedulingConfigProvider materialConfigs,
+        ISchedulingCapacityConfigProvider capacityConfigs,
+        IOrderRepository orders)
     {
         _availability = availability;
         _materialConfigs = materialConfigs;
+        _capacityConfigs = capacityConfigs;
+        _orders = orders;
     }
 
     public async Task<DeadlineRecommendationResult> RecommendAsync(OrderSchedulingInput input, CancellationToken ct = default)
@@ -37,10 +52,76 @@ public sealed class DeadlineRecommendationService
         return new DeadlineRecommendationResult(effectiveIntakeDate, leadTimeDays, postLeadTimeCandidate, earliestSelectable);
     }
 
+    public async Task<DateOnly> RecommendCapacityAwareDateAsync(OrderSchedulingInput input, CancellationToken ct = default)
+    {
+        var minimum = (await RecommendAsync(input, ct)).EarliestSelectableDeadline;
+        var orderCapacityUnits = await CalculateCapacityUnitsAsync(input.Material, input.WorkItems, ct);
+        return await FindRecommendedDateAsync(minimum, orderCapacityUnits, input.ExcludedOrderId, ct);
+    }
+
+    public async Task<DeadlineDateStatusesResult> GetCapacityAwareDateStatusesAsync(
+        OrderSchedulingInput input,
+        DateOnly start,
+        DateOnly end,
+        CancellationToken ct = default)
+    {
+        if (end < start)
+            throw new InvalidOperationException("End date must be on or after start date.");
+
+        var minimum = (await RecommendAsync(input, ct)).EarliestSelectableDeadline;
+        var orderCapacityUnits = await CalculateCapacityUnitsAsync(input.Material, input.WorkItems, ct);
+        var statuses = new List<DeliveryDateStatus>();
+        for (var date = start; date <= end; date = date.AddDays(1))
+            statuses.Add(await EvaluateDateAsync(date, minimum, orderCapacityUnits, input.ExcludedOrderId, ct));
+
+        DateOnly? recommendedDate = null;
+        try
+        {
+            recommendedDate = await FindRecommendedDateAsync(minimum, orderCapacityUnits, input.ExcludedOrderId, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            // Statuses are still useful even when no recommendation exists inside the search window.
+        }
+
+        return new DeadlineDateStatusesResult(minimum, recommendedDate, orderCapacityUnits, statuses);
+    }
+
+    public async Task<DeadlineValidationResult> ValidateRequestedDateAsync(
+        OrderSchedulingInput input,
+        DateOnly requestedDate,
+        CancellationToken ct = default)
+    {
+        var minimum = (await RecommendAsync(input, ct)).EarliestSelectableDeadline;
+        var orderCapacityUnits = await CalculateCapacityUnitsAsync(input.Material, input.WorkItems, ct);
+        var status = await EvaluateDateAsync(requestedDate, minimum, orderCapacityUnits, input.ExcludedOrderId, ct);
+
+        DateOnly? recommendedDate = null;
+        var failedRules = status.GetFailedRules().ToList();
+        try
+        {
+            recommendedDate = await FindRecommendedDateAsync(minimum, orderCapacityUnits, input.ExcludedOrderId, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            failedRules.Add(DeadlineValidationRule.SearchFailure);
+        }
+
+        return new DeadlineValidationResult(minimum, recommendedDate, status, orderCapacityUnits, failedRules);
+    }
+
+    public async Task<decimal> CalculateCapacityUnitsAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, CancellationToken ct = default)
+    {
+        OrderWorkItem.ValidateAll(workItems);
+        var config = await _materialConfigs.GetAsync(material, ct);
+        ValidateMaterialConfig(config);
+        return OrderWorkItem.AllTeeth(workItems).Length * config.CapacityUnitsPerTooth;
+    }
+
     public async Task<int> CalculateLeadTimeBusinessDaysAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, CancellationToken ct = default)
     {
         var config = await _materialConfigs.GetAsync(material, ct);
-        ValidateConfig(config);
+        ValidateMaterialConfig(config);
         if (!UsesToothCountExtraLeadTime(material))
             return config.FixedLeadTimeBusinessDays;
 
@@ -53,7 +134,7 @@ public sealed class DeadlineRecommendationService
     private static bool UsesToothCountExtraLeadTime(Material material) =>
         material is Material.Pfm or Material.PfzLayeredZrCrown;
 
-    private static void ValidateConfig(MaterialSchedulingConfig config)
+    private static void ValidateMaterialConfig(MaterialSchedulingConfig config)
     {
         if (!config.IsActive)
             throw new InvalidOperationException($"Material scheduling config for {config.Material} is inactive.");
@@ -63,6 +144,14 @@ public sealed class DeadlineRecommendationService
             throw new InvalidOperationException($"Material scheduling config for {config.Material} must have positive capacity units per tooth.");
         if (UsesToothCountExtraLeadTime(config.Material) && (config.TeethPerExtraLeadDay == null || config.TeethPerExtraLeadDay <= 0))
             throw new InvalidOperationException($"Material scheduling config for {config.Material} must have positive teeth per extra lead day.");
+    }
+
+    private static void ValidateCapacityConfig(SchedulingCapacityConfig config)
+    {
+        if (config.DailyCapacityUnits <= 0)
+            throw new InvalidOperationException($"Scheduling capacity config for {config.ActiveFromDate:yyyy-MM-dd} must have positive daily capacity units.");
+        if (config.WeeklyCapacityUnits <= 0)
+            throw new InvalidOperationException($"Scheduling capacity config for {config.ActiveFromDate:yyyy-MM-dd} must have positive weekly capacity units.");
     }
 
     public async Task<DateOnly> ResolveEffectiveIntakeBusinessDateAsync(DateTimeOffset impressionTimestampUtc, CancellationToken ct = default)
@@ -107,6 +196,107 @@ public sealed class DeadlineRecommendationService
         }
 
         throw new InvalidOperationException("No selectable deadline found within 60 calendar days.");
+    }
+
+    private async Task<DeliveryDateStatus> EvaluateDateAsync(
+        DateOnly date,
+        DateOnly minimumDate,
+        decimal orderCapacityUnits,
+        long? excludedOrderId,
+        CancellationToken ct)
+    {
+        var baseStatus = await _availability.GetStatusAsync(date, minimumDate, ct);
+        if (baseStatus.IsClosed || baseStatus.IsFirstBusinessDayAfterClosure)
+            return baseStatus with { OrderCapacityUnits = orderCapacityUnits };
+
+        var capacityConfig = await _capacityConfigs.GetForDateAsync(date, ct);
+        ValidateCapacityConfig(capacityConfig);
+        var usage = await GetCapacityUsageAsync(date, excludedOrderId, ct);
+        var isDailyCapacityExceeded = usage.DailyUsed + orderCapacityUnits > capacityConfig.DailyCapacityUnits;
+        var isWeeklyCapacityExceeded = usage.WeeklyUsed + orderCapacityUnits > capacityConfig.WeeklyCapacityUnits;
+        var reason = baseStatus.Reason ?? GetCapacityReason(isDailyCapacityExceeded, isWeeklyCapacityExceeded);
+        var isSelectable = baseStatus.IsSelectable && !isDailyCapacityExceeded && !isWeeklyCapacityExceeded;
+
+        return new DeliveryDateStatus(
+            date,
+            baseStatus.IsClosed,
+            baseStatus.IsFirstBusinessDayAfterClosure,
+            baseStatus.IsBeforeMinimum,
+            isSelectable,
+            reason,
+            isDailyCapacityExceeded,
+            isWeeklyCapacityExceeded,
+            orderCapacityUnits,
+            usage.DailyUsed,
+            usage.WeeklyUsed,
+            capacityConfig.DailyCapacityUnits,
+            capacityConfig.WeeklyCapacityUnits);
+    }
+
+    private async Task<CapacityUsage> GetCapacityUsageAsync(DateOnly date, long? excludedOrderId, CancellationToken ct)
+    {
+        var (weekStart, weekEnd) = SchedulingWeek.GetRange(date);
+        var orders = await _orders.ListActiveOrdersByDeadlineRangeAsync(weekStart, weekEnd, ct);
+        var materialCache = new Dictionary<Material, MaterialSchedulingConfig>();
+        decimal dailyUsed = 0;
+        decimal weeklyUsed = 0;
+        foreach (var order in orders)
+        {
+            if (excludedOrderId.HasValue && order.Id == excludedOrderId.Value)
+                continue;
+
+            var orderCapacityUnits = await ResolveOrderCapacityUnitsAsync(order, materialCache, ct);
+            weeklyUsed += orderCapacityUnits;
+            if (order.RequestedDeliveryDate == date)
+                dailyUsed += orderCapacityUnits;
+        }
+
+        return new CapacityUsage(dailyUsed, weeklyUsed);
+    }
+
+    private async Task<decimal> ResolveOrderCapacityUnitsAsync(
+        OrderRecord order,
+        Dictionary<Material, MaterialSchedulingConfig> materialCache,
+        CancellationToken ct)
+    {
+        if (order.CalculatedCapacityUnits.HasValue)
+            return order.CalculatedCapacityUnits.Value;
+
+        if (!materialCache.TryGetValue(order.Material, out var config))
+        {
+            config = await _materialConfigs.GetAsync(order.Material, ct);
+            ValidateMaterialConfig(config);
+            materialCache[order.Material] = config;
+        }
+
+        return OrderWorkItem.AllTeeth(order.WorkItems).Length * config.CapacityUnitsPerTooth;
+    }
+
+    private async Task<DateOnly> FindRecommendedDateAsync(DateOnly minimumDate, decimal orderCapacityUnits, long? excludedOrderId, CancellationToken ct)
+    {
+        var searchLimit = minimumDate.AddDays(SelectableDeadlineSearchLimitDays);
+        for (var current = minimumDate; current <= searchLimit; current = current.AddDays(1))
+        {
+            if (!await _availability.CanSelectDeadlineAsync(current, ct))
+                continue;
+
+            var status = await EvaluateDateAsync(current, minimumDate, orderCapacityUnits, excludedOrderId, ct);
+            if (status.IsSelectable)
+                return current;
+        }
+
+        throw new InvalidOperationException("No capacity-available deadline found within 60 calendar days; manual scheduling is required.");
+    }
+
+    private static string? GetCapacityReason(bool isDailyCapacityExceeded, bool isWeeklyCapacityExceeded)
+    {
+        if (isDailyCapacityExceeded && isWeeklyCapacityExceeded)
+            return "Daily and weekly capacity exceeded";
+        if (isDailyCapacityExceeded)
+            return "Daily capacity exceeded";
+        if (isWeeklyCapacityExceeded)
+            return "Weekly capacity exceeded";
+        return null;
     }
 
     private async Task<DateOnly> NextBusinessDateAsync(DateOnly start, CancellationToken ct)

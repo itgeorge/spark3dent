@@ -6,7 +6,26 @@ public sealed record DeliveryDateStatus(
     bool IsFirstBusinessDayAfterClosure,
     bool IsBeforeMinimum,
     bool IsSelectable,
-    string? Reason);
+    string? Reason,
+    bool IsDailyCapacityExceeded = false,
+    bool IsWeeklyCapacityExceeded = false,
+    decimal? OrderCapacityUnits = null,
+    decimal? ExistingDailyCapacityUsed = null,
+    decimal? ExistingWeeklyCapacityUsed = null,
+    decimal? DailyCapacityLimit = null,
+    decimal? WeeklyCapacityLimit = null)
+{
+    public IReadOnlyList<DeadlineValidationRule> GetFailedRules()
+    {
+        var failed = new List<DeadlineValidationRule>();
+        if (IsBeforeMinimum) failed.Add(DeadlineValidationRule.MinimumLeadTime);
+        if (IsClosed || IsFirstBusinessDayAfterClosure) failed.Add(DeadlineValidationRule.CalendarDeadlineBlocked);
+        if (IsDailyCapacityExceeded) failed.Add(DeadlineValidationRule.DailyCapacityExceeded);
+        if (IsWeeklyCapacityExceeded) failed.Add(DeadlineValidationRule.WeeklyCapacityExceeded);
+        if (failed.Count == 0 && !IsSelectable) failed.Add(DeadlineValidationRule.Other);
+        return failed;
+    }
+}
 
 public sealed class DateAvailabilityService
 {

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Database;
+using Database.Entities;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using Orders;
@@ -157,6 +158,180 @@ public class SchedulingApiTests
 
         Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(await create.Content.ReadAsStringAsync(), Does.Contain("Before minimum lead time"));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_CapacityAwareCreateRejectAndCancelRelease_WorkEndToEnd()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var firstCreate = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Capacity First",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(firstCreate.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var firstDoc = JsonDocument.Parse(await firstCreate.Content.ReadAsStringAsync());
+        var firstOrder = firstDoc.RootElement.GetProperty("order");
+        var firstCode = firstOrder.GetProperty("orderCode").GetString()!;
+        Assert.That(firstOrder.GetProperty("calculatedCapacityUnits").GetDecimal(), Is.EqualTo(1.0m));
+
+        await using (var ctx = OpenDb(fixture.DbPath))
+        {
+            var dbOrder = await ctx.SchedulingOrders.SingleAsync(o => o.OrderCode == firstCode);
+            Assert.That(dbOrder.CalculatedCapacityUnits, Is.EqualTo(1.0m));
+        }
+
+        var datesFull = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Capacity Second",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "start":"2026-06-10",
+          "end":"2026-06-11"
+        }
+        """));
+        Assert.That(datesFull.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var fullStatuses = JsonDocument.Parse(await datesFull.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(fullStatuses["2026-06-10"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        Assert.That(fullStatuses["2026-06-10"].GetProperty("reason").GetString(), Is.EqualTo("Daily capacity exceeded"));
+        Assert.That(fullStatuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.True);
+
+        var rejected = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Capacity Reject",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(rejected.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+
+        var secondCreate = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Capacity Second",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "requestedDeliveryDate":"2026-06-11"
+        }
+        """));
+        Assert.That(secondCreate.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var secondOrder = JsonDocument.Parse(await secondCreate.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(secondOrder.GetProperty("calculatedCapacityUnits").GetDecimal(), Is.EqualTo(1.0m));
+
+        var cancel = await client.DeleteAsync($"/api/scheduling/orders/{firstCode}");
+        Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var datesReleased = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Capacity Third",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":13,"toothEnd":13}],
+          "start":"2026-06-10",
+          "end":"2026-06-11"
+        }
+        """));
+        Assert.That(datesReleased.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var releasedStatuses = JsonDocument.Parse(await datesReleased.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(releasedStatuses["2026-06-10"].GetProperty("isSelectable").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task SchedulingDates_WeeklyCapacityFullCandidateUnavailableAndNextWeekSelectable()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 10.0m, 1.0m);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Weekly Full",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Weekly Second",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "start":"2026-06-10",
+          "end":"2026-06-16"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(statuses["2026-06-10"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        Assert.That(statuses["2026-06-10"].GetProperty("reason").GetString(), Is.EqualTo("Weekly capacity exceeded"));
+        Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        Assert.That(statuses["2026-06-16"].GetProperty("isSelectable").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task SchedulingFlow_UpdateExcludesSelfButRejectsMoveOntoFullDate()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var firstCode = await CreateOrderAsync(client, "Update Self", "2026-06-10", material: "pmma", productCategory: "temporary");
+        var secondCode = await CreateOrderAsync(client, "Update Other", "2026-06-11", material: "pmma", productCategory: "temporary");
+
+        var selfUpdate = await client.PutAsync($"/api/scheduling/orders/{firstCode}", Json("""
+        {
+          "caseName":"Update Self Renamed",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(selfUpdate.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var blockedMove = await client.PutAsync($"/api/scheduling/orders/{secondCode}", Json("""
+        {
+          "caseName":"Update Other Blocked",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(blockedMove.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await blockedMove.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+
+        var reloaded = await client.GetAsync($"/api/scheduling/orders/{secondCode}");
+        Assert.That(reloaded.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var reloadedOrder = JsonDocument.Parse(await reloaded.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(reloadedOrder.GetProperty("requestedDeliveryDate").GetString(), Is.EqualTo("2026-06-11"));
     }
 
     [Test]
@@ -996,16 +1171,23 @@ public class SchedulingApiTests
         client.DefaultRequestHeaders.Add("Cookie", cookie.Split(';')[0]);
     }
 
-    private static async Task<string> CreateOrderAsync(HttpClient client, string caseName, string requestedDeliveryDate, string? clinicCode = null)
+    private static async Task<string> CreateOrderAsync(
+        HttpClient client,
+        string caseName,
+        string requestedDeliveryDate,
+        string? clinicCode = null,
+        string material = "fullContourZirconia",
+        string productCategory = "permanent",
+        string impressionDate = "2026-06-02")
     {
         var clinicPrefix = clinicCode == null ? "" : $"\"clinicCode\":\"{clinicCode}\",";
         var create = await client.PostAsync("/api/scheduling/orders", Json($$"""
         {
           {{clinicPrefix}}
           "caseName":"{{caseName}}",
-          "impressionDate":"2026-06-02",
-          "productCategory":"permanent",
-          "material":"fullContourZirconia",
+          "impressionDate":"{{impressionDate}}",
+          "productCategory":"{{productCategory}}",
+          "material":"{{material}}",
           "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
           "requestedDeliveryDate":"{{requestedDeliveryDate}}"
         }
@@ -1043,8 +1225,44 @@ public class SchedulingApiTests
             timestamp,
             timestamp,
             "127.0.0.1",
-            "test"));
+            "test",
+            null,
+            1.0m));
         return code;
+    }
+
+    private static AppDbContext OpenDb(string dbPath)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        return new AppDbContext(options);
+    }
+
+    private static async Task UpsertCapacityConfigAsync(string dbPath, DateOnly activeFromDate, decimal dailyCapacityUnits, decimal weeklyCapacityUnits)
+    {
+        await using var ctx = OpenDb(dbPath);
+        await ctx.Database.MigrateAsync();
+        var row = await ctx.SchedulingCapacityConfigs.SingleOrDefaultAsync(c => c.ActiveFromDate == activeFromDate);
+        if (row == null)
+        {
+            ctx.SchedulingCapacityConfigs.Add(new SchedulingCapacityConfigEntity
+            {
+                ActiveFromDate = activeFromDate,
+                DailyCapacityUnits = dailyCapacityUnits,
+                WeeklyCapacityUnits = weeklyCapacityUnits,
+                CreatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z"),
+                UpdatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z")
+            });
+        }
+        else
+        {
+            row.DailyCapacityUnits = dailyCapacityUnits;
+            row.WeeklyCapacityUnits = weeklyCapacityUnits;
+            row.UpdatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z");
+        }
+
+        await ctx.SaveChangesAsync();
     }
 
     private static StringContent Json(string json) => new(json, Encoding.UTF8, "application/json");

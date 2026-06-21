@@ -131,6 +131,19 @@ public sealed class SqliteOrderRepo : IOrderRepository
         return items.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<OrderRecord>> ListActiveOrdersByDeadlineRangeAsync(DateOnly start, DateOnly end, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var items = await ctx.SchedulingOrders.AsNoTracking()
+            .Where(o => o.Status != nameof(OrderStatus.Cancelled)
+                && o.RequestedDeliveryDate >= start
+                && o.RequestedDeliveryDate <= end)
+            .OrderBy(o => o.RequestedDeliveryDate)
+            .ThenBy(o => o.Id)
+            .ToListAsync(ct);
+        return items.Select(ToDomain).ToList();
+    }
+
     private static IQueryable<SchedulingOrderEntity> ScopedOrders(AppDbContext ctx, string? clinicCode)
     {
         var query = ctx.SchedulingOrders.AsNoTracking();
@@ -191,6 +204,7 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.CreatedAt = order.CreatedAt;
         entity.CreatedAtUnixTimeMilliseconds = order.CreatedAt.ToUnixTimeMilliseconds();
         entity.UpdatedAt = order.UpdatedAt;
+        entity.CalculatedCapacityUnits = order.CalculatedCapacityUnits;
         entity.CreatedIp = order.CreatedIp;
         entity.CreatedUserAgent = order.CreatedUserAgent;
     }
@@ -218,7 +232,8 @@ public sealed class SqliteOrderRepo : IOrderRepository
             e.UpdatedAt,
             e.CreatedIp,
             e.CreatedUserAgent,
-            e.ColorNote);
+            e.ColorNote,
+            e.CalculatedCapacityUnits);
     }
 
     private static string SerializeWorkItems(IReadOnlyList<OrderWorkItem> items) =>

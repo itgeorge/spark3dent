@@ -63,11 +63,12 @@ builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper 
 builder.Services.AddSingleton<INonWorkingDayProvider, BulgariaHardcodedNonWorkingDayProvider>();
 builder.Services.AddSingleton<DateAvailabilityService>();
 builder.Services.AddScoped<IMaterialSchedulingConfigProvider, SqliteMaterialSchedulingConfigProvider>();
-builder.Services.AddScoped<DeadlineRecommendationService>();
+builder.Services.AddScoped<ISchedulingCapacityConfigProvider, SqliteSchedulingCapacityConfigProvider>();
 builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
+builder.Services.AddScoped<DeadlineRecommendationService>();
 builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
 builder.Services.AddScoped<SchedulingAuthService>();
 builder.Services.AddScoped<SchedulingOrderService>();

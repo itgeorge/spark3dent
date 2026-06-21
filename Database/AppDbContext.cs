@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SchedulingAuthSessionEntity> SchedulingAuthSessions { get; set; }
     public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
     public DbSet<Entities.SchedulingMaterialConfigEntity> SchedulingMaterialConfigs { get; set; }
+    public DbSet<Entities.SchedulingCapacityConfigEntity> SchedulingCapacityConfigs { get; set; }
     public DbSet<Entities.AuditEventEntity> AuditEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -118,6 +119,15 @@ public class AppDbContext : DbContext
             e.Property(x => x.MemberPinHashFingerprint).HasColumnName("CredentialPinHashFingerprint").IsRequired();
             e.Property(x => x.WorkItemsJson).IsRequired();
             e.Property(x => x.Shade).HasConversion<int>();
+            e.Property(x => x.CalculatedCapacityUnits).HasColumnType("TEXT");
+        });
+
+        modelBuilder.Entity<Entities.SchedulingCapacityConfigEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ActiveFromDate).IsUnique();
+            e.Property(x => x.DailyCapacityUnits).HasColumnType("TEXT").IsRequired();
+            e.Property(x => x.WeeklyCapacityUnits).HasColumnType("TEXT").IsRequired();
         });
 
         modelBuilder.Entity<Entities.AuditEventEntity>(e =>

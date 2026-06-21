@@ -86,12 +86,14 @@ public static class SchedulingApi
             try
             {
                 var draft = ToDraft(body, body.Start);
-                var impressionTimestampUtc = await ResolveDatePreviewImpressionTimestampAsync(body.OrderCode, actor, orders, ctx.RequestAborted);
+                var previewOrder = await ResolveDatePreviewOrderAsync(body.OrderCode, actor, orders, ctx.RequestAborted);
+                var impressionTimestampUtc = previewOrder?.CreatedAt;
+                var excludedOrderId = previewOrder?.Id;
                 var minimum = impressionTimestampUtc.HasValue
                     ? await orders.CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc.Value, ctx.RequestAborted)
                     : await orders.CalculateMinimumDeliveryDateAsync(draft, ctx.RequestAborted);
                 var statuses = impressionTimestampUtc.HasValue
-                    ? await orders.GetDateStatusesAsync(draft, body.Start, body.End, impressionTimestampUtc.Value, ctx.RequestAborted)
+                    ? await orders.GetDateStatusesAsync(draft, body.Start, body.End, impressionTimestampUtc.Value, excludedOrderId, ctx.RequestAborted)
                     : await orders.GetDateStatusesAsync(draft, body.Start, body.End, ctx.RequestAborted);
                 return Results.Json(new { minimumDate = minimum, dates = statuses }, JsonOptions);
             }
@@ -296,7 +298,7 @@ public static class SchedulingApi
         catch (JsonException) { return default; }
     }
 
-    private static async Task<DateTimeOffset?> ResolveDatePreviewImpressionTimestampAsync(
+    private static async Task<OrderRecord?> ResolveDatePreviewOrderAsync(
         string? orderCode,
         AuthenticatedActor actor,
         SchedulingOrderService orders,
@@ -307,7 +309,7 @@ public static class SchedulingApi
         var order = await orders.GetOrderByCodeAsync(orderCode.Trim(), ct);
         if (order == null || (!actor.IsLab && !string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase)))
             throw new KeyNotFoundException("Order not found.");
-        return order.CreatedAt;
+        return order;
     }
 
     private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate)
@@ -405,6 +407,7 @@ public static class SchedulingApi
                 o.Shade,
                 o.Notes,
                 o.ColorNote,
+                o.CalculatedCapacityUnits,
                 o.CreatedAt,
                 o.UpdatedAt
             };
@@ -431,6 +434,7 @@ public static class SchedulingApi
             o.Shade,
             o.Notes,
             o.ColorNote,
+            o.CalculatedCapacityUnits,
             o.CreatedAt,
             o.UpdatedAt
         };

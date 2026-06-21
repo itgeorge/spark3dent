@@ -68,6 +68,28 @@ internal sealed class TestMaterialSchedulingConfigProvider : IMaterialScheduling
         Enum.GetValues<Material>().Select(DefaultConfig).ToArray();
 }
 
+internal sealed class TestSchedulingCapacityConfigProvider : ISchedulingCapacityConfigProvider
+{
+    private readonly IReadOnlyList<SchedulingCapacityConfig> _configs;
+
+    public TestSchedulingCapacityConfigProvider(IEnumerable<SchedulingCapacityConfig>? configs = null) =>
+        _configs = (configs ?? [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 100m, 500m)])
+            .OrderBy(c => c.ActiveFromDate)
+            .ThenBy(c => c.Id)
+            .ToArray();
+
+    public Task<SchedulingCapacityConfig> GetForDateAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var config = _configs.LastOrDefault(c => c.ActiveFromDate <= date);
+        if (config == null)
+            throw new InvalidOperationException($"Scheduling capacity config is missing for {date:yyyy-MM-dd}.");
+        return Task.FromResult(config);
+    }
+
+    public Task<IReadOnlyList<SchedulingCapacityConfig>> ListAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SchedulingCapacityConfig>>(_configs);
+}
+
 internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentityRepository
 {
     private readonly Dictionary<string, SchedulingLab> _labsByCode;

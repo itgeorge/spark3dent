@@ -50,12 +50,26 @@ public sealed class SchedulingOrderService
     }
 
     public Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
-        GetDateStatusesAsync(draft, start, end, _clock.UtcNow, ct);
+        GetDateStatusesAsync(draft, start, end, _clock.UtcNow, excludedOrderId: null, ct);
 
-    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default)
+    public Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default) =>
+        GetDateStatusesAsync(draft, start, end, impressionTimestampUtc, excludedOrderId: null, ct);
+
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(
+        OrderDraft draft,
+        DateOnly start,
+        DateOnly end,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        CancellationToken ct = default)
     {
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc, ct);
-        return await _availability.GetStatusesAsync(start, end, minimum, ct);
+        ValidateOrderWorkItems(draft);
+        var result = await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
+            new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc, excludedOrderId),
+            start,
+            end,
+            ct);
+        return result.Statuses;
     }
 
     public Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, CancellationToken ct = default) =>
@@ -64,10 +78,10 @@ public sealed class SchedulingOrderService
     public async Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, string? targetClinicCode, CancellationToken ct = default)
     {
         ValidateDraft(draft);
-        await ValidateDeliveryDateForActorAsync(actor, draft, ct);
+        var validation = await ValidateDeliveryDateForActorAsync(actor, draft, ct);
 
         var targetClinic = await ResolveTargetClinicAsync(actor, targetClinicCode, ct);
-        var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent);
+        var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent, validation.OrderCapacityUnits);
         var created = await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
         await AppendOrderAuditAsync(
             actor,
@@ -101,7 +115,7 @@ public sealed class SchedulingOrderService
             throw new InvalidOperationException("Cancelled orders cannot be modified.");
 
         ValidateDraft(draft);
-        await ValidateDeliveryDateForActorAsync(actor, draft, existing.CreatedAt, ct);
+        var validation = await ValidateDeliveryDateForActorAsync(actor, draft, existing.CreatedAt, existing.Id, ct);
 
         var updated = existing with
         {
@@ -114,6 +128,7 @@ public sealed class SchedulingOrderService
             Shade = draft.Shade,
             Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
             ColorNote = string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
+            CalculatedCapacityUnits = validation.OrderCapacityUnits,
             UpdatedAt = _clock.UtcNow
         };
         var saved = await _orders.UpdateOrderAsync(updated, ct);
@@ -263,16 +278,32 @@ public sealed class SchedulingOrderService
         return changed.ToArray();
     }
 
-    private Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct) =>
-        ValidateDeliveryDateForActorAsync(actor, draft, _clock.UtcNow, ct);
+    private Task<DeadlineValidationResult> ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct) =>
+        ValidateDeliveryDateForActorAsync(actor, draft, _clock.UtcNow, excludedOrderId: null, ct);
 
-    private async Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, DateTimeOffset impressionTimestampUtc, CancellationToken ct)
+    private Task<DeadlineValidationResult> ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, DateTimeOffset impressionTimestampUtc, CancellationToken ct) =>
+        ValidateDeliveryDateForActorAsync(actor, draft, impressionTimestampUtc, excludedOrderId: null, ct);
+
+    private async Task<DeadlineValidationResult> ValidateDeliveryDateForActorAsync(
+        AuthenticatedActor actor,
+        OrderDraft draft,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        CancellationToken ct)
     {
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc, ct);
-        var status = await _availability.GetStatusAsync(draft.RequestedDeliveryDate, minimum, ct);
-        if (status.IsSelectable) return;
-        if (actor.IsLab && status.IsBeforeMinimum && !status.IsClosed && !status.IsFirstBusinessDayAfterClosure) return;
-        throw new InvalidOperationException($"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {status.Reason}.");
+        var validation = await _deadlineRecommendations.ValidateRequestedDateAsync(
+            new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc, excludedOrderId),
+            draft.RequestedDeliveryDate,
+            ct);
+        if (validation.Status.IsSelectable) return validation;
+        if (actor.IsLab
+            && validation.Status.IsBeforeMinimum
+            && !validation.Status.IsClosed
+            && !validation.Status.IsFirstBusinessDayAfterClosure
+            && !validation.Status.IsDailyCapacityExceeded
+            && !validation.Status.IsWeeklyCapacityExceeded)
+            return validation;
+        throw new InvalidOperationException($"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {validation.Status.Reason}.");
     }
 
     private static void ValidateDraft(OrderDraft draft)
@@ -327,7 +358,7 @@ public sealed class SchedulingOrderService
         return order;
     }
 
-    private OrderRecord BuildOrder(AuthenticatedActor actor, SchedulingClinic targetClinic, OrderDraft draft, string ip, string userAgent)
+    private OrderRecord BuildOrder(AuthenticatedActor actor, SchedulingClinic targetClinic, OrderDraft draft, string ip, string userAgent, decimal calculatedCapacityUnits)
     {
         var now = _clock.UtcNow;
         return new OrderRecord(
@@ -351,7 +382,8 @@ public sealed class SchedulingOrderService
             now,
             ip,
             userAgent,
-            string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim());
+            string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
+            calculatedCapacityUnits);
     }
 
     private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, CancellationToken ct)

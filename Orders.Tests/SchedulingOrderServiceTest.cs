@@ -343,6 +343,39 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task CreateAndUpdateOrderAsync_PersistsCalculatedCapacityUnits()
+    {
+        var fixture = new Fixture(
+            ["CAP-001", "CAP-002"],
+            materialConfigs:
+            [
+                TestMaterialSchedulingConfigProvider.DefaultConfig(Material.FullContourZirconia) with { CapacityUnitsPerTooth = 1.5m }
+            ]);
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Capacity") with
+        {
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(21, 21))
+            ],
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test");
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Capacity") with
+        {
+            WorkItems =
+            [
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(12, 12))
+            ],
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        });
+
+        Assert.That(created.CalculatedCapacityUnits, Is.EqualTo(6.0m));
+        Assert.That(updated.CalculatedCapacityUnits, Is.EqualTo(3.0m));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_GivenClinicBeforeMinimumDeliveryDate_Rejects()
     {
         var fixture = new Fixture(1);
@@ -373,6 +406,33 @@ public class SchedulingOrderServiceTest
             await fixture.Service.CreateOrderAsync(
                 TestActors.Lab,
                 fixture.CreateOrderDraft("First after closure") with { RequestedDeliveryDate = new DateOnly(2026, 6, 1) },
+                "127.0.0.1",
+                "test",
+                "OTHER"));
+    }
+
+    [Test]
+    public async Task CreateOrderAsync_GivenLabBeforeMinimumAndCapacityExceeded_Rejects()
+    {
+        var fixture = new Fixture(
+            ["A", "B", "C"],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        var minimum = await fixture.Service.CalculateMinimumDeliveryDateAsync(fixture.CreateOrderDraft("Test"));
+        var earlyDate = minimum.AddDays(-1);
+        while (DateAvailabilityService.IsWeekend(earlyDate))
+            earlyDate = earlyDate.AddDays(-1);
+
+        await fixture.Service.CreateOrderAsync(
+            TestActors.Lab,
+            fixture.CreateOrderDraft("Existing early") with { RequestedDeliveryDate = earlyDate },
+            "127.0.0.1",
+            "test",
+            "OTHER");
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(
+                TestActors.Lab,
+                fixture.CreateOrderDraft("Blocked early") with { RequestedDeliveryDate = earlyDate },
                 "127.0.0.1",
                 "test",
                 "OTHER"));
@@ -509,23 +569,36 @@ public class SchedulingOrderServiceTest
         public IList<string> GeneratorCodes => _generatorCodes;
         public IOrderRepository Repository { get; }
 
-        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null)
+        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null, IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null)
             : this(Enumerable
                 .Repeat("racecode", racingOrderCount) // race all on the first code, only 1st should win this code
                 .Concat(Enumerable.Range(2, racingOrderCount - 1) // generate unique code for each that didn't win 1st race
                     .Select(i => $"R{i:00}-XYZ")
                     .ToArray()).ToArray(),
                 maxOrderCodeAttempts,
-                auditLog)
+                auditLog,
+                clock: null,
+                materialConfigs,
+                capacityConfigs)
         {
         }
 
-        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IClock? clock = null)
+        public Fixture(
+            IReadOnlyList<string> generatorCodes,
+            int maxOrderCodeAttempts = 20,
+            IAuditLog? auditLog = null,
+            IClock? clock = null,
+            IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null,
+            IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null)
         {
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
             var dateAvailabilityService = new DateAvailabilityService(new WeekendOnlyNonWorkingDayProvider());
-            var deadlineRecommendationService = new DeadlineRecommendationService(dateAvailabilityService, new TestMaterialSchedulingConfigProvider());
+            var deadlineRecommendationService = new DeadlineRecommendationService(
+                dateAvailabilityService,
+                new TestMaterialSchedulingConfigProvider(materialConfigs),
+                new TestSchedulingCapacityConfigProvider(capacityConfigs),
+                Repository);
             var orderCodeGenerator = new SequenceOrderCodeGenerator(_generatorCodes.ToArray());
             clock ??= new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
             Service = new SchedulingOrderService(
@@ -681,6 +754,19 @@ public class SchedulingOrderServiceTest
                             .ThenBy(o => o.ClinicDisplayName)
                             .ThenBy(o => o.CaseName)
                             .ThenBy(o => o.OrderCode)
+                            .ToList());
+            }
+
+            public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersByDeadlineRangeAsync(DateOnly start, DateOnly end, CancellationToken ct = default)
+            {
+                lock (_gate)
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(
+                        _ordersByCode.Values
+                            .Where(o => o.Status != OrderStatus.Cancelled
+                                && o.RequestedDeliveryDate >= start
+                                && o.RequestedDeliveryDate <= end)
+                            .OrderBy(o => o.RequestedDeliveryDate)
+                            .ThenBy(o => o.Id)
                             .ToList());
             }
         }
