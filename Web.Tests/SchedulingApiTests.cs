@@ -88,6 +88,78 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingConfig_ReturnsDbBackedMaterialSchedulingConfig()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var response = await client.GetAsync("/api/scheduling/config");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var configs = doc.RootElement.GetProperty("materialSchedulingConfigs").EnumerateArray().ToArray();
+        var pfm = configs.Single(c => c.GetProperty("material").GetString() == "pfm");
+        Assert.Multiple(() =>
+        {
+            Assert.That(pfm.GetProperty("displayName").GetString(), Is.EqualTo("PFM"));
+            Assert.That(pfm.GetProperty("fixedLeadTimeBusinessDays").GetInt32(), Is.EqualTo(4));
+            Assert.That(pfm.GetProperty("capacityUnitsPerTooth").GetDecimal(), Is.EqualTo(1.0m));
+            Assert.That(pfm.GetProperty("teethPerExtraLeadDay").GetInt32(), Is.EqualTo(10));
+            Assert.That(pfm.GetProperty("isActive").GetBoolean(), Is.True);
+            Assert.That(pfm.GetProperty("sortOrder").GetInt32(), Is.EqualTo(50));
+        });
+    }
+
+    [Test]
+    public async Task SchedulingDates_ReflectDbEditedMaterialLeadTime()
+    {
+        using var fixture = NewSchedulingFixture();
+        await UpdateMaterialConfigAsync(fixture.DbPath, Material.Pmma, fixedLeadTimeBusinessDays: 3);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"DB PMMA",
+          "impressionDate":"2026-06-02",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-06-01",
+          "end":"2026-06-10"
+        }
+        """));
+
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
+        Assert.That(doc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-05"));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_CreateValidationReflectsDbEditedMaterialLeadTime()
+    {
+        using var fixture = NewSchedulingFixture();
+        await UpdateMaterialConfigAsync(fixture.DbPath, Material.FullContourZirconia, fixedLeadTimeBusinessDays: 4);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"DB Validation",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await create.Content.ReadAsStringAsync(), Does.Contain("Before minimum lead time"));
+    }
+
+    [Test]
     public async Task SchedulingFlow_CreatePmmaTelioOrder_RoundTripsMaterial()
     {
         using var fixture = NewSchedulingFixture();
@@ -900,6 +972,20 @@ public class SchedulingApiTests
         var clinic = await ctx.SchedulingClinics.SingleAsync(c => c.Code == clinicCode);
         clinic.IsActive = false;
         clinic.UpdatedAt = DateTimeOffset.UtcNow;
+        await ctx.SaveChangesAsync();
+    }
+
+    private static async Task UpdateMaterialConfigAsync(string dbPath, Material material, int? fixedLeadTimeBusinessDays = null, int? teethPerExtraLeadDay = null)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using var ctx = new AppDbContext(options);
+        await ctx.Database.MigrateAsync();
+        var row = await ctx.SchedulingMaterialConfigs.SingleAsync(c => c.Material == material.ToString());
+        if (fixedLeadTimeBusinessDays.HasValue) row.FixedLeadTimeBusinessDays = fixedLeadTimeBusinessDays.Value;
+        if (teethPerExtraLeadDay.HasValue) row.TeethPerExtraLeadDay = teethPerExtraLeadDay.Value;
+        row.UpdatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z");
         await ctx.SaveChangesAsync();
     }
 

@@ -36,6 +36,38 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
     }, DateTimeOffset.UtcNow, "test"));
 }
 
+internal sealed class TestMaterialSchedulingConfigProvider : IMaterialSchedulingConfigProvider
+{
+    private readonly IReadOnlyDictionary<Material, MaterialSchedulingConfig> _configs;
+
+    public TestMaterialSchedulingConfigProvider(IEnumerable<MaterialSchedulingConfig>? configs = null) =>
+        _configs = (configs ?? DefaultConfigs()).ToDictionary(c => c.Material);
+
+    public Task<MaterialSchedulingConfig> GetAsync(Material material, CancellationToken ct = default)
+    {
+        if (_configs.TryGetValue(material, out var config))
+            return Task.FromResult(config);
+        throw new InvalidOperationException($"Material scheduling config is missing for {material}.");
+    }
+
+    public Task<IReadOnlyList<MaterialSchedulingConfig>> ListAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<MaterialSchedulingConfig>>(_configs.Values.OrderBy(c => c.SortOrder).ToArray());
+
+    public static MaterialSchedulingConfig DefaultConfig(Material material) => material switch
+    {
+        Material.Pmma => new(material, "PMMA", 2, 1.0m, null, true, 10),
+        Material.PmmaTelio => new(material, "PMMA Telio", 2, 1.0m, null, true, 20),
+        Material.FullContourZirconia => new(material, "Full Contour Zirconia", 3, 1.0m, null, true, 30),
+        Material.GlassCeramics => new(material, "Glass Ceramics / LiSi", 4, 1.0m, null, true, 40),
+        Material.Pfm => new(material, "PFM", 4, 1.0m, 10, true, 50),
+        Material.PfzLayeredZrCrown => new(material, "PFZ Layered Zr Crown", 4, 1.0m, 10, true, 60),
+        _ => throw new ArgumentOutOfRangeException(nameof(material), material, null)
+    };
+
+    public static IReadOnlyList<MaterialSchedulingConfig> DefaultConfigs() =>
+        Enum.GetValues<Material>().Select(DefaultConfig).ToArray();
+}
+
 internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentityRepository
 {
     private readonly Dictionary<string, SchedulingLab> _labsByCode;

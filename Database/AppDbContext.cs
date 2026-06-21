@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SchedulingMemberEntity> SchedulingMembers { get; set; }
     public DbSet<Entities.SchedulingAuthSessionEntity> SchedulingAuthSessions { get; set; }
     public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
+    public DbSet<Entities.SchedulingMaterialConfigEntity> SchedulingMaterialConfigs { get; set; }
     public DbSet<Entities.AuditEventEntity> AuditEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -90,6 +91,16 @@ public class AppDbContext : DbContext
             e.Property(x => x.OrganizationType).HasConversion<string>().IsRequired();
             e.Property(x => x.OrganizationCode).HasColumnName("ClinicCode").IsRequired();
             e.Property(x => x.MemberId).HasColumnName("CredentialId").IsRequired();
+        });
+
+        modelBuilder.Entity<Entities.SchedulingMaterialConfigEntity>(e =>
+        {
+            e.HasKey(x => x.Material);
+            e.Property(x => x.Material).IsRequired();
+            e.Property(x => x.FixedLeadTimeBusinessDays).IsRequired();
+            e.Property(x => x.CapacityUnitsPerTooth).HasColumnType("TEXT").IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.SortOrder).HasDefaultValue(0);
         });
 
         modelBuilder.Entity<Entities.SchedulingOrderEntity>(e =>

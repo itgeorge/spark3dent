@@ -71,7 +71,7 @@ public class DeadlineRecommendationServiceTest
     [TestCase(1, 5)]
     [TestCase(10, 5)]
     [TestCase(11, 6)]
-    public void CalculateLeadTimeBusinessDays_GivenPfmToothCounts_AppliesExtraLeadFormula(int toothCount, int expectedLeadDays)
+    public async Task CalculateLeadTimeBusinessDaysAsync_GivenPfmToothCounts_AppliesExtraLeadFormula(int toothCount, int expectedLeadDays)
     {
         var service = CreateService();
         var validTeeth = new[] { 18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23 };
@@ -79,15 +79,97 @@ public class DeadlineRecommendationServiceTest
             .Select(tooth => new OrderWorkItem(ConstructionType.Crown, new ToothRange(tooth, tooth)))
             .ToArray();
 
-        var days = service.CalculateLeadTimeBusinessDays(Material.Pfm, workItems);
+        var days = await service.CalculateLeadTimeBusinessDaysAsync(Material.Pfm, workItems);
 
         Assert.That(days, Is.EqualTo(expectedLeadDays));
     }
 
-    private static DeadlineRecommendationService CreateService(IEnumerable<DateOnly>? extraClosedDates = null)
+    [Test]
+    public async Task RecommendAsync_UsesProviderFixedLeadTimeInsteadOfHardcodedValues()
+    {
+        var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { FixedLeadTimeBusinessDays = 3 }]);
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+
+        var result = await service.RecommendAsync(Input(Material.Pmma, createdAtUtc));
+
+        Assert.That(result.LeadTimeBusinessDays, Is.EqualTo(3));
+        Assert.That(result.EarliestSelectableDeadline, Is.EqualTo(new DateOnly(2026, 6, 5)));
+    }
+
+    [Test]
+    public async Task CalculateLeadTimeBusinessDaysAsync_GivenConfiguredPfmTeethPerExtraLeadDay_UsesConfiguredValue()
+    {
+        var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pfm) with { TeethPerExtraLeadDay = 5 }]);
+        var workItems = new[] { new OrderWorkItem(ConstructionType.Bridge, new ToothRange(18, 13)) };
+
+        var days = await service.CalculateLeadTimeBusinessDaysAsync(Material.Pfm, workItems);
+
+        Assert.That(OrderWorkItem.AllTeeth(workItems), Has.Length.EqualTo(6));
+        Assert.That(days, Is.EqualTo(6));
+    }
+
+    [Test]
+    public void RecommendAsync_GivenMissingConfig_FailsClearly()
+    {
+        var service = CreateService(configs: []);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await service.RecommendAsync(Input(Material.Pmma, SofiaLocal(2026, 6, 2, 10, 30))));
+
+        Assert.That(ex!.Message, Does.Contain("missing").IgnoreCase);
+        Assert.That(ex.Message, Does.Contain(nameof(Material.Pmma)));
+    }
+
+    [TestCase(null)]
+    [TestCase(0)]
+    public void CalculateLeadTimeBusinessDaysAsync_GivenInvalidPfmTeethPerExtraLeadDay_FailsClearly(int? teethPerExtraLeadDay)
+    {
+        var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pfm) with { TeethPerExtraLeadDay = teethPerExtraLeadDay }]);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await service.CalculateLeadTimeBusinessDaysAsync(Material.Pfm, [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))]));
+
+        Assert.That(ex!.Message, Does.Contain("teeth per extra lead day").IgnoreCase);
+        Assert.That(ex.Message, Does.Contain(nameof(Material.Pfm)));
+    }
+
+    [Test]
+    public async Task CalculateLeadTimeBusinessDaysAsync_GivenNonPfmStrayTeethPerExtraLeadDay_IgnoresIt()
+    {
+        var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { FixedLeadTimeBusinessDays = 2, TeethPerExtraLeadDay = 1 }]);
+
+        var days = await service.CalculateLeadTimeBusinessDaysAsync(
+            Material.Pmma,
+            [new OrderWorkItem(ConstructionType.Bridge, new ToothRange(18, 13))]);
+
+        Assert.That(days, Is.EqualTo(2));
+    }
+
+    [TestCase(0, 1, true, "fixed lead-time")]
+    [TestCase(2, 0, true, "capacity units")]
+    [TestCase(2, 1, false, "inactive")]
+    public void RecommendAsync_GivenInvalidConfig_FailsClearly(int fixedLeadDays, decimal capacityUnitsPerTooth, bool isActive, string expectedMessage)
+    {
+        var service = CreateService(configs:
+        [
+            TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with
+            {
+                FixedLeadTimeBusinessDays = fixedLeadDays,
+                CapacityUnitsPerTooth = capacityUnitsPerTooth,
+                IsActive = isActive
+            }
+        ]);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await service.RecommendAsync(Input(Material.Pmma, SofiaLocal(2026, 6, 2, 10, 30))));
+
+        Assert.That(ex!.Message, Does.Contain(expectedMessage).IgnoreCase);
+    }
+
+    private static DeadlineRecommendationService CreateService(IEnumerable<DateOnly>? extraClosedDates = null, IReadOnlyList<MaterialSchedulingConfig>? configs = null)
     {
         var availability = new DateAvailabilityService(new TestNonWorkingDayProvider(extraClosedDates ?? []));
-        return new DeadlineRecommendationService(availability, new MaterialLeadTimeConfigProvider());
+        return new DeadlineRecommendationService(availability, new TestMaterialSchedulingConfigProvider(configs));
     }
 
     private static OrderSchedulingInput Input(Material material, DateTimeOffset createdAtUtc) =>

@@ -17,12 +17,12 @@ public sealed class DeadlineRecommendationService
     private const int SelectableDeadlineSearchLimitDays = 60;
 
     private readonly DateAvailabilityService _availability;
-    private readonly MaterialLeadTimeConfigProvider _leadTimeConfig;
+    private readonly IMaterialSchedulingConfigProvider _materialConfigs;
 
-    public DeadlineRecommendationService(DateAvailabilityService availability, MaterialLeadTimeConfigProvider leadTimeConfig)
+    public DeadlineRecommendationService(DateAvailabilityService availability, IMaterialSchedulingConfigProvider materialConfigs)
     {
         _availability = availability;
-        _leadTimeConfig = leadTimeConfig;
+        _materialConfigs = materialConfigs;
     }
 
     public async Task<DeadlineRecommendationResult> RecommendAsync(OrderSchedulingInput input, CancellationToken ct = default)
@@ -30,23 +30,39 @@ public sealed class DeadlineRecommendationService
         OrderWorkItem.ValidateAll(input.WorkItems);
 
         var effectiveIntakeDate = await ResolveEffectiveIntakeBusinessDateAsync(input.ImpressionTimestampUtc, ct);
-        var leadTimeDays = CalculateLeadTimeBusinessDays(input.Material, input.WorkItems);
+        var leadTimeDays = await CalculateLeadTimeBusinessDaysAsync(input.Material, input.WorkItems, ct);
         var postLeadTimeCandidate = await CalculatePostLeadTimeCandidateAsync(effectiveIntakeDate, leadTimeDays, ct);
         var earliestSelectable = await AdvanceToSelectableDeadlineAsync(postLeadTimeCandidate, ct);
 
         return new DeadlineRecommendationResult(effectiveIntakeDate, leadTimeDays, postLeadTimeCandidate, earliestSelectable);
     }
 
-    public int CalculateLeadTimeBusinessDays(Material material, IReadOnlyList<OrderWorkItem> workItems)
+    public async Task<int> CalculateLeadTimeBusinessDaysAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, CancellationToken ct = default)
     {
-        var config = _leadTimeConfig.Get(material);
-        if (!config.UsesToothCountExtraLeadTime)
+        var config = await _materialConfigs.GetAsync(material, ct);
+        ValidateConfig(config);
+        if (!UsesToothCountExtraLeadTime(material))
             return config.FixedLeadTimeBusinessDays;
 
+        var teethPerExtraLeadDay = config.TeethPerExtraLeadDay!.Value;
         var distinctToothCount = OrderWorkItem.AllTeeth(workItems).Length;
-        var extraLeadDays = (distinctToothCount + MaterialLeadTimeConfigProvider.TeethPerExtraLeadDay - 1)
-            / MaterialLeadTimeConfigProvider.TeethPerExtraLeadDay;
+        var extraLeadDays = (distinctToothCount + teethPerExtraLeadDay - 1) / teethPerExtraLeadDay;
         return config.FixedLeadTimeBusinessDays + extraLeadDays;
+    }
+
+    private static bool UsesToothCountExtraLeadTime(Material material) =>
+        material is Material.Pfm or Material.PfzLayeredZrCrown;
+
+    private static void ValidateConfig(MaterialSchedulingConfig config)
+    {
+        if (!config.IsActive)
+            throw new InvalidOperationException($"Material scheduling config for {config.Material} is inactive.");
+        if (config.FixedLeadTimeBusinessDays <= 0)
+            throw new InvalidOperationException($"Material scheduling config for {config.Material} must have positive fixed lead-time business days.");
+        if (config.CapacityUnitsPerTooth <= 0)
+            throw new InvalidOperationException($"Material scheduling config for {config.Material} must have positive capacity units per tooth.");
+        if (UsesToothCountExtraLeadTime(config.Material) && (config.TeethPerExtraLeadDay == null || config.TeethPerExtraLeadDay <= 0))
+            throw new InvalidOperationException($"Material scheduling config for {config.Material} must have positive teeth per extra lead day.");
     }
 
     public async Task<DateOnly> ResolveEffectiveIntakeBusinessDateAsync(DateTimeOffset impressionTimestampUtc, CancellationToken ct = default)

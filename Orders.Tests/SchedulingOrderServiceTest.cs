@@ -525,7 +525,7 @@ public class SchedulingOrderServiceTest
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
             var dateAvailabilityService = new DateAvailabilityService(new WeekendOnlyNonWorkingDayProvider());
-            var deadlineRecommendationService = new DeadlineRecommendationService(dateAvailabilityService, new MaterialLeadTimeConfigProvider());
+            var deadlineRecommendationService = new DeadlineRecommendationService(dateAvailabilityService, new TestMaterialSchedulingConfigProvider());
             var orderCodeGenerator = new SequenceOrderCodeGenerator(_generatorCodes.ToArray());
             clock ??= new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
             Service = new SchedulingOrderService(

@@ -49,21 +49,21 @@ public static class SchedulingApi
             return Results.Json(ToActorDto(actor), JsonOptions);
         });
 
-        app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, MaterialLeadTimeConfigProvider leadTimes) =>
+        app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, IMaterialSchedulingConfigProvider materialConfigs) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            var materialLeadTimes = leadTimes.ListAll().Select(c => new
+            var materialSchedulingConfigs = (await materialConfigs.ListAsync(ctx.RequestAborted)).Select(c => new
             {
                 c.Material,
+                c.DisplayName,
                 c.FixedLeadTimeBusinessDays,
-                c.UsesToothCountExtraLeadTime
+                c.CapacityUnitsPerTooth,
+                c.TeethPerExtraLeadDay,
+                c.IsActive,
+                c.SortOrder
             });
-            return Results.Json(new
-            {
-                materialLeadTimes,
-                teethPerExtraLeadDay = MaterialLeadTimeConfigProvider.TeethPerExtraLeadDay
-            }, JsonOptions);
+            return Results.Json(new { materialSchedulingConfigs }, JsonOptions);
         });
 
         app.MapGet("/api/scheduling/clinics", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingIdentityRepository identities) =>
