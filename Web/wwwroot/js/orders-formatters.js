@@ -14,8 +14,8 @@
   function shadeShort(v){ return !v||v==='unspecified'?'—':v; }
   function shadeDisplay(v){ return !v||v==='unspecified'?'—':v; }
   function titleText(v){ return String(v||'').replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase()).trim(); }
-  function orderMaterialShort(o){ return ({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'Glass ceramic',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[o.material] || titleText(o.material) || 'Material'; }
-  function orderMaterialCalendarShort(o){ return ({fullContourZirconia:'Zr',pfzLayeredZrCrown:'PFZ',pfm:'M',glassCeramics:'C',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[o.material] || orderMaterialShort(o); }
+  function orderMaterialShort(o){ return ({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'SiLi',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[o.material] || titleText(o.material) || 'Material'; }
+  function orderMaterialCalendarShort(o){ return ({fullContourZirconia:'Zr',pfzLayeredZrCrown:'PFZ',pfm:'M',glassCeramics:'SiLi',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[o.material] || orderMaterialShort(o); }
   function orderWorkItems(o){ return Array.isArray(o.workItems) ? o.workItems : []; }
   function orderWorkItemLabel(i){ const c=i.constructionType||i.construction||'case'; return +i.toothStart===+i.toothEnd ? `${constructionLabel(c)} ${i.toothStart||'—'}` : `${constructionLabel(c)} ${i.toothStart||'—'}-${i.toothEnd||'—'}`; }
   function orderOverviewBaseText(o){ return `${orderMaterialShort(o)} · ${orderWorkItems(o).map(orderWorkItemLabel).join(', ')}`; }

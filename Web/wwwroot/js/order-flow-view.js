@@ -96,7 +96,7 @@
     function pickTooth(t){clearErr();if(lockedTeethSet().has(t)){showErr('That tooth is already used by a previous construction.');return}if(!construction)setConstruction('crown');resetForwardProgress(1);const seq=jawForTooth(t);if(seq===upperTeeth)selectedJaw='upper';else if(seq===lowerTeeth)selectedJaw='lower';syncJawToggle();if(!isRangeConstruction()){rangePick=0;setToothRange(t,t);updateSummary();return}if(rangePick===0){rangePick=1;setToothRange(t,t);updateSummary();return}setToothRange($('ts')?.value||t,t);rangePick=0;updateSummary()}
     function formatDateBulgarianWithWeekday(iso){return Format.formatDateBulgarianWithWeekday(iso)}
     function updateSelectedDeliveryDisplay(){const el=$('selectedDeliveryDate');if(!el)return;const iso=deadline.value||selectedDate;if(iso){el.textContent=formatDateBulgarianWithWeekday(iso);el.classList.remove('date-display-placeholder')}else{el.textContent='Select a delivery date';el.classList.add('date-display-placeholder')}}
-    function overviewMaterialLabel(){return material?({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'Glass ceramic',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[material]:'Material'}
+    function overviewMaterialLabel(){return material?({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'SiLi',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[material]:'Material'}
     function overviewOrderBaseText(){const mat=overviewMaterialLabel();const items=workItems.map(workItemLabel).join(', ');return `${mat} · ${items||'—'}`}
     function overviewShadeLine(){return shade.value&&shade.value!==UNSPECIFIED_SHADE?`shade ${shade.value}`:''}
     function selectedTeethRange(){const nums=allSelectedTeeth();return nums.length?nums:null}

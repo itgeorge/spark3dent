@@ -52,7 +52,7 @@ public class DescriptiveOrderCodeGeneratorTest
     [TestCase(Material.Pfm, 'M')]
     [TestCase(Material.FullContourZirconia, 'Z')]
     [TestCase(Material.PfzLayeredZrCrown, 'L')]
-    [TestCase(Material.GlassCeramics, 'G')]
+    [TestCase(Material.GlassCeramics, 'S')]
     [TestCase(Material.Pmma, 'P')]
     [TestCase(Material.PmmaTelio, 'T')]
     public void Generate_GivenKnownMaterial_IncludesExpectedMaterialLetter(Material material, char expected)
