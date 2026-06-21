@@ -120,6 +120,22 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task UpdateOrderAsync_ValidatesLeadTimeAgainstExistingOrderCreatedAt()
+    {
+        var clock = new MutableClock(new DateTimeOffset(2026, 6, 2, 7, 30, 0, TimeSpan.Zero));
+        var fixture = new Fixture(["A"], clock: clock);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Original"), "127.0.0.1", "test");
+        clock.UtcNow = new DateTimeOffset(2026, 6, 3, 8, 30, 0, TimeSpan.Zero);
+
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Still valid") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 5)
+        });
+
+        Assert.That(updated.RequestedDeliveryDate, Is.EqualTo(new DateOnly(2026, 6, 5)));
+    }
+
+    [Test]
     public async Task CancelOrderAsync_SetsCancelledAndRejectsFurtherChanges()
     {
         var fixture = new Fixture(1);
@@ -292,28 +308,23 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
-    public async Task CalculateMinimumDeliveryDateAsync_SumsLeadTimeAcrossOrderWorkItemsUsingDerivedWorkTypes()
+    public async Task CalculateMinimumDeliveryDateAsync_UsesMaterialLeadTimeAndDistinctTeethInsteadOfWorkRuleSum()
     {
-        var rules = new List<WorkRule>
-        {
-            new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.Crown, 2),
-            new(ProductCategory.Permanent, WorkType.Bridge, Material.FullContourZirconia, ConstructionType.Bridge, 4),
-            new(ProductCategory.Permanent, WorkType.Crown, Material.FullContourZirconia, ConstructionType.InlayOverlay, 3)
-        };
-        var fixture = new Fixture(["A"], configProvider: TestSchedulingConfigProvider.Create(workRules: rules));
+        var fixture = new Fixture(["A"]);
         var draft = fixture.CreateOrderDraft("Lead") with
         {
+            Material = Material.Pfm,
             WorkItems =
             [
-                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
-                new OrderWorkItem(ConstructionType.Crown, new ToothRange(23, 23)),
-                new OrderWorkItem(ConstructionType.InlayOverlay, new ToothRange(31, 31))
-            ]
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(18, 24))
+            ],
+            RequestedDeliveryDate = new DateOnly(2026, 6, 9)
         };
 
         var minimum = await fixture.Service.CalculateMinimumDeliveryDateAsync(draft);
 
-        Assert.That(minimum, Is.EqualTo(new DateOnly(2026, 6, 15)));
+        Assert.That(OrderWorkItem.AllTeeth(draft.WorkItems), Has.Length.EqualTo(12));
+        Assert.That(minimum, Is.EqualTo(new DateOnly(2026, 6, 9)));
     }
 
     [Test]
@@ -344,6 +355,27 @@ public class SchedulingOrderServiceTest
 
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test"));
+    }
+
+    [Test]
+    public void CreateOrderAsync_GivenLabClosedOrFirstAfterClosureDate_Rejects()
+    {
+        var fixture = new Fixture(["A", "B"]);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(
+                TestActors.Lab,
+                fixture.CreateOrderDraft("Closed") with { RequestedDeliveryDate = new DateOnly(2026, 6, 6) },
+                "127.0.0.1",
+                "test",
+                "OTHER"));
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(
+                TestActors.Lab,
+                fixture.CreateOrderDraft("First after closure") with { RequestedDeliveryDate = new DateOnly(2026, 6, 1) },
+                "127.0.0.1",
+                "test",
+                "OTHER"));
     }
 
     [Test]
@@ -488,18 +520,19 @@ public class SchedulingOrderServiceTest
         {
         }
 
-        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, TestSchedulingConfigProvider? configProvider = null)
+        public Fixture(IReadOnlyList<string> generatorCodes, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IClock? clock = null)
         {
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
             var dateAvailabilityService = new DateAvailabilityService(new WeekendOnlyNonWorkingDayProvider());
+            var deadlineRecommendationService = new DeadlineRecommendationService(dateAvailabilityService, new MaterialLeadTimeConfigProvider());
             var orderCodeGenerator = new SequenceOrderCodeGenerator(_generatorCodes.ToArray());
-            var clock = new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
+            clock ??= new FixedClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
             Service = new SchedulingOrderService(
-                configProvider ?? TestSchedulingConfigProvider.Create(),
                 new InMemorySchedulingIdentityRepository(),
                 Repository,
                 dateAvailabilityService,
+                deadlineRecommendationService,
                 orderCodeGenerator,
                 clock,
                 maxOrderCodeAttempts,

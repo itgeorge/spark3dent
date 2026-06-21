@@ -31,6 +31,7 @@ public class ApiTestFixture : WebApplicationFactory<Program>
     private readonly Utilities.ILogger? _loggerOverride;
     private readonly bool _autoLoginAsLab;
     private readonly bool _seedIdentity;
+    private readonly IClock? _clockOverride;
     private bool _identitySeeded;
 
     public ApiTestFixture(
@@ -41,7 +42,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         IInvoiceImporter? invoiceImporterOverride = null,
         Utilities.ILogger? loggerOverride = null,
         bool autoLoginAsLab = false,
-        bool seedIdentity = true)
+        bool seedIdentity = true,
+        IClock? clockOverride = null)
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "WebTests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
@@ -55,6 +57,7 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _loggerOverride = loggerOverride;
         _autoLoginAsLab = autoLoginAsLab;
         _seedIdentity = seedIdentity;
+        _clockOverride = clockOverride;
     }
 
     public string DbPath => _dbPath;
@@ -111,6 +114,11 @@ public class ApiTestFixture : WebApplicationFactory<Program>
             {
                 services.RemoveAll<IInvoiceImporter>();
                 services.AddSingleton(_invoiceImporterOverride);
+            }
+            if (_clockOverride != null)
+            {
+                services.RemoveAll<IClock>();
+                services.AddSingleton(_clockOverride);
             }
             // Use LegacyOnlyInvoiceParser so API tests don't need OpenAI key
             services.RemoveAll<ILegacyInvoiceParser>();

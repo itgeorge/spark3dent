@@ -49,19 +49,21 @@ public static class SchedulingApi
             return Results.Json(ToActorDto(actor), JsonOptions);
         });
 
-        app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingConfigProvider provider) =>
+        app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, MaterialLeadTimeConfigProvider leadTimes) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            var rules = provider.Current.Options.WorkRules.Select(r => new
+            var materialLeadTimes = leadTimes.ListAll().Select(c => new
             {
-                r.ProductCategory,
-                r.WorkType,
-                r.Material,
-                r.ConstructionType,
-                r.MinBusinessDays
+                c.Material,
+                c.FixedLeadTimeBusinessDays,
+                c.UsesToothCountExtraLeadTime
             });
-            return Results.Json(new { rules, defaultMinBusinessDays = provider.Current.Options.DefaultMinBusinessDays }, JsonOptions);
+            return Results.Json(new
+            {
+                materialLeadTimes,
+                teethPerExtraLeadDay = MaterialLeadTimeConfigProvider.TeethPerExtraLeadDay
+            }, JsonOptions);
         });
 
         app.MapGet("/api/scheduling/clinics", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingIdentityRepository identities) =>
@@ -84,9 +86,18 @@ public static class SchedulingApi
             try
             {
                 var draft = ToDraft(body, body.Start);
-                var minimum = await orders.CalculateMinimumDeliveryDateAsync(draft, ctx.RequestAborted);
-                var statuses = await orders.GetDateStatusesAsync(draft, body.Start, body.End, ctx.RequestAborted);
+                var impressionTimestampUtc = await ResolveDatePreviewImpressionTimestampAsync(body.OrderCode, actor, orders, ctx.RequestAborted);
+                var minimum = impressionTimestampUtc.HasValue
+                    ? await orders.CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc.Value, ctx.RequestAborted)
+                    : await orders.CalculateMinimumDeliveryDateAsync(draft, ctx.RequestAborted);
+                var statuses = impressionTimestampUtc.HasValue
+                    ? await orders.GetDateStatusesAsync(draft, body.Start, body.End, impressionTimestampUtc.Value, ctx.RequestAborted)
+                    : await orders.GetDateStatusesAsync(draft, body.Start, body.End, ctx.RequestAborted);
                 return Results.Json(new { minimumDate = minimum, dates = statuses }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
             }
             catch (InvalidOperationException ex)
             {
@@ -285,6 +296,20 @@ public static class SchedulingApi
         catch (JsonException) { return default; }
     }
 
+    private static async Task<DateTimeOffset?> ResolveDatePreviewImpressionTimestampAsync(
+        string? orderCode,
+        AuthenticatedActor actor,
+        SchedulingOrderService orders,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(orderCode)) return null;
+
+        var order = await orders.GetOrderByCodeAsync(orderCode.Trim(), ct);
+        if (order == null || (!actor.IsLab && !string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase)))
+            throw new KeyNotFoundException("Order not found.");
+        return order.CreatedAt;
+    }
+
     private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate)
     {
         var workItems = body.WorkItems?
@@ -453,6 +478,7 @@ public static class SchedulingApi
     {
         public DateOnly Start { get; init; }
         public DateOnly End { get; init; }
+        public string? OrderCode { get; init; }
     }
 
     public sealed record CreateOrderRequest : OrderShape

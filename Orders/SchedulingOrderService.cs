@@ -5,10 +5,10 @@ namespace Orders;
 
 public sealed class SchedulingOrderService
 {
-    private readonly ISchedulingConfigProvider _configProvider;
     private readonly ISchedulingIdentityRepository _identities;
     private readonly IOrderRepository _orders;
     private readonly DateAvailabilityService _availability;
+    private readonly DeadlineRecommendationService _deadlineRecommendations;
     private readonly IOrderCodeGenerator _codeGenerator;
     private readonly IClock _clock;
     private const int DefaultPageLimit = 50;
@@ -18,40 +18,43 @@ public sealed class SchedulingOrderService
     private readonly int _maxOrderCodeAttempts;
 
     public SchedulingOrderService(
-        ISchedulingConfigProvider configProvider,
         ISchedulingIdentityRepository identities,
         IOrderRepository orders,
         DateAvailabilityService availability,
+        DeadlineRecommendationService deadlineRecommendations,
         IOrderCodeGenerator codeGenerator,
         IClock clock,
         int maxOrderCodeAttempts = 20,
         IAuditLog? auditLog = null)
     {
-        _configProvider = configProvider;
         _identities = identities;
         _orders = orders;
         _availability = availability;
+        _deadlineRecommendations = deadlineRecommendations;
         _codeGenerator = codeGenerator;
         _clock = clock;
         _auditLog = auditLog ?? NoOpAuditLog.Instance;
         _maxOrderCodeAttempts = maxOrderCodeAttempts;
     }
 
-    public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default)
+    public Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default) =>
+        CalculateMinimumDeliveryDateAsync(draft, _clock.UtcNow, ct);
+
+    public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default)
     {
         ValidateOrderWorkItems(draft);
-        var workItems = draft.WorkItems;
-        var requiredBusinessDays = workItems.Sum(item =>
-        {
-            var workType = WorkTypeFor(draft.ProductCategory, draft.Material, item.ConstructionType);
-            return _configProvider.Current.FindWorkRule(draft.ProductCategory, workType, draft.Material, item.ConstructionType).MinBusinessDays;
-        });
-        return await _availability.CalculateMinimumDateAsync(draft.ImpressionDate, requiredBusinessDays, ct);
+        var recommendation = await _deadlineRecommendations.RecommendAsync(
+            new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc),
+            ct);
+        return recommendation.EarliestSelectableDeadline;
     }
 
-    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default)
+    public Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        GetDateStatusesAsync(draft, start, end, _clock.UtcNow, ct);
+
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default)
     {
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
+        var minimum = await CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc, ct);
         return await _availability.GetStatusesAsync(start, end, minimum, ct);
     }
 
@@ -98,7 +101,7 @@ public sealed class SchedulingOrderService
             throw new InvalidOperationException("Cancelled orders cannot be modified.");
 
         ValidateDraft(draft);
-        await ValidateDeliveryDateForActorAsync(actor, draft, ct);
+        await ValidateDeliveryDateForActorAsync(actor, draft, existing.CreatedAt, ct);
 
         var updated = existing with
         {
@@ -260,9 +263,12 @@ public sealed class SchedulingOrderService
         return changed.ToArray();
     }
 
-    private async Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct)
+    private Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct) =>
+        ValidateDeliveryDateForActorAsync(actor, draft, _clock.UtcNow, ct);
+
+    private async Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, DateTimeOffset impressionTimestampUtc, CancellationToken ct)
     {
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
+        var minimum = await CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc, ct);
         var status = await _availability.GetStatusAsync(draft.RequestedDeliveryDate, minimum, ct);
         if (status.IsSelectable) return;
         if (actor.IsLab && status.IsBeforeMinimum && !status.IsClosed && !status.IsFirstBusinessDayAfterClosure) return;
@@ -281,13 +287,6 @@ public sealed class SchedulingOrderService
         if (draft.WorkItems == null)
             throw new InvalidOperationException("At least one order work item is required.");
         OrderWorkItem.ValidateAll(draft.WorkItems);
-    }
-
-    private static WorkType WorkTypeFor(ProductCategory productCategory, Material material, ConstructionType constructionType)
-    {
-        if (material is Material.Pmma or Material.PmmaTelio || productCategory == ProductCategory.Temporary)
-            return WorkType.TemporaryCrownBridge;
-        return constructionType == ConstructionType.Bridge ? WorkType.Bridge : WorkType.Crown;
     }
 
     private static bool WorkItemsEqual(IReadOnlyList<OrderWorkItem> left, IReadOnlyList<OrderWorkItem> right) =>

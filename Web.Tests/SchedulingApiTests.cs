@@ -5,15 +5,26 @@ using Database;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
 using Orders;
+using Utilities;
 
 namespace Web.Tests;
 
 public class SchedulingApiTests
 {
+    private static ApiTestFixture NewSchedulingFixture(DateTimeOffset? utcNow = null) =>
+        new(clockOverride: new FixedSchedulingClock(utcNow ?? new DateTimeOffset(2026, 6, 2, 7, 30, 0, TimeSpan.Zero)));
+
+    private sealed class FixedSchedulingClock : IClock
+    {
+        public FixedSchedulingClock(DateTimeOffset utcNow) => UtcNow = utcNow;
+        public DateTimeOffset UtcNow { get; }
+        public DateOnly Today => DateOnly.FromDateTime(UtcNow.Date);
+    }
+
     [Test]
     public async Task SchedulingFlow_LoginCreateListLogout_Works()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
 
         var login = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"123456\"}"));
@@ -35,6 +46,13 @@ public class SchedulingApiTests
         Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dateDoc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
         Assert.That(dateDoc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-05"));
+        var dateStatuses = dateDoc.RootElement.GetProperty("dates").EnumerateArray()
+            .ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(dateStatuses["2026-06-04"].GetProperty("isBeforeMinimum").GetBoolean(), Is.True);
+        Assert.That(dateStatuses["2026-06-04"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        Assert.That(dateStatuses["2026-06-05"].GetProperty("isSelectable").GetBoolean(), Is.True);
+        Assert.That(dateStatuses["2026-06-08"].GetProperty("isFirstBusinessDayAfterClosure").GetBoolean(), Is.True);
+        Assert.That(dateStatuses["2026-06-08"].GetProperty("isSelectable").GetBoolean(), Is.False);
 
         var create = await client.PostAsync("/api/scheduling/orders", Json("""
         {
@@ -72,7 +90,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_CreatePmmaTelioOrder_RoundTripsMaterial()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -100,7 +118,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_UnauthenticatedOrderListReturns401()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
 
         var response = await client.GetAsync("/api/scheduling/orders");
@@ -111,7 +129,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingAuthResponses_UseOrganizationAndLabFields()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
 
         using var clinic = fixture.Client;
         var clinicLogin = await clinic.PostAsync("/api/scheduling/auth/login", Json("{\"organizationCode\":\"DEMO\",\"pin\":\"123456\"}"));
@@ -133,7 +151,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_LabCanListAndCreateWithTargetClinic()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var clinicClient = fixture.Client;
         await LoginAsync(clinicClient);
         var create = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
@@ -188,7 +206,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_UpdateAndCancelOrder_EnforcesPermissions()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
         var create = await client.PostAsync("/api/scheduling/orders", Json("""
@@ -247,7 +265,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingCalendarEndpoint_RequiresAuthValidatesRangeAndIsNotCapturedByCodeRoute()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var anonymous = fixture.Client;
 
         var unauthenticated = await anonymous.GetAsync("/api/scheduling/orders/calendar?start=2026-06-01&end=2026-06-30");
@@ -271,7 +289,7 @@ public class SchedulingApiTests
     [Test]
     public async Task NonWorkingDaysEndpoint_ReturnsProviderDatesForRange()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.CreateClient();
         await LoginAsync(client);
 
@@ -289,7 +307,7 @@ public class SchedulingApiTests
     [Test]
     public async Task NonWorkingDaysEndpoint_RequiresAuthAndValidatesRange()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var anonymous = fixture.CreateClient();
 
         var unauthenticated = await anonymous.GetAsync("/api/scheduling/non-working-days?start=2026-06-01&end=2026-06-30");
@@ -305,7 +323,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingCalendarEndpoint_IsRoleAwareInclusiveAndExcludesCancelled()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var clinicClient = fixture.Client;
         await LoginAsync(clinicClient);
 
@@ -342,7 +360,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_CreateUpdateListGetCalendar_WithOrderWorkItems()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -400,7 +418,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_InvalidOverlappingOrderWorkItems_Returns400()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -438,7 +456,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_OldSingleFieldOnlyRequest_Returns400()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -461,9 +479,58 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task SchedulingDates_GivenMultipleOrderWorkItems_UsesSummedLeadTime()
+    public async Task SchedulingDates_GivenEditOrderCode_UsesExistingOrderCreatedAtForPreview()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 5, 9, 30, 0, TimeSpan.Zero));
+        const string code = "EDT-001";
+        await SeedOrderAsync(
+            fixture.DbPath,
+            code,
+            "Edit preview",
+            "DEMO",
+            "2026-06-05",
+            createdAt: DateTimeOffset.Parse("2026-06-02T07:30:00Z"));
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var withoutEditContext = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Edit preview",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-06-01",
+          "end":"2026-06-12"
+        }
+        """));
+        var withEditContext = await client.PostAsync("/api/scheduling/dates", Json($$"""
+        {
+          "orderCode":"{{code}}",
+          "caseName":"Edit preview",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-06-01",
+          "end":"2026-06-12"
+        }
+        """));
+
+        Assert.That(withoutEditContext.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(withEditContext.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var withoutDoc = JsonDocument.Parse(await withoutEditContext.Content.ReadAsStringAsync());
+        var withDoc = JsonDocument.Parse(await withEditContext.Content.ReadAsStringAsync());
+        Assert.That(withoutDoc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-11"));
+        Assert.That(withDoc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-05"));
+        var statuses = withDoc.RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(statuses["2026-06-05"].GetProperty("isSelectable").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task SchedulingDates_GivenMultipleOrderWorkItems_UsesMaterialLeadTime()
+    {
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -484,13 +551,13 @@ public class SchedulingApiTests
 
         Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var doc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
-        Assert.That(doc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-10"));
+        Assert.That(doc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-06-05"));
     }
 
     [Test]
     public async Task SchedulingFlow_RetiredLegacyTechnicianOrdersRouteReturns404()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await ApiTestFixture.LoginAsLabAsync(client);
 
@@ -502,7 +569,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_RejectsInvalidPinAndUnauthenticatedAccess()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
 
         var badLogin = await client.PostAsync("/api/scheduling/auth/login", Json("{\"clinicCode\":\"DEMO\",\"pin\":\"000000\"}"));
@@ -532,7 +599,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_RejectsWeekendDelivery()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -553,7 +620,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_NormalizesReversedToothRangeOnCreate()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -582,7 +649,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_RejectsToothRangeAcrossBothJaws()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -604,7 +671,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingFlow_RejectsInvalidToothRangeWhenCalculatingDates()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -627,7 +694,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingOrdersListEndpoint_ReturnsCursorPageAndRejectsInvalidCursor()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         await SeedOrderAsync(fixture.DbPath, "PG1-234", "Page old", "DEMO", "2026-06-05");
         await SeedOrderAsync(fixture.DbPath, "PG2-234", "Page mid", "DEMO", "2026-06-06");
         await SeedOrderAsync(fixture.DbPath, "PG3-234", "Page new", "DEMO", "2026-06-07");
@@ -654,7 +721,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingOrdersFindEndpoint_ReturnsContextAndEnforcesVisibility()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         await SeedOrderAsync(fixture.DbPath, "26-0605-Z1AA", "Find demo", "DEMO", "2026-06-05");
         var cancelledCode = await SeedOrderAsync(fixture.DbPath, "26-0606-Z1BB", "Find cancelled", "DEMO", "2026-06-06");
         await SeedOrderAsync(fixture.DbPath, "27-0605-Z1AA", "Find other", "OTHER", "2027-06-05");
@@ -689,7 +756,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingConfigReloadEndpoint_IsRemoved()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
 
@@ -701,7 +768,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingClinicsEndpoint_ReturnsDisplayColorAndLinkedClientForLab()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await ApiTestFixture.LoginAsLabAsync(client);
 
@@ -718,7 +785,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingOrdersList_IncludesClinicMetadataForLab()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         await SeedOrderAsync(fixture.DbPath, "META-001", "Meta Demo", "DEMO", "2026-06-05");
         await SeedOrderAsync(fixture.DbPath, "META-002", "Meta Other", "OTHER", "2026-06-06");
 
@@ -738,7 +805,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingOrdersList_ClinicScopedDoesNotIncludeClinicsMap()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         await SeedOrderAsync(fixture.DbPath, "CLN-001", "Clinic Only", "DEMO", "2026-06-05");
 
         using var client = fixture.Client;
@@ -752,7 +819,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingCalendar_IncludesClinicMetadataForLab()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         await SeedOrderAsync(fixture.DbPath, "CAL-001", "Calendar Demo", "DEMO", "2026-06-05");
 
         using var client = fixture.Client;
@@ -768,7 +835,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingOrderDetail_IncludesClinicMetadataForLab()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         const string code = "DET-001";
         await SeedOrderAsync(fixture.DbPath, code, "Detail Demo", "DEMO", "2026-06-05");
 
@@ -784,7 +851,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingOrdersFind_ListPageIncludesClinicMetadataForLab()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         const string code = "FND-001";
         await SeedOrderAsync(fixture.DbPath, code, "Find Demo", "DEMO", "2026-06-05");
 
@@ -801,7 +868,7 @@ public class SchedulingApiTests
     [Test]
     public async Task SchedulingClinicMetadata_InactiveClinicHistoricalOrderOmitsLiveMetadata()
     {
-        using var fixture = new ApiTestFixture();
+        using var fixture = NewSchedulingFixture();
         _ = fixture.CreateClient();
         const string code = "INA-001";
         await SeedOrderAsync(fixture.DbPath, code, "Inactive Clinic Order", "OTHER", "2026-06-05");
@@ -861,7 +928,7 @@ public class SchedulingApiTests
         return JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString()!;
     }
 
-    private static async Task<string> SeedOrderAsync(string dbPath, string code, string caseName, string clinicCode, string requestedDeliveryDate)
+    private static async Task<string> SeedOrderAsync(string dbPath, string code, string caseName, string clinicCode, string requestedDeliveryDate, DateTimeOffset? createdAt = null)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlite($"Data Source={dbPath}")
@@ -869,6 +936,7 @@ public class SchedulingApiTests
         await using (var ctx = new AppDbContext(options))
             await ctx.Database.MigrateAsync();
         var repo = new SqliteOrderRepo(() => new AppDbContext(options));
+        var timestamp = createdAt ?? DateTimeOffset.Parse("2026-06-02T12:00:00Z");
         await repo.CreateOrderAsync(new OrderRecord(
             0,
             code,
@@ -886,8 +954,8 @@ public class SchedulingApiTests
             OrderStatus.Created,
             Shade.Unspecified,
             null,
-            DateTimeOffset.Parse("2026-06-02T12:00:00Z"),
-            DateTimeOffset.Parse("2026-06-02T12:00:00Z"),
+            timestamp,
+            timestamp,
             "127.0.0.1",
             "test"));
         return code;
