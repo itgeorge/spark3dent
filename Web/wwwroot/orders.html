@@ -84,12 +84,15 @@
   <div id="beforeMinimumConfirmPopup" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="beforeMinimumConfirmTitle">
     <div class="card cancel-order-confirm-card">
       <div class="body">
-        <h2 id="beforeMinimumConfirmTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">Before minimum delivery date?</h2>
+        <h2 id="beforeMinimumConfirmTitle" style="margin:0 0 10px;font-size:18px;font-weight:900">Deadline override required</h2>
         <p id="beforeMinimumConfirmText" class="cancel-order-confirm-text"></p>
+        <label for="deadlineOverrideReasonInput">Override reason</label>
+        <textarea id="deadlineOverrideReasonInput" placeholder="Enter a reason for this lab override"></textarea>
+        <div class="msg err hidden" id="deadlineOverrideReasonMsg"></div>
       </div>
       <div class="cancel-order-confirm-actions">
         <button class="btn" id="beforeMinimumConfirmBackBtn" type="button">Cancel</button>
-        <button class="btn primary" id="beforeMinimumConfirmYesBtn" type="button">Use this date</button>
+        <button class="btn primary" id="beforeMinimumConfirmYesBtn" type="button">Confirm override</button>
       </div>
     </div>
   </div>

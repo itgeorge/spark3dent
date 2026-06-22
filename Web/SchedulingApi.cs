@@ -115,8 +115,12 @@ public static class SchedulingApi
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var created = await orders.CreateOrderAsync(actor, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), body.ClinicCode, ctx.RequestAborted);
+                var created = await orders.CreateOrderAsync(actor, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), body.ClinicCode, ToDeadlineOverrideRequest(body), ctx.RequestAborted);
                 return Results.Json(new { order = ToDto(created) }, statusCode: 201, options: JsonOptions);
+            }
+            catch (DeadlineOverrideRequiredException ex)
+            {
+                return Results.Json(ToDeadlineOverrideErrorDto(ex), statusCode: 400, options: JsonOptions);
             }
             catch (InvalidOperationException ex)
             {
@@ -235,6 +239,17 @@ public static class SchedulingApi
             return Results.Json(new { items = items.Select(ToDeadlineRecommendationLogDto) }, JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/orders/{code}/deadline-override-logs", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, IDeadlineOverrideLogRepository logs) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
+            if (order == null) return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
+            var items = await logs.ListForOrderAsync(order.Id, ctx.RequestAborted);
+            return Results.Json(new { items = items.Select(ToDeadlineOverrideLogDto) }, JsonOptions);
+        });
+
         app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -256,12 +271,16 @@ public static class SchedulingApi
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var updated = await orders.UpdateOrderAsync(actor, code, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
+                var updated = await orders.UpdateOrderAsync(actor, code, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), ToDeadlineOverrideRequest(body), ctx.RequestAborted);
                 return Results.Json(new { order = ToDto(updated) }, JsonOptions);
             }
             catch (KeyNotFoundException ex)
             {
                 return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (DeadlineOverrideRequiredException ex)
+            {
+                return Results.Json(ToDeadlineOverrideErrorDto(ex), statusCode: 400, options: JsonOptions);
             }
             catch (InvalidOperationException ex)
             {
@@ -322,6 +341,19 @@ public static class SchedulingApi
             throw new KeyNotFoundException("Order not found.");
         return order;
     }
+
+    private static DeadlineOverrideRequest? ToDeadlineOverrideRequest(OrderShape body) =>
+        body.ConfirmDeadlineOverride || !string.IsNullOrWhiteSpace(body.DeadlineOverrideReason)
+            ? new DeadlineOverrideRequest(body.ConfirmDeadlineOverride, body.DeadlineOverrideReason)
+            : null;
+
+    private static object ToDeadlineOverrideErrorDto(DeadlineOverrideRequiredException ex) => new
+    {
+        error = ex.Message,
+        overrideAllowed = ex.OverrideAllowed,
+        failedRules = ex.FailedRules.Select(r => r.ToString()),
+        recommendedDate = ex.RecommendedDate
+    };
 
     private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate)
     {
@@ -503,6 +535,32 @@ public static class SchedulingApi
         log.ConfigSnapshotJson
     };
 
+    private static object ToDeadlineOverrideLogDto(DeadlineOverrideLog log) => new
+    {
+        log.Id,
+        log.OrderId,
+        log.OrderCode,
+        log.CreatedAtUtc,
+        log.CreatedByOrganizationType,
+        log.CreatedByOrganizationCode,
+        log.CreatedByMemberId,
+        log.CreatedByMemberLabel,
+        log.SelectedDeadlineDate,
+        log.SystemRecommendedDeadlineDate,
+        log.MinimumDeadlineDate,
+        log.OrderCapacityUnits,
+        log.RulesBypassedJson,
+        log.OverrideReason,
+        log.RecommendationLogId,
+        log.ExistingDailyCapacityUsed,
+        log.ExistingWeeklyCapacityUsed,
+        log.DailyCapacityLimitUsed,
+        log.WeeklyCapacityLimitUsed,
+        log.DailyCapacityAfterOverride,
+        log.WeeklyCapacityAfterOverride,
+        log.CalendarReason
+    };
+
     private static string RemoteIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private static string UserAgent(HttpContext ctx) => ctx.Request.Headers.UserAgent.ToString();
 
@@ -520,6 +578,8 @@ public static class SchedulingApi
         public Shade Shade { get; init; }
         public string? Notes { get; init; }
         public string? ColorNote { get; init; }
+        public bool ConfirmDeadlineOverride { get; init; }
+        public string? DeadlineOverrideReason { get; init; }
     }
 
     public sealed record DateAvailabilityRequest : OrderShape

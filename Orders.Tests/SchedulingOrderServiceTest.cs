@@ -7,6 +7,159 @@ namespace Orders.Tests;
 public class SchedulingOrderServiceTest
 {
     [Test]
+    public async Task LabInvalidDateWithoutOverrideConfirmationOrReason_RejectsAndDoesNotLogOverride()
+    {
+        var overrideLogs = new CapturingDeadlineOverrideLogRepository();
+        var fixture = new Fixture(
+            ["OVR-1", "OVR-2"],
+            deadlineOverrideLogs: overrideLogs,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Existing") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+        }, "127.0.0.1", "test");
+
+        var ex = Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Lab blocked") with
+            {
+                Material = Material.Pmma,
+                ProductCategory = ProductCategory.Temporary,
+                RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+            }, "127.0.0.1", "test", "OTHER"));
+        Assert.That(ex!.OverrideAllowed, Is.True);
+        Assert.That(ex.FailedRules, Does.Contain(DeadlineValidationRule.DailyCapacityExceeded));
+        Assert.That(overrideLogs.Logs, Is.Empty);
+
+        var emptyReasonEx = Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Lab blocked") with
+            {
+                Material = Material.Pmma,
+                ProductCategory = ProductCategory.Temporary,
+                RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+            }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "  ")));
+        Assert.That(emptyReasonEx!.Message, Does.Contain("reason"));
+        Assert.That(overrideLogs.Logs, Is.Empty);
+    }
+
+    [Test]
+    public async Task LabCapacityOverride_SavesLogsAndConsumesFutureCapacity()
+    {
+        var overrideLogs = new CapturingDeadlineOverrideLogRepository();
+        var recommendationLogs = new CapturingDeadlineRecommendationLogRepository();
+        var fixture = new Fixture(
+            ["OVR-1", "OVR-2", "OVR-3"],
+            deadlineRecommendationLogs: recommendationLogs,
+            deadlineOverrideLogs: overrideLogs,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Existing") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+        }, "127.0.0.1", "test");
+        overrideLogs.Clear();
+        recommendationLogs.Clear();
+
+        var overridden = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Override") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "Rush case approved by lab"));
+
+        Assert.That(overridden.RequestedDeliveryDate, Is.EqualTo(new DateOnly(2026, 6, 4)));
+        Assert.That(overridden.CalculatedCapacityUnits, Is.EqualTo(1m));
+        Assert.That(recommendationLogs.Logs, Has.Count.EqualTo(1));
+        Assert.That(overrideLogs.Logs, Has.Count.EqualTo(1));
+        var log = overrideLogs.Logs.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(log.OrderId, Is.EqualTo(overridden.Id));
+            Assert.That(log.RulesBypassedJson, Does.Contain(nameof(DeadlineValidationRule.DailyCapacityExceeded)));
+            Assert.That(log.OverrideReason, Is.EqualTo("Rush case approved by lab"));
+            Assert.That(log.ExistingDailyCapacityUsed, Is.EqualTo(1m));
+            Assert.That(log.DailyCapacityAfterOverride, Is.EqualTo(2m));
+            Assert.That(log.RecommendationLogId, Is.EqualTo(recommendationLogs.Logs.Single().Id));
+        });
+
+        var clinicEx = Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Clinic later") with
+            {
+                Material = Material.Pmma,
+                ProductCategory = ProductCategory.Temporary,
+                RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+            }, "127.0.0.1", "test"));
+        Assert.That(clinicEx!.OverrideAllowed, Is.False);
+    }
+
+    [Test]
+    public async Task LabOverride_WhenRecommendationSearchFails_LogsSearchFailureRule()
+    {
+        var overrideLogs = new CapturingDeadlineOverrideLogRepository();
+        var fixture = new Fixture(
+            ["OVR-SEARCH"],
+            deadlineOverrideLogs: overrideLogs,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 10m, 1m)]);
+        foreach (var date in new[]
+        {
+            new DateOnly(2026, 6, 3),
+            new DateOnly(2026, 6, 10),
+            new DateOnly(2026, 6, 17),
+            new DateOnly(2026, 6, 24),
+            new DateOnly(2026, 7, 1),
+            new DateOnly(2026, 7, 8),
+            new DateOnly(2026, 7, 15),
+            new DateOnly(2026, 7, 22),
+            new DateOnly(2026, 7, 29)
+        })
+        {
+            await fixture.Repository.CreateOrderAsync(BuildSeedOrder($"FULL-{date:MMdd}", date, Material.Pmma, ProductCategory.Temporary));
+        }
+
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Search failure") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            RequestedDeliveryDate = new DateOnly(2026, 6, 3)
+        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "No normal capacity in search window"));
+
+        Assert.That(overrideLogs.Logs.Single().RulesBypassedJson, Does.Contain(nameof(DeadlineValidationRule.SearchFailure)));
+    }
+
+    [Test]
+    public async Task LabMinimumAndCalendarOverride_SavesAndLogsRules()
+    {
+        var overrideLogs = new CapturingDeadlineOverrideLogRepository();
+        var fixture = new Fixture(["OVR-1", "OVR-2"], deadlineOverrideLogs: overrideLogs);
+
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Early") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 3)
+        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "Lab accepts earlier date"));
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Monday") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 1)
+        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "Pickup arranged despite Monday"));
+
+        Assert.That(overrideLogs.Logs, Has.Count.EqualTo(2));
+        Assert.That(overrideLogs.Logs[0].RulesBypassedJson, Does.Contain(nameof(DeadlineValidationRule.MinimumLeadTime)));
+        Assert.That(overrideLogs.Logs[1].RulesBypassedJson, Does.Contain(nameof(DeadlineValidationRule.CalendarDeadlineBlocked)));
+    }
+
+    [Test]
+    public async Task ValidLabSave_DoesNotCreateOverrideLog()
+    {
+        var overrideLogs = new CapturingDeadlineOverrideLogRepository();
+        var fixture = new Fixture(1, deadlineOverrideLogs: overrideLogs);
+
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Normal"), "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "not needed"));
+
+        Assert.That(overrideLogs.Logs, Is.Empty);
+    }
+
+    [Test]
     public async Task CreateOrderAsync_PersistsDeadlineRecommendationLogAfterSuccessfulCreate()
     {
         var logs = new CapturingDeadlineRecommendationLogRepository();
@@ -61,7 +214,7 @@ public class SchedulingOrderServiceTest
         }, "127.0.0.1", "test");
         logs.Clear();
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Rejected") with
             {
                 Material = Material.Pmma,
@@ -393,7 +546,7 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
-    public async Task CreateOrderAsync_GivenLabBeforeMinimumDeliveryDate_AllowsSelection()
+    public async Task CreateOrderAsync_GivenLabBeforeMinimumDeliveryDate_RequiresExplicitOverride()
     {
         var fixture = new Fixture(1);
         var minimum = await fixture.Service.CalculateMinimumDeliveryDateAsync(fixture.CreateOrderDraft("Test"));
@@ -402,9 +555,9 @@ public class SchedulingOrderServiceTest
             earlyDate = earlyDate.AddDays(-1);
 
         var draft = fixture.CreateOrderDraft("Early lab") with { RequestedDeliveryDate = earlyDate };
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, draft, "127.0.0.1", "test", "OTHER");
 
-        Assert.That(created.RequestedDeliveryDate, Is.EqualTo(earlyDate));
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Lab, draft, "127.0.0.1", "test", "OTHER"));
     }
 
     [Test]
@@ -451,7 +604,7 @@ public class SchedulingOrderServiceTest
 
         var draft = fixture.CreateOrderDraft("Early clinic") with { RequestedDeliveryDate = earlyDate };
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test"));
     }
 
@@ -460,14 +613,14 @@ public class SchedulingOrderServiceTest
     {
         var fixture = new Fixture(["A", "B"]);
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(
                 TestActors.Lab,
                 fixture.CreateOrderDraft("Closed") with { RequestedDeliveryDate = new DateOnly(2026, 6, 6) },
                 "127.0.0.1",
                 "test",
                 "OTHER"));
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(
                 TestActors.Lab,
                 fixture.CreateOrderDraft("First after closure") with { RequestedDeliveryDate = new DateOnly(2026, 6, 1) },
@@ -492,9 +645,10 @@ public class SchedulingOrderServiceTest
             fixture.CreateOrderDraft("Existing early") with { RequestedDeliveryDate = earlyDate },
             "127.0.0.1",
             "test",
-            "OTHER");
+            "OTHER",
+            new DeadlineOverrideRequest(true, "seed early capacity"));
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(
                 TestActors.Lab,
                 fixture.CreateOrderDraft("Blocked early") with { RequestedDeliveryDate = earlyDate },
@@ -543,7 +697,7 @@ public class SchedulingOrderServiceTest
 
         fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-1", new DateOnly(2026, 6, 10), Material.Pmma, ProductCategory.Temporary)));
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test"));
 
         Assert.That(ex!.Message, Does.Contain("Daily capacity exceeded"));
@@ -603,7 +757,7 @@ public class SchedulingOrderServiceTest
 
         fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-2", new DateOnly(2026, 6, 10), Material.Pmma, ProductCategory.Temporary)));
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.UpdateOrderAsync(TestActors.Demo, existing.OrderCode, fixture.CreateOrderDraft("Editable") with
             {
                 Material = Material.Pmma,
@@ -633,7 +787,7 @@ public class SchedulingOrderServiceTest
         };
 
         fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-3", new DateOnly(2026, 6, 10), Material.Pmma, ProductCategory.Temporary)));
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Service.CreateOrderAsync(TestActors.Demo, createDraft, "127.0.0.1", "test"));
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () => await fixture.Service.CreateOrderAsync(TestActors.Demo, createDraft, "127.0.0.1", "test"));
         Assert.That(audit.Events, Is.Empty);
 
         var existing = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Editable") with
@@ -646,7 +800,7 @@ public class SchedulingOrderServiceTest
         Assert.That(audit.Events.Select(e => e.Operation), Is.EqualTo(new[] { "OrderCreated" }));
 
         fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-4", new DateOnly(2026, 6, 12), Material.Pmma, ProductCategory.Temporary)));
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.UpdateOrderAsync(TestActors.Demo, existing.OrderCode, fixture.CreateOrderDraft("Editable") with
             {
                 Material = Material.Pmma,
@@ -802,6 +956,44 @@ public class SchedulingOrderServiceTest
         }
     }
 
+    private sealed class CapturingDeadlineOverrideLogRepository : IDeadlineOverrideLogRepository
+    {
+        private readonly object _gate = new();
+        private readonly List<DeadlineOverrideLog> _logs = new();
+        private long _nextId = 1;
+
+        public IReadOnlyList<DeadlineOverrideLog> Logs
+        {
+            get
+            {
+                lock (_gate)
+                    return _logs.ToList();
+            }
+        }
+
+        public Task<DeadlineOverrideLog> AddAsync(DeadlineOverrideLog log, CancellationToken ct = default)
+        {
+            lock (_gate)
+            {
+                var saved = log with { Id = _nextId++ };
+                _logs.Add(saved);
+                return Task.FromResult(saved);
+            }
+        }
+
+        public Task<IReadOnlyList<DeadlineOverrideLog>> ListForOrderAsync(long orderId, CancellationToken ct = default)
+        {
+            lock (_gate)
+                return Task.FromResult<IReadOnlyList<DeadlineOverrideLog>>(_logs.Where(l => l.OrderId == orderId).OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id).ToList());
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+                _logs.Clear();
+        }
+    }
+
     private sealed class CapturingAuditLog : IAuditLog
     {
         private readonly object _gate = new();
@@ -831,7 +1023,7 @@ public class SchedulingOrderServiceTest
         public IOrderRepository Repository { get; }
         public InMemorySchedulingWriteTransaction WriteTransaction { get; }
 
-        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null, IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null, IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null)
+        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null, IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null, IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null, IDeadlineOverrideLogRepository? deadlineOverrideLogs = null)
             : this(Enumerable
                 .Repeat("racecode", racingOrderCount) // race all on the first code, only 1st should win this code
                 .Concat(Enumerable.Range(2, racingOrderCount - 1) // generate unique code for each that didn't win 1st race
@@ -842,7 +1034,8 @@ public class SchedulingOrderServiceTest
                 clock: null,
                 materialConfigs,
                 capacityConfigs,
-                deadlineRecommendationLogs)
+                deadlineRecommendationLogs,
+                deadlineOverrideLogs)
         {
         }
 
@@ -853,7 +1046,8 @@ public class SchedulingOrderServiceTest
             IClock? clock = null,
             IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null,
             IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null,
-            IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null)
+            IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null,
+            IDeadlineOverrideLogRepository? deadlineOverrideLogs = null)
         {
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
@@ -876,7 +1070,8 @@ public class SchedulingOrderServiceTest
                 clock,
                 maxOrderCodeAttempts,
                 auditLog,
-                deadlineRecommendationLogs);
+                deadlineRecommendationLogs,
+                deadlineOverrideLogs);
         }
 
         public SchedulingOrderService Service { get; }

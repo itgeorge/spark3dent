@@ -1214,6 +1214,127 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task DeadlineOverride_ClinicCannotOverrideButLabCanAndLogsAreRetrievable()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+        var firstCode = await CreateOrderAsync(clinicClient, "Capacity First", "2026-06-10", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
+
+        var clinicOverride = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Clinic Override Attempt",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "requestedDeliveryDate":"2026-06-10",
+          "confirmDeadlineOverride":true,
+          "deadlineOverrideReason":"please overbook"
+        }
+        """));
+        Assert.That(clinicOverride.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var clinicError = JsonDocument.Parse(await clinicOverride.Content.ReadAsStringAsync()).RootElement;
+        Assert.Multiple(() =>
+        {
+            Assert.That(clinicError.GetProperty("overrideAllowed").GetBoolean(), Is.False);
+            Assert.That(clinicError.GetProperty("failedRules").EnumerateArray().Select(e => e.GetString()), Does.Contain("DailyCapacityExceeded"));
+        });
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var noReason = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"OTHER",
+          "caseName":"Lab No Reason",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "requestedDeliveryDate":"2026-06-10",
+          "confirmDeadlineOverride":true,
+          "deadlineOverrideReason":" "
+        }
+        """));
+        Assert.That(noReason.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await noReason.Content.ReadAsStringAsync(), Does.Contain("reason"));
+
+        var labOverride = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"OTHER",
+          "caseName":"Lab Override",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "requestedDeliveryDate":"2026-06-10",
+          "confirmDeadlineOverride":true,
+          "deadlineOverrideReason":"Doctor requested rush remake"
+        }
+        """));
+        Assert.That(labOverride.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var overrideOrder = JsonDocument.Parse(await labOverride.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        var overrideCode = overrideOrder.GetProperty("orderCode").GetString()!;
+        Assert.That(overrideOrder.GetProperty("requestedDeliveryDate").GetString(), Is.EqualTo("2026-06-10"));
+
+        var clinicLogAccess = await clinicClient.GetAsync($"/api/scheduling/orders/{overrideCode}/deadline-override-logs");
+        Assert.That(clinicLogAccess.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        using var anon = fixture.CreateClient();
+        var anonLogAccess = await anon.GetAsync($"/api/scheduling/orders/{overrideCode}/deadline-override-logs");
+        Assert.That(anonLogAccess.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        var overrideLogs = await labClient.GetAsync($"/api/scheduling/orders/{overrideCode}/deadline-override-logs");
+        Assert.That(overrideLogs.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var log = JsonDocument.Parse(await overrideLogs.Content.ReadAsStringAsync()).RootElement.GetProperty("items")[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(log.GetProperty("overrideReason").GetString(), Is.EqualTo("Doctor requested rush remake"));
+            Assert.That(log.GetProperty("rulesBypassedJson").GetString(), Does.Contain("DailyCapacityExceeded"));
+            Assert.That(log.GetProperty("existingDailyCapacityUsed").GetDecimal(), Is.EqualTo(1.0m));
+            Assert.That(log.GetProperty("dailyCapacityAfterOverride").GetDecimal(), Is.EqualTo(2.0m));
+            Assert.That(log.GetProperty("recommendationLogId").GetInt64(), Is.GreaterThan(0));
+        });
+
+        var recommendationLogs = await labClient.GetAsync($"/api/scheduling/orders/{overrideCode}/deadline-recommendation-logs");
+        Assert.That(recommendationLogs.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(JsonDocument.Parse(await recommendationLogs.Content.ReadAsStringAsync()).RootElement.GetProperty("items").GetArrayLength(), Is.EqualTo(1));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        Assert.That(await ctx.SchedulingDeadlineOverrideLogs.CountAsync(), Is.EqualTo(1));
+        Assert.That(await ctx.SchedulingDeadlineRecommendationLogs.CountAsync(l => l.OrderCode == overrideCode), Is.EqualTo(1));
+        Assert.That(await ctx.SchedulingOrders.CountAsync(o => o.OrderCode == firstCode || o.OrderCode == overrideCode), Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task DeadlineOverride_LabCanOverrideCalendarBlockedDate()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var create = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"OTHER",
+          "caseName":"Calendar Override",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-01",
+          "confirmDeadlineOverride":true,
+          "deadlineOverrideReason":"Special hand delivery arranged"
+        }
+        """));
+
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var code = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString()!;
+        var logs = await labClient.GetAsync($"/api/scheduling/orders/{code}/deadline-override-logs");
+        var log = JsonDocument.Parse(await logs.Content.ReadAsStringAsync()).RootElement.GetProperty("items")[0];
+        Assert.That(log.GetProperty("rulesBypassedJson").GetString(), Does.Contain("CalendarDeadlineBlocked"));
+    }
+
+    [Test]
     public async Task SchedulingDatesPreview_DoesNotCreateDeadlineRecommendationLog()
     {
         using var fixture = NewSchedulingFixture();
@@ -1235,6 +1356,7 @@ public class SchedulingApiTests
 
         await using var ctx = OpenDb(fixture.DbPath);
         Assert.That(await ctx.SchedulingDeadlineRecommendationLogs.CountAsync(), Is.EqualTo(0));
+        Assert.That(await ctx.SchedulingDeadlineOverrideLogs.CountAsync(), Is.EqualTo(0));
     }
 
     [Test]

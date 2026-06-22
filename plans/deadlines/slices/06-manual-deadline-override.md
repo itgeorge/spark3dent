@@ -350,19 +350,19 @@ Expected: all tests pass, including new Orders, Database, and Web/API tests.
 
 At the end of implementation, explicitly check this slice against `plans/deadlines/v1-requirements.md`:
 
-- [ ] Section 4.7 normal users cannot overbook.
-- [ ] Section 4.7 lab override can overbook daily/weekly capacity.
-- [ ] Section 4.8 manually overridden orders still consume capacity.
-- [ ] Section 10.1 only `actor.IsLab` can override.
-- [ ] Section 10.1 UI/API requires explicit warning/confirmation and reason before override save.
-- [ ] Section 10.1 override creates or updates the selected deadline.
-- [ ] Section 10.2 override log records required fields or documented equivalents.
-- [ ] Section 10.3 rules bypassed are recorded using expected rule names.
-- [ ] Section 12 commit-time revalidation still happens before normal save or override decision.
-- [ ] Acceptance scenario 14.13 override can overbook is covered.
-- [ ] Acceptance scenario 14.14 non-technician cannot overbook is covered.
-- [ ] Recommendation logs from Slice 5 still work for normal and override saves.
-- [ ] `/api/scheduling/dates` preview does not create override logs.
+- [x] Section 4.7 normal users cannot overbook.
+- [x] Section 4.7 lab override can overbook daily/weekly capacity.
+- [x] Section 4.8 manually overridden orders still consume capacity.
+- [x] Section 10.1 only `actor.IsLab` can override.
+- [x] Section 10.1 UI/API requires explicit warning/confirmation and reason before override save.
+- [x] Section 10.1 override creates or updates the selected deadline.
+- [x] Section 10.2 override log records required fields or documented equivalents.
+- [x] Section 10.3 rules bypassed are recorded using expected rule names.
+- [x] Section 12 commit-time revalidation still happens before normal save or override decision.
+- [x] Acceptance scenario 14.13 override can overbook is covered.
+- [x] Acceptance scenario 14.14 non-technician cannot overbook is covered.
+- [x] Recommendation logs from Slice 5 still work for normal and override saves.
+- [x] `/api/scheduling/dates` preview does not create override logs.
 
 ### Manual end-to-end validation
 

@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SchedulingMaterialConfigEntity> SchedulingMaterialConfigs { get; set; }
     public DbSet<Entities.SchedulingCapacityConfigEntity> SchedulingCapacityConfigs { get; set; }
     public DbSet<Entities.SchedulingDeadlineRecommendationLogEntity> SchedulingDeadlineRecommendationLogs { get; set; }
+    public DbSet<Entities.SchedulingDeadlineOverrideLogEntity> SchedulingDeadlineOverrideLogs { get; set; }
     public DbSet<Entities.AuditEventEntity> AuditEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -148,6 +149,28 @@ public class AppDbContext : DbContext
             e.Property(x => x.ResultStatus).IsRequired();
             e.Property(x => x.CandidateChecksJson).IsRequired();
             e.Property(x => x.ConfigSnapshotJson).IsRequired();
+        });
+
+        modelBuilder.Entity<Entities.SchedulingDeadlineOverrideLogEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.OrderId);
+            e.HasIndex(x => x.OrderCode);
+            e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
+            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.CreatedByOrganizationType).IsRequired();
+            e.Property(x => x.CreatedByOrganizationCode).IsRequired();
+            e.Property(x => x.CreatedByMemberId).IsRequired();
+            e.Property(x => x.CreatedByMemberLabel).IsRequired();
+            e.Property(x => x.OrderCapacityUnits).HasColumnType("TEXT").IsRequired();
+            e.Property(x => x.RulesBypassedJson).IsRequired();
+            e.Property(x => x.OverrideReason).IsRequired();
+            e.Property(x => x.ExistingDailyCapacityUsed).HasColumnType("TEXT");
+            e.Property(x => x.ExistingWeeklyCapacityUsed).HasColumnType("TEXT");
+            e.Property(x => x.DailyCapacityLimitUsed).HasColumnType("TEXT");
+            e.Property(x => x.WeeklyCapacityLimitUsed).HasColumnType("TEXT");
+            e.Property(x => x.DailyCapacityAfterOverride).HasColumnType("TEXT");
+            e.Property(x => x.WeeklyCapacityAfterOverride).HasColumnType("TEXT");
         });
 
         modelBuilder.Entity<Entities.AuditEventEntity>(e =>
