@@ -45,6 +45,7 @@
       updateOrder: function(code, payload){ return jsonRequest('/api/scheduling/orders/' + encodeURIComponent(code), { method:'PUT', body: JSON.stringify(payload || {}) }, { error:'Could not save order.' }); },
       deleteOrder: function(code){ return jsonRequest('/api/scheduling/orders/' + encodeURIComponent(code), { method:'DELETE' }, { error:'Could not cancel order.' }); },
       clinics: function(){ return jsonRequest('/api/scheduling/clinics', undefined, { items: [] }); },
+      materialOptions: function(){ return jsonRequest('/api/scheduling/material-options', undefined, { items: [] }); },
       dateAvailability: function(payload){ return jsonRequest('/api/scheduling/dates', { method:'POST', body: JSON.stringify(payload || {}) }); }
     };
   }

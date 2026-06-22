@@ -50,12 +50,26 @@ public static class SchedulingApi
             return Results.Json(ToActorDto(actor), JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/material-options", async (HttpContext ctx, SchedulingAuthService auth, IMaterialSchedulingConfigAdminRepository materialConfigs) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var configuredMaterials = (await materialConfigs.ListAdminAsync(ctx.RequestAborted))
+                .Select(c => c.Material)
+                .ToHashSet();
+            return Results.Json(new { items = BuildMaterialOptionDtos(configuredMaterials) }, JsonOptions);
+        });
+
         app.MapGet("/api/scheduling/config", async (HttpContext ctx, SchedulingAuthService auth, IMaterialSchedulingConfigAdminRepository materialConfigs, ISchedulingCapacityConfigAdminRepository capacityConfigs, IClock clock) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
-            var materialSchedulingConfigs = (await materialConfigs.ListAdminAsync(ctx.RequestAborted)).Select(ToMaterialSchedulingConfigDto);
+            var materialConfigRows = await materialConfigs.ListAdminAsync(ctx.RequestAborted);
+            var configuredMaterials = materialConfigRows.Select(c => c.Material).ToHashSet();
+            var materialOptions = BuildMaterialOptionDtos(configuredMaterials);
+            var materialSchedulingConfigs = materialConfigRows.Select(ToMaterialSchedulingConfigDto);
+            var missingMaterials = materialOptions.Where(x => !x.HasAnyConfig).ToArray();
             var capacityConfigRows = await capacityConfigs.ListAdminAsync(ctx.RequestAborted);
             var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime.Date);
             var currentCapacityConfigId = capacityConfigRows
@@ -65,7 +79,7 @@ public static class SchedulingApi
                 .Select(c => (long?)c.Id)
                 .FirstOrDefault();
             var schedulingCapacityConfigs = capacityConfigRows.Select(c => ToCapacityConfigDto(c, today, currentCapacityConfigId));
-            return Results.Json(new { materialSchedulingConfigs, capacityConfigs = schedulingCapacityConfigs, today }, JsonOptions);
+            return Results.Json(new { materialOptions, missingMaterials, materialSchedulingConfigs, capacityConfigs = schedulingCapacityConfigs, today }, JsonOptions);
         });
 
         app.MapPost("/api/scheduling/config/capacity", async (HttpContext ctx, SchedulingAuthService auth, ISchedulingCapacityConfigAdminRepository capacityConfigs, IAuditLog auditLog, IClock clock) =>
@@ -82,6 +96,29 @@ public static class SchedulingApi
                 return Results.Json(new { capacityConfig = ToCapacityConfigDto(created, DateOnly.FromDateTime(clock.UtcNow.UtcDateTime.Date), created.ActiveFromDate <= DateOnly.FromDateTime(clock.UtcNow.UtcDateTime.Date) ? created.Id : (long?)null) }, statusCode: 201, options: JsonOptions);
             }
             catch (DuplicateSchedulingCapacityConfigDateException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 409, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapPost("/api/scheduling/config/materials", async (HttpContext ctx, SchedulingAuthService auth, IMaterialSchedulingConfigAdminRepository materialConfigs, IAuditLog auditLog, IClock clock) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var body = await ReadJson<MaterialSchedulingConfigCreateRequest>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var created = await materialConfigs.CreateAsync(body.Material, new MaterialSchedulingConfigCreate(body.FixedLeadTimeBusinessDays, body.CapacityUnitsPerTooth, body.TeethPerExtraLeadDay), clock.UtcNow, ctx.RequestAborted);
+                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingMaterialConfigCreated", "SchedulingMaterialConfig", created.Material.ToString(), MaterialOptions.Get(created.Material).Title, new { @new = created });
+                return Results.Json(new { materialSchedulingConfig = ToMaterialSchedulingConfigDto(created) }, statusCode: 201, options: JsonOptions);
+            }
+            catch (MaterialSchedulingConfigAlreadyExistsException ex)
             {
                 return Results.Json(new { error = ex.Message }, statusCode: 409, options: JsonOptions);
             }
@@ -119,7 +156,7 @@ public static class SchedulingApi
             {
                 var old = (await materialConfigs.ListAdminAsync(ctx.RequestAborted)).FirstOrDefault(c => c.Material == parsedMaterial);
                 var updated = await materialConfigs.UpdateAsync(parsedMaterial, body, clock.UtcNow, ctx.RequestAborted);
-                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingMaterialConfigUpdated", "SchedulingMaterialConfig", updated.Material.ToString(), updated.DisplayName, new { old, @new = updated });
+                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingMaterialConfigUpdated", "SchedulingMaterialConfig", updated.Material.ToString(), MaterialOptions.Get(updated.Material).Title, new { old, @new = updated });
                 return Results.Json(new { materialSchedulingConfig = ToMaterialSchedulingConfigDto(updated) }, options: JsonOptions);
             }
             catch (KeyNotFoundException ex)
@@ -571,12 +608,21 @@ public static class SchedulingApi
     private static object ToMaterialSchedulingConfigDto(MaterialSchedulingConfigAdminRecord c) => new
     {
         c.Material,
-        c.DisplayName,
         c.FixedLeadTimeBusinessDays,
         c.CapacityUnitsPerTooth,
         c.TeethPerExtraLeadDay,
         c.ActiveFromDate
     };
+
+    private static MaterialOptionDto[] BuildMaterialOptionDtos(IReadOnlySet<Material> configuredMaterials) =>
+        MaterialOptions.All
+            .OrderBy(x => x.SortOrder)
+            .Select(x => new MaterialOptionDto(
+                x.Material,
+                x.Title,
+                x.Description,
+                configuredMaterials.Contains(x.Material)))
+            .ToArray();
 
     private static object ToCapacityConfigDto(SchedulingCapacityConfigAdminRecord c, DateOnly today, long? currentId)
     {
@@ -713,4 +759,16 @@ public static class SchedulingApi
     {
         public DateOnly RequestedDeliveryDate { get; init; }
     }
+
+    public sealed record MaterialSchedulingConfigCreateRequest(
+        Material Material,
+        int FixedLeadTimeBusinessDays,
+        decimal CapacityUnitsPerTooth,
+        int? TeethPerExtraLeadDay);
+
+    public sealed record MaterialOptionDto(
+        Material Material,
+        string Title,
+        string Description,
+        bool HasAnyConfig);
 }

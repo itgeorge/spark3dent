@@ -101,12 +101,10 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Material, x.ActiveFromDate }).IsUnique();
             e.HasIndex(x => x.Material);
-            e.Property(x => x.Material).IsRequired();
+            e.Property(x => x.Material).HasConversion<string>().IsRequired();
             e.Property(x => x.ActiveFromDate).IsRequired();
             e.Property(x => x.FixedLeadTimeBusinessDays).IsRequired();
             e.Property(x => x.CapacityUnitsPerTooth).HasColumnType("TEXT").IsRequired();
-            e.Property(x => x.IsActive).HasDefaultValue(true);
-            e.Property(x => x.SortOrder).HasDefaultValue(0);
         });
 
         modelBuilder.Entity<Entities.SchedulingOrderEntity>(e =>

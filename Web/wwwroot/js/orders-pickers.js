@@ -2,39 +2,34 @@
   'use strict';
 
   var S3DOrders = global.S3DOrders = global.S3DOrders || {};
-  var Dom = global.S3DDom || { esc: function(v){ return String(v == null ? '' : v).replace(/[&<>"]/g,function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]; }); } };
-
-  var MATERIALS = [
-    { value:'fullContourZirconia', title:'Zirconia', description:'Full contour zirconia crown/bridge' },
-    { value:'pfzLayeredZrCrown', title:'Layered zirconia', description:'PFZ / ceramic layered on ZR' },
-    { value:'pfm', title:'Metal-ceramic', description:'PFM crown/bridge' },
-    { value:'glassCeramics', title:'Glass ceramics', description:'High-esthetic ceramic case' },
-    { value:'pmma', title:'Standard PMMA', description:'Temporary PMMA crown/bridge' },
-    { value:'pmmaTelio', title:'PMMA Telio', description:'Stronger cross-linked PMMA temporary' }
-  ];
+  var Dom = global.S3DDom || { esc: function(v){ return String(v == null ? '' : v).replace(/[&<>\"]/g,function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]; }); } };
+  var MaterialOptions = S3DOrders.MaterialOptions || null;
 
   function selectedMarkHtml(){
-    return global.S3DIcons ? global.S3DIcons.selectedMarkHtml() : '<span class="picker-selected-mark" aria-hidden="true"><svg class="picker-selected-mark-icon" viewBox="0 0 24 24"><path d="M6 12l4 4 8-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>';
+    return MaterialOptions && MaterialOptions.selectedMarkHtml
+      ? MaterialOptions.selectedMarkHtml()
+      : (global.S3DIcons ? global.S3DIcons.selectedMarkHtml() : '<span class="picker-selected-mark" aria-hidden="true"><svg class="picker-selected-mark-icon" viewBox="0 0 24 24"><path d="M6 12l4 4 8-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>');
   }
 
   function renderMaterial(container, options){
     options = options || {};
-    if(!container) return;
-    var value = typeof options.value === 'function' ? options.value() : options.value;
-    var materials = options.materials || MATERIALS;
-    container.innerHTML = materials.map(function(material){
-      var active = value && material.value === value;
-      return '<button class="choice' + (active ? ' active' : '') + '" type="button" data-mat="' + Dom.esc(material.value) + '">' + selectedMarkHtml() + '<b>' + Dom.esc(material.title) + '</b><span>' + Dom.esc(material.description) + '</span></button>';
-    }).join('');
-    if(options.onChange){
-      container.onclick = function(event){
-        var button = event.target.closest && event.target.closest('.choice[data-mat]');
-        if(button && container.contains(button)) options.onChange(button.dataset.mat, button, event);
-      };
+    if(MaterialOptions && MaterialOptions.renderPicker){
+      MaterialOptions.renderPicker(container, {
+        items: options.materials || [],
+        actor: options.actor,
+        value: options.value,
+        onChange: options.onChange
+      });
+      return;
     }
+    if(container) container.innerHTML = '';
   }
 
   function syncMaterial(container, value){
+    if(MaterialOptions && MaterialOptions.syncPicker){
+      MaterialOptions.syncPicker(container, value);
+      return;
+    }
     if(!container) return;
     container.querySelectorAll('.choice[data-mat]').forEach(function(button){
       button.classList.toggle('active', !!value && button.dataset.mat === value);
@@ -74,7 +69,7 @@
   }
 
   S3DOrders.MaterialPicker = {
-    materials: MATERIALS,
+    materials: [],
     render: renderMaterial,
     sync: syncMaterial,
     selectedMarkHtml: selectedMarkHtml

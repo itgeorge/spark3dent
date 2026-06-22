@@ -8,6 +8,7 @@
     const ordersApi = options.api;
     const getActor = options.getActor || (() => null);
     const getClinics = options.getClinics || (() => []);
+    const getMaterialOptions = options.getMaterialOptions || (() => []);
     const OrdersTeeth = S3DOrders.Teeth;
     const Format = S3DOrders.Format;
     const upperTeeth = OrdersTeeth.upper;
@@ -85,6 +86,7 @@
     function cycleActiveConstruction(){const cur=construction||'inlayOverlay';const next=CONSTRUCTION_SEQUENCE[(CONSTRUCTION_SEQUENCE.indexOf(cur)+1)%CONSTRUCTION_SEQUENCE.length];setConstruction(next)}
     function setConstruction(c){if(c===construction)return;resetForwardProgress(1);rangePick=0;construction=c;activeWorkItem().construction=c;const ts=$('ts'),te=$('te');if(!isRangeConstruction()&&ts?.value!=='')setToothRange(ts.value,ts.value);else if(isRangeConstruction()&&ts?.value&&te?.value)setToothRange(ts.value,te.value,undefined,undefined,true);else syncToothDisplayLayout();const cycle=toothReadouts.querySelector('[data-cycle-construction]');if(cycle)cycle.textContent=constructionLabel(c);updateSummary()}
     function setMaterial(m){if(m===material)return;resetForwardProgress(2);material=m;S3DOrders.MaterialPicker.sync(materialChoices,m);updateSummary()}
+    function renderMaterialChoices(){S3DOrders.MaterialPicker.render(materialChoices,{value:()=>material,actor:getActor,materials:getMaterialOptions(),onChange:setMaterial})}
     function setShade(code){if(code===shade.value)return;resetForwardProgress(2);shade.value=code;S3DOrders.ShadePicker.sync(shadeChoices,code);updateSummary()}
     function renderShadeChoices(){S3DOrders.ShadePicker.render(shadeChoices,{value:shade.value,groups:SHADE_GROUPS,unspecifiedValue:UNSPECIFIED_SHADE,onChange:setShade})}
     function clinicChoiceLabel(c){const parts=[c.clinicDisplayName||c.clinicCode,c.clinicCode!==(c.clinicDisplayName||'')?`(${c.clinicCode})`:null].filter(Boolean);return parts.join(' · ')}
@@ -97,7 +99,7 @@
     function pickTooth(t){clearErr();if(lockedTeethSet().has(t)){showErr('That tooth is already used by a previous construction.');return}if(!construction)setConstruction('crown');resetForwardProgress(1);const seq=jawForTooth(t);if(seq===upperTeeth)selectedJaw='upper';else if(seq===lowerTeeth)selectedJaw='lower';syncJawToggle();if(!isRangeConstruction()){rangePick=0;setToothRange(t,t);updateSummary();return}if(rangePick===0){rangePick=1;setToothRange(t,t);updateSummary();return}setToothRange($('ts')?.value||t,t);rangePick=0;updateSummary()}
     function formatDateBulgarianWithWeekday(iso){return Format.formatDateBulgarianWithWeekday(iso)}
     function updateSelectedDeliveryDisplay(){const el=$('selectedDeliveryDate');if(!el)return;const iso=deadline.value||selectedDate;if(iso){el.textContent=formatDateBulgarianWithWeekday(iso);el.classList.remove('date-display-placeholder')}else{el.textContent='Select a delivery date';el.classList.add('date-display-placeholder')}}
-    function overviewMaterialLabel(){return material?({fullContourZirconia:'Zr',pfzLayeredZrCrown:'Layered Zr',pfm:'Metal-ceramic',glassCeramics:'SiLi',pmma:'PMMA-S',pmmaTelio:'PMMA-T'})[material]:'Material'}
+    function overviewMaterialLabel(){if(!material)return 'Material';var helper=S3DOrders.MaterialOptions;return helper&&helper.titleFor?helper.titleFor(getMaterialOptions(),material):material}
     function overviewOrderBaseText(){const mat=overviewMaterialLabel();const items=workItems.map(workItemLabel).join(', ');return `${mat} · ${items||'—'}`}
     function overviewShadeLine(){return shade.value&&shade.value!==UNSPECIFIED_SHADE?`shade ${shade.value}`:''}
     function selectedTeethRange(){const nums=allSelectedTeeth();return nums.length?nums:null}
@@ -154,7 +156,7 @@
     function closeDiscardOrderFlowPopup(){closeUiModal('discard',discardOrderFlowPopup);pendingRouteAfterDiscard=null}
     async function requestBackToList(){await navigate('', undefined)}
     async function confirmDiscardOrderFlow(){const pending=pendingRouteAfterDiscard;closeUiModal('discard',discardOrderFlowPopup);pendingRouteAfterDiscard=null;if(pending){await navigate(pending.path,{skipDirtyGuard:true});return}await navigate('',{skipDirtyGuard:true})}
-    async function showShell(){if(options.showAuthenticatedAppShell)options.showAuthenticatedAppShell();if(actor()?.isLab&&options.loadClinics)await options.loadClinics();renderClinicChoices();list?.classList.add('hidden');reviewCard?.classList.add('hidden');reviewCard?.setAttribute('aria-hidden','true');if(options.closeFindOrder)options.closeFindOrder();if(options.closeOrdersDay)options.closeOrdersDay();if(options.closeCancelOrder)options.closeCancelOrder();closeDiscardOrderFlowPopup();closeBeforeMinimumConfirmPopup();app?.classList.remove('hidden')}
+    async function showShell(){if(options.showAuthenticatedAppShell)options.showAuthenticatedAppShell();if(options.loadMaterialOptions)await options.loadMaterialOptions();if(actor()?.isLab&&options.loadClinics)await options.loadClinics();renderClinicChoices();renderMaterialChoices();list?.classList.add('hidden');reviewCard?.classList.add('hidden');reviewCard?.setAttribute('aria-hidden','true');if(options.closeFindOrder)options.closeFindOrder();if(options.closeOrdersDay)options.closeOrdersDay();if(options.closeCancelOrder)options.closeCancelOrder();closeDiscardOrderFlowPopup();closeBeforeMinimumConfirmPopup();app?.classList.remove('hidden')}
     function resetOrderForm(){editMode=false;editingOrder=null;createdOrder=null;orderCreated=false;step=1;construction='';workItems=[{construction:'',toothStart:'',toothEnd:''}];activeWorkItemIndex=0;material='';selectedDate='';rangePick=0;selectedJaw='upper';completedSteps.clear();caseName.value='';extraNote.value='';if(colorNote)colorNote.value='';shade.value='';deadline.value='';deliveryMinimumDate='';resetDeadlineOverride();if(targetClinic)targetClinic.value='';closeBeforeMinimumConfirmPopup();syncImpressionToday();calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);document.querySelectorAll('.choice.active,.shade-card.active').forEach(x=>x.classList.remove('active'));renderShadeChoices();renderClinicChoices();renderWorkItemReadouts();syncToothDisplayLayout();updateSummary();rememberOrderFlowBaseline()}
     function addWorkItem(){const msg=validateWorkItems();if(msg)return showErr(msg);clearErr();resetForwardProgress(1);syncActiveFromInputs();const nextConstruction=activeWorkItem()?.construction||construction||'crown';workItems.push({construction:nextConstruction,toothStart:'',toothEnd:''});activeWorkItemIndex=workItems.length-1;construction=nextConstruction;rangePick=0;renderWorkItemReadouts();updateSummary()}
     function removeWorkItemAt(index){if(index<0||index>=workItems.length)return;clearErr();resetForwardProgress(1);if(workItems.length<=1){workItems[0]={construction:'',toothStart:'',toothEnd:''};activeWorkItemIndex=0;construction='';rangePick=0;selectedJaw='upper'}else{syncActiveFromInputs();workItems.splice(index,1);if(index<activeWorkItemIndex)activeWorkItemIndex--;else if(index===activeWorkItemIndex)activeWorkItemIndex=Math.min(index,workItems.length-1);rangePick=0}syncGlobalsFromActive();renderWorkItemReadouts();updateSummary()}
@@ -193,7 +195,7 @@
       if(colorNote)colorNote.addEventListener('input',()=>{updateSummary();if(step===4)renderOverview()});
       if(deadline)deadline.addEventListener('change',()=>{resetForwardProgress(3);updateSummary();updateSelectedDeliveryDisplay();if(step===3)loadDates()});
       window.addEventListener('scroll',hideDateReasonPop,{passive:true});
-      S3DOrders.MaterialPicker.render(materialChoices,{value:()=>material,onChange:setMaterial});
+      renderMaterialChoices();
       renderShadeChoices();
       syncImpressionToday();
       renderToothChart();

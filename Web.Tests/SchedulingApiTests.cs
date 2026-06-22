@@ -105,10 +105,10 @@ public class SchedulingApiTests
         var pfm = configs.Single(c => c.GetProperty("material").GetString() == "pfm");
         Assert.Multiple(() =>
         {
-            Assert.That(pfm.GetProperty("displayName").GetString(), Is.EqualTo("PFM"));
             Assert.That(pfm.GetProperty("fixedLeadTimeBusinessDays").GetInt32(), Is.EqualTo(4));
             Assert.That(pfm.GetProperty("capacityUnitsPerTooth").GetDecimal(), Is.EqualTo(1.0m));
             Assert.That(pfm.GetProperty("teethPerExtraLeadDay").GetInt32(), Is.EqualTo(10));
+            Assert.That(doc.RootElement.GetProperty("materialOptions").EnumerateArray().Any(x => x.GetProperty("material").GetString() == "pfm" && x.GetProperty("title").GetString() == "Metal-ceramic"), Is.True);
         });
     }
 
@@ -136,7 +136,7 @@ public class SchedulingApiTests
         var removedUpdate = await labClient.PutAsync($"/api/scheduling/config/capacity/{id}", Json("{\"dailyCapacityUnits\":35,\"weeklyCapacityUnits\":175}"));
         Assert.That(removedUpdate.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
 
-        var materialUpdate = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"displayName\":\"PMMA Test\",\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.25,\"teethPerExtraLeadDay\":null}"));
+        var materialUpdate = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.25,\"teethPerExtraLeadDay\":null}"));
         Assert.That(materialUpdate.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         var get = await labClient.GetAsync("/api/scheduling/config");
@@ -173,7 +173,7 @@ public class SchedulingApiTests
         var badCapacity = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-12-01\",\"dailyCapacityUnits\":0,\"weeklyCapacityUnits\":150}"));
         Assert.That(badCapacity.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 
-        var badMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pfm", Json("{\"displayName\":\"PFM\",\"fixedLeadTimeBusinessDays\":4,\"capacityUnitsPerTooth\":1,\"teethPerExtraLeadDay\":null}"));
+        var badMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pfm", Json("{\"fixedLeadTimeBusinessDays\":4,\"capacityUnitsPerTooth\":1,\"teethPerExtraLeadDay\":null}"));
         Assert.That(badMaterial.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
@@ -187,7 +187,7 @@ public class SchedulingApiTests
         var createCapacity = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-06-08\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":1000}"));
         Assert.That(createCapacity.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        var updateMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"displayName\":\"PMMA\",\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.0,\"teethPerExtraLeadDay\":null}"));
+        var updateMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.0,\"teethPerExtraLeadDay\":null}"));
         Assert.That(updateMaterial.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         using var clinicClient = fixture.CreateClient();
@@ -210,6 +210,49 @@ public class SchedulingApiTests
         var error = await create.Content.ReadAsStringAsync();
         Assert.That(error, Does.Contain("Daily capacity exceeded"));
         Assert.That(error, Does.Contain("DailyCapacityExceeded"));
+    }
+
+    [Test]
+    public async Task SchedulingMaterialOptionsEndpoint_ReportsMissingConfigMaterials()
+    {
+        using var fixture = NewSchedulingFixture();
+        await RemoveMaterialConfigRowsAsync(fixture.DbPath, Material.PmmaTelio);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var response = await client.GetAsync("/api/scheduling/material-options");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("items").EnumerateArray().ToArray();
+        var pmmaTelio = items.Single(i => i.GetProperty("material").GetString() == "pmmaTelio");
+        Assert.Multiple(() =>
+        {
+            Assert.That(items.Select(i => i.GetProperty("material").GetString()), Is.EqualTo(new[] { "fullContourZirconia", "pfzLayeredZrCrown", "pfm", "glassCeramics", "pmma", "pmmaTelio" }));
+            Assert.That(pmmaTelio.GetProperty("title").GetString(), Is.EqualTo("PMMA Telio"));
+            Assert.That(pmmaTelio.GetProperty("hasAnyConfig").GetBoolean(), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task SchedulingConfigAdmin_CanAddMissingMaterial()
+    {
+        using var fixture = NewSchedulingFixture();
+        await RemoveMaterialConfigRowsAsync(fixture.DbPath, Material.PmmaTelio);
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var before = await labClient.GetAsync("/api/scheduling/config");
+        var beforeDoc = JsonDocument.Parse(await before.Content.ReadAsStringAsync());
+        Assert.That(beforeDoc.RootElement.GetProperty("missingMaterials").EnumerateArray().Select(x => x.GetProperty("material").GetString()), Does.Contain("pmmaTelio"));
+
+        var create = await labClient.PostAsync("/api/scheduling/config/materials", Json("{\"material\":\"pmmaTelio\",\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.1,\"teethPerExtraLeadDay\":null}"));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        var after = await labClient.GetAsync("/api/scheduling/config");
+        var afterDoc = JsonDocument.Parse(await after.Content.ReadAsStringAsync());
+        Assert.That(afterDoc.RootElement.GetProperty("missingMaterials").EnumerateArray().Select(x => x.GetProperty("material").GetString()), Does.Not.Contain("pmmaTelio"));
+        var current = afterDoc.RootElement.GetProperty("materialSchedulingConfigs").EnumerateArray().Single(x => x.GetProperty("material").GetString() == "pmmaTelio");
+        Assert.That(current.GetProperty("capacityUnitsPerTooth").GetDecimal(), Is.EqualTo(1.1m));
     }
 
     [Test]
@@ -1616,10 +1659,26 @@ public class SchedulingApiTests
             .Options;
         await using var ctx = new AppDbContext(options);
         await ctx.Database.MigrateAsync();
-        var row = await ctx.SchedulingMaterialConfigs.SingleAsync(c => c.Material == material.ToString());
+        var row = await ctx.SchedulingMaterialConfigs
+            .Where(c => c.Material == material)
+            .OrderByDescending(c => c.ActiveFromDate)
+            .ThenByDescending(c => c.Id)
+            .FirstAsync();
         if (fixedLeadTimeBusinessDays.HasValue) row.FixedLeadTimeBusinessDays = fixedLeadTimeBusinessDays.Value;
         if (teethPerExtraLeadDay.HasValue) row.TeethPerExtraLeadDay = teethPerExtraLeadDay.Value;
         row.UpdatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z");
+        await ctx.SaveChangesAsync();
+    }
+
+    private static async Task RemoveMaterialConfigRowsAsync(string dbPath, Material material)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath}")
+            .Options;
+        await using var ctx = new AppDbContext(options);
+        await ctx.Database.MigrateAsync();
+        var rows = await ctx.SchedulingMaterialConfigs.Where(c => c.Material == material).ToListAsync();
+        ctx.SchedulingMaterialConfigs.RemoveRange(rows);
         await ctx.SaveChangesAsync();
     }
 

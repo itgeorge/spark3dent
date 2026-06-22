@@ -50,7 +50,7 @@ public sealed class DeadlineRecommendationService
 
     public async Task<DeadlineRecommendationResult> RecommendAsync(OrderSchedulingInput input, CancellationToken ct = default)
     {
-        var basics = await CalculateRecommendationBasicsAsync(input, ct);
+        var basics = await FindLeadTimeRecommendationBasicsAsync(input, ct);
         return new DeadlineRecommendationResult(
             basics.EffectiveIntakeBusinessDate,
             basics.LeadTimeBusinessDays,
@@ -158,17 +158,17 @@ public sealed class DeadlineRecommendationService
         return new DeadlineValidationWithAuditResult(validation, audit);
     }
 
-    public async Task<decimal> CalculateCapacityUnitsAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, CancellationToken ct = default)
+    public async Task<decimal> CalculateCapacityUnitsAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, DateOnly deadlineDate, CancellationToken ct = default)
     {
         OrderWorkItem.ValidateAll(workItems);
-        var config = await _materialConfigs.GetAsync(material, ct);
+        var config = await _materialConfigs.GetForDateAsync(material, deadlineDate, ct);
         ValidateMaterialConfig(config);
         return OrderWorkItem.AllTeeth(workItems).Length * config.CapacityUnitsPerTooth;
     }
 
-    public async Task<int> CalculateLeadTimeBusinessDaysAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, CancellationToken ct = default)
+    public async Task<int> CalculateLeadTimeBusinessDaysAsync(Material material, IReadOnlyList<OrderWorkItem> workItems, DateOnly deadlineDate, CancellationToken ct = default)
     {
-        var config = await _materialConfigs.GetAsync(material, ct);
+        var config = await _materialConfigs.GetForDateAsync(material, deadlineDate, ct);
         ValidateMaterialConfig(config);
         if (!UsesToothCountExtraLeadTime(material))
             return config.FixedLeadTimeBusinessDays;
@@ -367,16 +367,26 @@ public sealed class DeadlineRecommendationService
         throw new InvalidOperationException("No capacity-available deadline found within 60 calendar days; manual scheduling is required.");
     }
 
-    private async Task<RecommendationBasics> CalculateRecommendationBasicsAsync(OrderSchedulingInput input, CancellationToken ct) =>
-        await CalculateRecommendationBasicsAsync(input, deadlineDate: null, ct);
+    private async Task<RecommendationBasics> FindLeadTimeRecommendationBasicsAsync(OrderSchedulingInput input, CancellationToken ct)
+    {
+        var effectiveIntakeDate = await ResolveEffectiveIntakeBusinessDateAsync(input.ImpressionTimestampUtc, ct);
+        var searchLimit = effectiveIntakeDate.AddDays(SelectableDeadlineSearchLimitDays);
+        for (var current = effectiveIntakeDate; current <= searchLimit; current = current.AddDays(1))
+        {
+            var basics = await CalculateRecommendationBasicsAsync(input, current, ct);
+            var status = await _availability.GetStatusAsync(current, basics.MinimumDeadlineDateFromLeadTime, ct);
+            if (status.IsSelectable)
+                return basics;
+        }
 
-    private async Task<RecommendationBasics> CalculateRecommendationBasicsAsync(OrderSchedulingInput input, DateOnly? deadlineDate, CancellationToken ct)
+        throw new InvalidOperationException("No selectable deadline found within 60 calendar days.");
+    }
+
+    private async Task<RecommendationBasics> CalculateRecommendationBasicsAsync(OrderSchedulingInput input, DateOnly deadlineDate, CancellationToken ct)
     {
         OrderWorkItem.ValidateAll(input.WorkItems);
 
-        var materialConfig = deadlineDate.HasValue
-            ? await _materialConfigs.GetForDateAsync(input.Material, deadlineDate.Value, ct)
-            : await _materialConfigs.GetAsync(input.Material, ct);
+        var materialConfig = await _materialConfigs.GetForDateAsync(input.Material, deadlineDate, ct);
         ValidateMaterialConfig(materialConfig);
         var toothCount = OrderWorkItem.AllTeeth(input.WorkItems).Length;
         var extraLeadDays = 0;
@@ -416,12 +426,10 @@ public sealed class DeadlineRecommendationService
             materialConfig = new
             {
                 material = basics.MaterialConfig.Material,
-                basics.MaterialConfig.DisplayName,
                 basics.MaterialConfig.FixedLeadTimeBusinessDays,
                 basics.MaterialConfig.TeethPerExtraLeadDay,
                 basics.MaterialConfig.CapacityUnitsPerTooth,
-                basics.MaterialConfig.IsActive,
-                basics.MaterialConfig.SortOrder
+                basics.MaterialConfig.ActiveFromDate
             },
             toothCount = basics.ToothCount,
             calculatedOrderCapacityUnits = basics.CalculatedOrderCapacityUnits,

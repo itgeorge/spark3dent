@@ -46,7 +46,7 @@ internal sealed class TestMaterialSchedulingConfigProvider : IMaterialScheduling
             .ThenBy(c => c.ActiveFromDate)
             .ToArray();
 
-    public Task<MaterialSchedulingConfig> GetAsync(Material material, CancellationToken ct = default)
+    public Task<MaterialSchedulingConfig> GetLatestAsync(Material material, CancellationToken ct = default)
     {
         var config = _configs.Where(c => c.Material == material)
             .OrderByDescending(c => c.ActiveFromDate)
@@ -75,12 +75,12 @@ internal sealed class TestMaterialSchedulingConfigProvider : IMaterialScheduling
 
     public static MaterialSchedulingConfig DefaultConfig(Material material) => material switch
     {
-        Material.Pmma => new(material, "PMMA", 2, 1.0m, null, true, 10),
-        Material.PmmaTelio => new(material, "PMMA Telio", 2, 1.0m, null, true, 20),
-        Material.FullContourZirconia => new(material, "Full Contour Zirconia", 3, 1.0m, null, true, 30),
-        Material.GlassCeramics => new(material, "Glass Ceramics / LiSi", 4, 1.0m, null, true, 40),
-        Material.Pfm => new(material, "PFM", 4, 1.0m, 10, true, 50),
-        Material.PfzLayeredZrCrown => new(material, "PFZ Layered Zr Crown", 4, 1.0m, 10, true, 60),
+        Material.Pmma => new(material, 2, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.PmmaTelio => new(material, 2, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.FullContourZirconia => new(material, 3, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.GlassCeramics => new(material, 4, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.Pfm => new(material, 4, 1.0m, 10, new DateOnly(2026, 1, 1)),
+        Material.PfzLayeredZrCrown => new(material, 4, 1.0m, 10, new DateOnly(2026, 1, 1)),
         _ => throw new ArgumentOutOfRangeException(nameof(material), material, null)
     };
 
