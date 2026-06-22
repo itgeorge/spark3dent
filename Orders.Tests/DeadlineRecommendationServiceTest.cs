@@ -212,6 +212,93 @@ public class DeadlineRecommendationServiceTest
     }
 
     [Test]
+    public async Task ValidateRequestedDateWithAuditAsync_ContainsLeadTimeAndConfigSnapshot()
+    {
+        var service = CreateService(configs:
+        [
+            TestMaterialSchedulingConfigProvider.DefaultConfig(Material.FullContourZirconia) with
+            {
+                FixedLeadTimeBusinessDays = 3,
+                CapacityUnitsPerTooth = 1.5m
+            }
+        ]);
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+
+        var result = await service.ValidateRequestedDateWithAuditAsync(
+            new OrderSchedulingInput(Material.FullContourZirconia,
+            [
+                new OrderWorkItem(ConstructionType.Bridge, new ToothRange(11, 13)),
+                new OrderWorkItem(ConstructionType.Crown, new ToothRange(21, 21))
+            ], createdAtUtc),
+            new DateOnly(2026, 6, 5),
+            orderRepositoryOverride: null);
+
+        var audit = result.Audit;
+        Assert.Multiple(() =>
+        {
+            Assert.That(audit.EffectiveIntakeBusinessDate, Is.EqualTo(new DateOnly(2026, 6, 2)));
+            Assert.That(audit.FixedLeadTimeBusinessDaysUsed, Is.EqualTo(3));
+            Assert.That(audit.ExtraLeadTimeBusinessDaysUsed, Is.EqualTo(0));
+            Assert.That(audit.LeadTimeBusinessDaysUsed, Is.EqualTo(3));
+            Assert.That(audit.ToothCount, Is.EqualTo(4));
+            Assert.That(audit.CapacityUnitsPerToothUsed, Is.EqualTo(1.5m));
+            Assert.That(audit.CalculatedOrderCapacityUnits, Is.EqualTo(6.0m));
+            Assert.That(audit.MinimumDeadlineDateFromLeadTime, Is.EqualTo(new DateOnly(2026, 6, 5)));
+            Assert.That(audit.FinalRecommendedDeadlineDate, Is.EqualTo(new DateOnly(2026, 6, 5)));
+            Assert.That(audit.ConfigSnapshotJson, Does.Contain("fullContourZirconia"));
+        });
+    }
+
+    [Test]
+    public async Task ValidateRequestedDateWithAuditAsync_GivenPfm_CapturesExtraLeadDays()
+    {
+        var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pfm) with { TeethPerExtraLeadDay = 10 }]);
+        var teeth = new[] { 18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23 };
+        var workItems = teeth.Select(t => new OrderWorkItem(ConstructionType.Crown, new ToothRange(t, t))).ToArray();
+
+        var result = await service.ValidateRequestedDateWithAuditAsync(
+            new OrderSchedulingInput(Material.Pfm, workItems, SofiaLocal(2026, 6, 2, 10, 30)),
+            new DateOnly(2026, 6, 10),
+            orderRepositoryOverride: null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Audit.FixedLeadTimeBusinessDaysUsed, Is.EqualTo(4));
+            Assert.That(result.Audit.ExtraLeadTimeBusinessDaysUsed, Is.EqualTo(2));
+            Assert.That(result.Audit.LeadTimeBusinessDaysUsed, Is.EqualTo(6));
+            Assert.That(result.Audit.TeethPerExtraLeadDayUsed, Is.EqualTo(10));
+            Assert.That(result.Audit.ToothCount, Is.EqualTo(11));
+        });
+    }
+
+    [Test]
+    public async Task ValidateRequestedDateWithAuditAsync_CandidateTrailRecordsCapacityRejectionAndAcceptedDate()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+        var service = CreateService(
+            orders: [BuildOrder(1, "EX-THU", new DateOnly(2026, 6, 4))],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+
+        var result = await service.ValidateRequestedDateWithAuditAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 5), orderRepositoryOverride: null);
+
+        var rejected = result.Audit.CandidateChecks.Single(c => c.CandidateDate == new DateOnly(2026, 6, 4));
+        var accepted = result.Audit.CandidateChecks.Single(c => c.CandidateDate == new DateOnly(2026, 6, 5));
+        Assert.Multiple(() =>
+        {
+            Assert.That(rejected.Accepted, Is.False);
+            Assert.That(rejected.IsSelectableDeadline, Is.True);
+            Assert.That(rejected.ExistingDailyCapacityUsed, Is.EqualTo(1m));
+            Assert.That(rejected.DailyCapacityLimitUsed, Is.EqualTo(1m));
+            Assert.That(rejected.OrderCapacityUnits, Is.EqualTo(1m));
+            Assert.That(rejected.DailyCapacityWouldPass, Is.False);
+            Assert.That(rejected.RejectionReasons, Does.Contain(nameof(DeadlineValidationRule.DailyCapacityExceeded)));
+            Assert.That(accepted.Accepted, Is.True);
+            Assert.That(accepted.IsSelectableDeadline, Is.True);
+            Assert.That(accepted.WeeklyCapacityWouldPass, Is.True);
+        });
+    }
+
+    [Test]
     public async Task RecommendAsync_UsesProviderFixedLeadTimeInsteadOfHardcodedValues()
     {
         var service = CreateService(configs: [TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { FixedLeadTimeBusinessDays = 3 }]);

@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
     public DbSet<Entities.SchedulingMaterialConfigEntity> SchedulingMaterialConfigs { get; set; }
     public DbSet<Entities.SchedulingCapacityConfigEntity> SchedulingCapacityConfigs { get; set; }
+    public DbSet<Entities.SchedulingDeadlineRecommendationLogEntity> SchedulingDeadlineRecommendationLogs { get; set; }
     public DbSet<Entities.AuditEventEntity> AuditEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -128,6 +129,25 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.ActiveFromDate).IsUnique();
             e.Property(x => x.DailyCapacityUnits).HasColumnType("TEXT").IsRequired();
             e.Property(x => x.WeeklyCapacityUnits).HasColumnType("TEXT").IsRequired();
+        });
+
+        modelBuilder.Entity<Entities.SchedulingDeadlineRecommendationLogEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.OrderId);
+            e.HasIndex(x => x.OrderCode);
+            e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
+            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.CreatedByOrganizationType).IsRequired();
+            e.Property(x => x.CreatedByOrganizationCode).IsRequired();
+            e.Property(x => x.CreatedByMemberId).IsRequired();
+            e.Property(x => x.CreatedByMemberLabel).IsRequired();
+            e.Property(x => x.Material).IsRequired();
+            e.Property(x => x.CapacityUnitsPerToothUsed).HasColumnType("TEXT").IsRequired();
+            e.Property(x => x.CalculatedOrderCapacityUnits).HasColumnType("TEXT").IsRequired();
+            e.Property(x => x.ResultStatus).IsRequired();
+            e.Property(x => x.CandidateChecksJson).IsRequired();
+            e.Property(x => x.ConfigSnapshotJson).IsRequired();
         });
 
         modelBuilder.Entity<Entities.AuditEventEntity>(e =>

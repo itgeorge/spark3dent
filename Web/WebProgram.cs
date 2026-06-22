@@ -68,6 +68,8 @@ builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
+builder.Services.AddScoped<IDeadlineRecommendationLogRepository, SqliteDeadlineRecommendationLogRepository>();
+builder.Services.AddScoped<ISchedulingWriteTransaction, SqliteSchedulingWriteTransaction>();
 builder.Services.AddScoped<DeadlineRecommendationService>();
 builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
 builder.Services.AddScoped<SchedulingAuthService>();

@@ -224,6 +224,17 @@ public static class SchedulingApi
             return Results.Json(new { start, end, dates }, JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/orders/{code}/deadline-recommendation-logs", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, IDeadlineRecommendationLogRepository logs) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
+            if (order == null) return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
+            var items = await logs.ListForOrderAsync(order.Id, ctx.RequestAborted);
+            return Results.Json(new { items = items.Select(ToDeadlineRecommendationLogDto) }, JsonOptions);
+        });
+
         app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -457,6 +468,39 @@ public static class SchedulingApi
         memberLabel = actor.MemberLabel,
         isLab = actor.IsLab,
         isClinic = actor.IsClinic
+    };
+
+    private static object ToDeadlineRecommendationLogDto(DeadlineRecommendationLog log) => new
+    {
+        log.Id,
+        log.OrderId,
+        log.OrderCode,
+        log.CreatedAtUtc,
+        log.CreatedByOrganizationType,
+        log.CreatedByOrganizationCode,
+        log.CreatedByMemberId,
+        log.CreatedByMemberLabel,
+        log.OrderCreatedAtUtc,
+        log.EffectiveIntakeBusinessDate,
+        log.CutoffTimeUsed,
+        log.Material,
+        log.ToothCount,
+        log.LeadTimeBusinessDaysUsed,
+        log.FixedLeadTimeBusinessDaysUsed,
+        log.ExtraLeadTimeBusinessDaysUsed,
+        log.TeethPerExtraLeadDayUsed,
+        log.CapacityUnitsPerToothUsed,
+        log.CalculatedOrderCapacityUnits,
+        log.MinimumDeadlineDateFromLeadTime,
+        log.FinalRecommendedDeadlineDate,
+        log.SelectedDeadlineDate,
+        log.SearchStartedAtDate,
+        log.SearchEndedAtDate,
+        log.SearchLimitDate,
+        log.ResultStatus,
+        log.FailureReason,
+        log.CandidateChecksJson,
+        log.ConfigSnapshotJson
     };
 
     private static string RemoteIp(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";

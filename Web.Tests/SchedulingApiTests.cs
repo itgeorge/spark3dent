@@ -335,6 +335,173 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingFlow_ConcurrentCreatesCannotOverbookDailyCapacity()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
+        using var client1 = fixture.CreateClient();
+        using var client2 = fixture.CreateClient();
+        await LoginAsync(client1);
+        await LoginAsync(client2);
+        using var barrier = new Barrier(2);
+
+        var tasks = new[]
+        {
+            Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                return await client1.PostAsync("/api/scheduling/orders", Json("""
+                {
+                  "caseName":"Concurrent Daily A",
+                  "impressionDate":"2026-06-08",
+                  "productCategory":"temporary",
+                  "material":"pmma",
+                  "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+                  "requestedDeliveryDate":"2026-06-10"
+                }
+                """));
+            }),
+            Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                return await client2.PostAsync("/api/scheduling/orders", Json("""
+                {
+                  "caseName":"Concurrent Daily B",
+                  "impressionDate":"2026-06-08",
+                  "productCategory":"temporary",
+                  "material":"pmma",
+                  "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+                  "requestedDeliveryDate":"2026-06-10"
+                }
+                """));
+            })
+        };
+
+        var responses = await Task.WhenAll(tasks);
+        Assert.That(responses.Count(r => r.StatusCode == HttpStatusCode.Created), Is.EqualTo(1));
+        Assert.That(responses.Count(r => r.StatusCode == HttpStatusCode.BadRequest), Is.EqualTo(1));
+        var rejected = responses.Single(r => r.StatusCode == HttpStatusCode.BadRequest);
+        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        var activeCount = await ctx.SchedulingOrders.CountAsync(o => o.Status != nameof(OrderStatus.Cancelled) && o.RequestedDeliveryDate == new DateOnly(2026, 6, 10));
+        Assert.That(activeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_ConcurrentCreatesCannotOverbookWeeklyCapacity()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 10.0m, 1.0m);
+        using var client1 = fixture.CreateClient();
+        using var client2 = fixture.CreateClient();
+        await LoginAsync(client1);
+        await LoginAsync(client2);
+        using var barrier = new Barrier(2);
+
+        var tasks = new[]
+        {
+            Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                return await client1.PostAsync("/api/scheduling/orders", Json("""
+                {
+                  "caseName":"Concurrent Weekly A",
+                  "impressionDate":"2026-06-08",
+                  "productCategory":"temporary",
+                  "material":"pmma",
+                  "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+                  "requestedDeliveryDate":"2026-06-10"
+                }
+                """));
+            }),
+            Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                return await client2.PostAsync("/api/scheduling/orders", Json("""
+                {
+                  "caseName":"Concurrent Weekly B",
+                  "impressionDate":"2026-06-08",
+                  "productCategory":"temporary",
+                  "material":"pmma",
+                  "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+                  "requestedDeliveryDate":"2026-06-11"
+                }
+                """));
+            })
+        };
+
+        var responses = await Task.WhenAll(tasks);
+        Assert.That(responses.Count(r => r.StatusCode == HttpStatusCode.Created), Is.EqualTo(1));
+        Assert.That(responses.Count(r => r.StatusCode == HttpStatusCode.BadRequest), Is.EqualTo(1));
+        var rejected = responses.Single(r => r.StatusCode == HttpStatusCode.BadRequest);
+        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Weekly capacity exceeded"));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        var activeCount = await ctx.SchedulingOrders.CountAsync(o => o.Status != nameof(OrderStatus.Cancelled) && o.RequestedDeliveryDate >= new DateOnly(2026, 6, 10) && o.RequestedDeliveryDate <= new DateOnly(2026, 6, 11));
+        Assert.That(activeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SchedulingFlow_ConcurrentUpdatesCannotOverbookDailyCapacity()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
+        using var setupClient = fixture.CreateClient();
+        await LoginAsync(setupClient);
+        var firstCode = await CreateOrderAsync(setupClient, "Concurrent Update A", "2026-06-11", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
+        var secondCode = await CreateOrderAsync(setupClient, "Concurrent Update B", "2026-06-12", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
+
+        using var client1 = fixture.CreateClient();
+        using var client2 = fixture.CreateClient();
+        await LoginAsync(client1);
+        await LoginAsync(client2);
+        using var barrier = new Barrier(2);
+
+        var tasks = new[]
+        {
+            Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                return await client1.PutAsync($"/api/scheduling/orders/{firstCode}", Json("""
+                {
+                  "caseName":"Concurrent Update A",
+                  "impressionDate":"2026-06-08",
+                  "productCategory":"temporary",
+                  "material":"pmma",
+                  "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+                  "requestedDeliveryDate":"2026-06-10"
+                }
+                """));
+            }),
+            Task.Run(async () =>
+            {
+                barrier.SignalAndWait();
+                return await client2.PutAsync($"/api/scheduling/orders/{secondCode}", Json("""
+                {
+                  "caseName":"Concurrent Update B",
+                  "impressionDate":"2026-06-08",
+                  "productCategory":"temporary",
+                  "material":"pmma",
+                  "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+                  "requestedDeliveryDate":"2026-06-10"
+                }
+                """));
+            })
+        };
+
+        var responses = await Task.WhenAll(tasks);
+        Assert.That(responses.Count(r => r.StatusCode == HttpStatusCode.OK), Is.EqualTo(1));
+        Assert.That(responses.Count(r => r.StatusCode == HttpStatusCode.BadRequest), Is.EqualTo(1));
+        var rejected = responses.Single(r => r.StatusCode == HttpStatusCode.BadRequest);
+        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        var activeOnTargetDate = await ctx.SchedulingOrders.CountAsync(o => o.Status != nameof(OrderStatus.Cancelled) && o.RequestedDeliveryDate == new DateOnly(2026, 6, 10));
+        Assert.That(activeOnTargetDate, Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task SchedulingFlow_CreatePmmaTelioOrder_RoundTripsMaterial()
     {
         using var fixture = NewSchedulingFixture();
@@ -998,6 +1165,76 @@ public class SchedulingApiTests
         Assert.That(techFind.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var ambiguousShort = await techClient.GetAsync("/api/scheduling/orders/find?code=0605-Z1AA");
         Assert.That(ambiguousShort.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [Test]
+    public async Task DeadlineRecommendationLogsEndpoint_LabCanInspectCreateAndUpdateLogsAndClinicForbidden()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+        var code = await CreateOrderAsync(clinicClient, "Logged API", "2026-06-05");
+
+        var update = await clinicClient.PutAsync($"/api/scheduling/orders/{code}", Json("""
+        {
+          "caseName":"Logged API Updated",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-09"
+        }
+        """));
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var forbidden = await clinicClient.GetAsync($"/api/scheduling/orders/{code}/deadline-recommendation-logs");
+        Assert.That(forbidden.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+
+        using var anon = fixture.CreateClient();
+        var unauth = await anon.GetAsync($"/api/scheduling/orders/{code}/deadline-recommendation-logs");
+        Assert.That(unauth.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var logs = await labClient.GetAsync($"/api/scheduling/orders/{code}/deadline-recommendation-logs");
+
+        Assert.That(logs.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await logs.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.That(items, Has.Length.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(items[0].GetProperty("orderCode").GetString(), Is.EqualTo(code));
+            Assert.That(items[0].GetProperty("selectedDeadlineDate").GetString(), Is.EqualTo("2026-06-09"));
+            Assert.That(items[0].GetProperty("finalRecommendedDeadlineDate").GetString(), Is.EqualTo("2026-06-05"));
+            Assert.That(items[0].GetProperty("calculatedOrderCapacityUnits").GetDecimal(), Is.EqualTo(1.0m));
+            Assert.That(items[0].GetProperty("candidateChecksJson").GetString(), Does.Contain("candidateDate"));
+            Assert.That(items[0].GetProperty("configSnapshotJson").GetString(), Does.Contain("materialConfig"));
+        });
+    }
+
+    [Test]
+    public async Task SchedulingDatesPreview_DoesNotCreateDeadlineRecommendationLog()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+
+        var dates = await clinicClient.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Preview Only",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-06-01",
+          "end":"2026-06-10"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        Assert.That(await ctx.SchedulingDeadlineRecommendationLogs.CountAsync(), Is.EqualTo(0));
     }
 
     [Test]

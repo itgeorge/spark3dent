@@ -175,6 +175,39 @@ internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentity
     public Task<SchedulingMember> UpdateMemberSecretAsync(OrganizationType organizationType, string organizationCode, string memberId, string pinHash, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
 }
 
+internal sealed class InMemorySchedulingWriteTransaction : ISchedulingWriteTransaction
+{
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly IOrderRepository _orders;
+    private Func<IOrderRepository, Task>? _beforeOperationAsync;
+
+    public InMemorySchedulingWriteTransaction(IOrderRepository orders)
+    {
+        _orders = orders;
+    }
+
+    public void SetBeforeOperation(Func<IOrderRepository, Task>? beforeOperationAsync)
+    {
+        _beforeOperationAsync = beforeOperationAsync;
+    }
+
+    public async Task<T> ExecuteAsync<T>(Func<IOrderRepository, Task<T>> operation, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var beforeOperation = Interlocked.Exchange(ref _beforeOperationAsync, null);
+            if (beforeOperation != null)
+                await beforeOperation(_orders);
+            return await operation(_orders);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+}
+
 internal static class TestActors
 {
     public static readonly AuthenticatedActor Demo = new(OrganizationType.Clinic, "DEMO", "Demo", "cred-1", "Cred 1", "fingerprint", "session-1");

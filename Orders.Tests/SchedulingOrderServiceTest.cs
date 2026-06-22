@@ -7,6 +7,71 @@ namespace Orders.Tests;
 public class SchedulingOrderServiceTest
 {
     [Test]
+    public async Task CreateOrderAsync_PersistsDeadlineRecommendationLogAfterSuccessfulCreate()
+    {
+        var logs = new CapturingDeadlineRecommendationLogRepository();
+        var fixture = new Fixture(1, deadlineRecommendationLogs: logs);
+
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Logged"), "127.0.0.1", "test");
+
+        Assert.That(logs.Logs, Has.Count.EqualTo(1));
+        var log = logs.Logs.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(log.OrderId, Is.EqualTo(created.Id));
+            Assert.That(log.OrderCode, Is.EqualTo(created.OrderCode));
+            Assert.That(log.SelectedDeadlineDate, Is.EqualTo(created.RequestedDeliveryDate));
+            Assert.That(log.FinalRecommendedDeadlineDate, Is.EqualTo(new DateOnly(2026, 6, 4)));
+            Assert.That(log.CalculatedOrderCapacityUnits, Is.EqualTo(created.CalculatedCapacityUnits));
+            Assert.That(log.CandidateChecksJson, Does.Contain("accepted"));
+            Assert.That(log.ConfigSnapshotJson, Does.Contain("materialConfig"));
+        });
+    }
+
+    [Test]
+    public async Task UpdateOrderAsync_AppendsAnotherDeadlineRecommendationLog()
+    {
+        var logs = new CapturingDeadlineRecommendationLogRepository();
+        var fixture = new Fixture(["LOG-1", "LOG-2"], deadlineRecommendationLogs: logs);
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Logged"), "127.0.0.1", "test");
+
+        var updated = await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Logged update") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 9)
+        });
+
+        Assert.That(logs.Logs, Has.Count.EqualTo(2));
+        Assert.That(logs.Logs.Select(l => l.OrderCode), Is.All.EqualTo(created.OrderCode));
+        Assert.That(logs.Logs.Last().SelectedDeadlineDate, Is.EqualTo(updated.RequestedDeliveryDate));
+    }
+
+    [Test]
+    public async Task RejectedCreate_DoesNotPersistDeadlineRecommendationLog()
+    {
+        var logs = new CapturingDeadlineRecommendationLogRepository();
+        var fixture = new Fixture(
+            ["LOG-1", "LOG-2"],
+            deadlineRecommendationLogs: logs,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Existing") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+        }, "127.0.0.1", "test");
+        logs.Clear();
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Rejected") with
+            {
+                Material = Material.Pmma,
+                ProductCategory = ProductCategory.Temporary,
+                RequestedDeliveryDate = new DateOnly(2026, 6, 4)
+            }, "127.0.0.1", "test"));
+        Assert.That(logs.Logs, Is.Empty);
+    }
+
+    [Test]
     public async Task CreateOrderAsync_AppendsOrderCreatedAuditAfterPersistence()
     {
         var audit = new CapturingAuditLog();
@@ -460,6 +525,139 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_RevalidatesInsideSerializedWriteTransactionAgainstLatestCapacity()
+    {
+        var fixture = new Fixture(
+            ["A", "B"],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        var draft = fixture.CreateOrderDraft("Stale preview") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            ImpressionDate = new DateOnly(2026, 6, 8),
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        };
+
+        var preview = await fixture.Service.GetDateStatusesAsync(draft, new DateOnly(2026, 6, 10), new DateOnly(2026, 6, 10), new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        Assert.That(preview.Single().IsSelectable, Is.True);
+
+        fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-1", new DateOnly(2026, 6, 10), Material.Pmma, ProductCategory.Temporary)));
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, draft, "127.0.0.1", "test"));
+
+        Assert.That(ex!.Message, Does.Contain("Daily capacity exceeded"));
+        Assert.That((await fixture.Repository.ListOrdersAsync()).Select(o => o.OrderCode), Is.EqualTo(new[] { "COMP-1" }));
+    }
+
+    [Test]
+    public async Task CreateOrderAsync_ConcurrentCreatesForLastCapacitySlot_OnlyOneSucceeds()
+    {
+        var fixture = new Fixture(
+            ["A", "B", "C"],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        var draft = fixture.CreateOrderDraft("Race") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            ImpressionDate = new DateOnly(2026, 6, 8),
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        };
+        using var barrier = new Barrier(2);
+
+        var tasks = Enumerable.Range(0, 2).Select(i => Task.Run(async () =>
+        {
+            barrier.SignalAndWait();
+            try
+            {
+                var order = await fixture.Service.CreateOrderAsync(TestActors.Demo, draft with { CaseName = $"Race {i}" }, "127.0.0.1", $"test-{i}");
+                return (Order: order, Error: (Exception?)null);
+            }
+            catch (Exception ex)
+            {
+                return (Order: (OrderRecord?)null, Error: ex);
+            }
+        })).ToArray();
+
+        var outcomes = await Task.WhenAll(tasks);
+
+        Assert.That(outcomes.Count(o => o.Order != null), Is.EqualTo(1));
+        Assert.That(outcomes.Count(o => o.Error is InvalidOperationException), Is.EqualTo(1));
+        Assert.That(outcomes.Single(o => o.Error != null).Error!.Message, Does.Contain("Daily capacity exceeded"));
+        Assert.That((await fixture.Repository.ListOrdersAsync()).Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task UpdateOrderAsync_ReFetchesInsideSerializedWriteTransactionAndRejectsLatestCapacity()
+    {
+        var fixture = new Fixture(
+            ["A", "B", "C"],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        var existing = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Editable") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            ImpressionDate = new DateOnly(2026, 6, 8),
+            RequestedDeliveryDate = new DateOnly(2026, 6, 11)
+        }, "127.0.0.1", "test");
+
+        fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-2", new DateOnly(2026, 6, 10), Material.Pmma, ProductCategory.Temporary)));
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.UpdateOrderAsync(TestActors.Demo, existing.OrderCode, fixture.CreateOrderDraft("Editable") with
+            {
+                Material = Material.Pmma,
+                ProductCategory = ProductCategory.Temporary,
+                ImpressionDate = new DateOnly(2026, 6, 8),
+                RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+            }));
+
+        Assert.That(ex!.Message, Does.Contain("Daily capacity exceeded"));
+        Assert.That((await fixture.Repository.GetOrderByCodeAsync(existing.OrderCode))!.RequestedDeliveryDate, Is.EqualTo(new DateOnly(2026, 6, 11)));
+    }
+
+    [Test]
+    public async Task RejectedCommitTimeValidation_DoesNotAppendCreateOrUpdateAuditEvents()
+    {
+        var audit = new CapturingAuditLog();
+        var fixture = new Fixture(
+            ["A", "B", "C"],
+            auditLog: audit,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)]);
+        var createDraft = fixture.CreateOrderDraft("Create blocked") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            ImpressionDate = new DateOnly(2026, 6, 8),
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        };
+
+        fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-3", new DateOnly(2026, 6, 10), Material.Pmma, ProductCategory.Temporary)));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Service.CreateOrderAsync(TestActors.Demo, createDraft, "127.0.0.1", "test"));
+        Assert.That(audit.Events, Is.Empty);
+
+        var existing = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Editable") with
+        {
+            Material = Material.Pmma,
+            ProductCategory = ProductCategory.Temporary,
+            ImpressionDate = new DateOnly(2026, 6, 8),
+            RequestedDeliveryDate = new DateOnly(2026, 6, 11)
+        }, "127.0.0.1", "test");
+        Assert.That(audit.Events.Select(e => e.Operation), Is.EqualTo(new[] { "OrderCreated" }));
+
+        fixture.WriteTransaction.SetBeforeOperation(orders => orders.CreateOrderAsync(BuildSeedOrder("COMP-4", new DateOnly(2026, 6, 12), Material.Pmma, ProductCategory.Temporary)));
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.UpdateOrderAsync(TestActors.Demo, existing.OrderCode, fixture.CreateOrderDraft("Editable") with
+            {
+                Material = Material.Pmma,
+                ProductCategory = ProductCategory.Temporary,
+                ImpressionDate = new DateOnly(2026, 6, 8),
+                RequestedDeliveryDate = new DateOnly(2026, 6, 12)
+            }));
+        Assert.That(audit.Events.Select(e => e.Operation), Is.EqualTo(new[] { "OrderCreated" }));
+    }
+
+    [Test]
     public async Task CreateOrderAsync_WhenManyConcurrentRequestsReceiveSameFirstOrderCode_RetriesAndAllSucceed()
     {
         const int racingOrderCount = 20;
@@ -541,6 +739,69 @@ public class SchedulingOrderServiceTest
         }
     }
 
+    private static OrderRecord BuildSeedOrder(string code, DateOnly requestedDeliveryDate, Material material, ProductCategory productCategory) =>
+        new(
+            0,
+            code,
+            "DEMO",
+            "Demo",
+            "seed",
+            "Seed",
+            "fingerprint",
+            code,
+            new DateOnly(2026, 6, 8),
+            productCategory,
+            material,
+            [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))],
+            requestedDeliveryDate,
+            OrderStatus.Created,
+            Shade.Unspecified,
+            null,
+            DateTimeOffset.Parse("2026-06-08T07:30:00Z"),
+            DateTimeOffset.Parse("2026-06-08T07:30:00Z"),
+            "127.0.0.1",
+            "test",
+            null,
+            1.0m);
+
+    private sealed class CapturingDeadlineRecommendationLogRepository : IDeadlineRecommendationLogRepository
+    {
+        private readonly object _gate = new();
+        private readonly List<DeadlineRecommendationLog> _logs = new();
+        private long _nextId = 1;
+
+        public IReadOnlyList<DeadlineRecommendationLog> Logs
+        {
+            get
+            {
+                lock (_gate)
+                    return _logs.ToList();
+            }
+        }
+
+        public Task<DeadlineRecommendationLog> AddAsync(DeadlineRecommendationLog log, CancellationToken ct = default)
+        {
+            lock (_gate)
+            {
+                var saved = log with { Id = _nextId++ };
+                _logs.Add(saved);
+                return Task.FromResult(saved);
+            }
+        }
+
+        public Task<IReadOnlyList<DeadlineRecommendationLog>> ListForOrderAsync(long orderId, CancellationToken ct = default)
+        {
+            lock (_gate)
+                return Task.FromResult<IReadOnlyList<DeadlineRecommendationLog>>(_logs.Where(l => l.OrderId == orderId).OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id).ToList());
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+                _logs.Clear();
+        }
+    }
+
     private sealed class CapturingAuditLog : IAuditLog
     {
         private readonly object _gate = new();
@@ -568,8 +829,9 @@ public class SchedulingOrderServiceTest
         private readonly IList<string> _generatorCodes;
         public IList<string> GeneratorCodes => _generatorCodes;
         public IOrderRepository Repository { get; }
+        public InMemorySchedulingWriteTransaction WriteTransaction { get; }
 
-        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null, IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null)
+        public Fixture(int racingOrderCount, int maxOrderCodeAttempts = 20, IAuditLog? auditLog = null, IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null, IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null, IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null)
             : this(Enumerable
                 .Repeat("racecode", racingOrderCount) // race all on the first code, only 1st should win this code
                 .Concat(Enumerable.Range(2, racingOrderCount - 1) // generate unique code for each that didn't win 1st race
@@ -579,7 +841,8 @@ public class SchedulingOrderServiceTest
                 auditLog,
                 clock: null,
                 materialConfigs,
-                capacityConfigs)
+                capacityConfigs,
+                deadlineRecommendationLogs)
         {
         }
 
@@ -589,10 +852,12 @@ public class SchedulingOrderServiceTest
             IAuditLog? auditLog = null,
             IClock? clock = null,
             IReadOnlyList<MaterialSchedulingConfig>? materialConfigs = null,
-            IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null)
+            IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null,
+            IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null)
         {
             _generatorCodes = generatorCodes.ToList();
             Repository = new InMemoryOrderRepository();
+            WriteTransaction = new InMemorySchedulingWriteTransaction(Repository);
             var dateAvailabilityService = new DateAvailabilityService(new WeekendOnlyNonWorkingDayProvider());
             var deadlineRecommendationService = new DeadlineRecommendationService(
                 dateAvailabilityService,
@@ -606,10 +871,12 @@ public class SchedulingOrderServiceTest
                 Repository,
                 dateAvailabilityService,
                 deadlineRecommendationService,
+                WriteTransaction,
                 orderCodeGenerator,
                 clock,
                 maxOrderCodeAttempts,
-                auditLog);
+                auditLog,
+                deadlineRecommendationLogs);
         }
 
         public SchedulingOrderService Service { get; }
