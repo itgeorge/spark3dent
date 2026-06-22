@@ -93,13 +93,15 @@ public class SchedulingApiTests
     {
         using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
-        await LoginAsync(client);
+        await ApiTestFixture.LoginAsLabAsync(client);
 
         var response = await client.GetAsync("/api/scheduling/config");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var configs = doc.RootElement.GetProperty("materialSchedulingConfigs").EnumerateArray().ToArray();
+        var capacityConfigs = doc.RootElement.GetProperty("capacityConfigs").EnumerateArray().ToArray();
+        Assert.That(capacityConfigs, Is.Not.Empty);
         var pfm = configs.Single(c => c.GetProperty("material").GetString() == "pfm");
         Assert.Multiple(() =>
         {
@@ -107,9 +109,107 @@ public class SchedulingApiTests
             Assert.That(pfm.GetProperty("fixedLeadTimeBusinessDays").GetInt32(), Is.EqualTo(4));
             Assert.That(pfm.GetProperty("capacityUnitsPerTooth").GetDecimal(), Is.EqualTo(1.0m));
             Assert.That(pfm.GetProperty("teethPerExtraLeadDay").GetInt32(), Is.EqualTo(10));
-            Assert.That(pfm.GetProperty("isActive").GetBoolean(), Is.True);
-            Assert.That(pfm.GetProperty("sortOrder").GetInt32(), Is.EqualTo(50));
         });
+    }
+
+    [Test]
+    public async Task SchedulingConfigAdmin_WriteEndpointsRequireLabAndAuditChanges()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var unauthenticated = fixture.Client;
+
+        var unauthenticatedWrite = await unauthenticated.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-12-01\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":150}"));
+        Assert.That(unauthenticatedWrite.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var clinicWrite = await clinicClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-12-01\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":150}"));
+        Assert.That(clinicWrite.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var create = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-12-01\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":150}"));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var created = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("capacityConfig");
+        var id = created.GetProperty("id").GetInt64();
+
+        var removedUpdate = await labClient.PutAsync($"/api/scheduling/config/capacity/{id}", Json("{\"dailyCapacityUnits\":35,\"weeklyCapacityUnits\":175}"));
+        Assert.That(removedUpdate.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var materialUpdate = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"displayName\":\"PMMA Test\",\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.25,\"teethPerExtraLeadDay\":null}"));
+        Assert.That(materialUpdate.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var get = await labClient.GetAsync("/api/scheduling/config");
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        var capacity = doc.RootElement.GetProperty("capacityConfigs").EnumerateArray().Single(c => c.GetProperty("id").GetInt64() == id);
+        var pmma = doc.RootElement.GetProperty("materialSchedulingConfigs").EnumerateArray().Single(c => c.GetProperty("material").GetString() == "pmma");
+        Assert.Multiple(() =>
+        {
+            Assert.That(capacity.GetProperty("dailyCapacityUnits").GetDecimal(), Is.EqualTo(30m));
+            Assert.That(capacity.GetProperty("weeklyCapacityUnits").GetDecimal(), Is.EqualTo(150m));
+            Assert.That(pmma.GetProperty("capacityUnitsPerTooth").GetDecimal(), Is.EqualTo(1.25m));
+            Assert.That(pmma.GetProperty("activeFromDate").GetString(), Is.EqualTo("2026-06-02"));
+        });
+
+        var history = await labClient.GetAsync("/api/scheduling/config/materials/pmma/history?limit=10");
+        Assert.That(history.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var historyItems = JsonDocument.Parse(await history.Content.ReadAsStringAsync()).RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.That(historyItems.Select(i => i.GetProperty("activeFromDate").GetString()), Is.EqualTo(new[] { "2026-06-02", "2026-01-01" }));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        var operations = await ctx.AuditEvents.AsNoTracking().Select(e => e.Operation).ToArrayAsync();
+        Assert.That(operations, Does.Contain("SchedulingCapacityConfigCreated"));
+        Assert.That(operations, Does.Contain("SchedulingMaterialConfigUpdated"));
+    }
+
+    [Test]
+    public async Task SchedulingConfigAdmin_RejectsInvalidValues()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var badCapacity = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-12-01\",\"dailyCapacityUnits\":0,\"weeklyCapacityUnits\":150}"));
+        Assert.That(badCapacity.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var badMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pfm", Json("{\"displayName\":\"PFM\",\"fixedLeadTimeBusinessDays\":4,\"capacityUnitsPerTooth\":1,\"teethPerExtraLeadDay\":null}"));
+        Assert.That(badMaterial.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task SchedulingConfigAdmin_ChangedCapacityBlocksClinicOrderOverDailyLimit()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var createCapacity = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-06-08\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":1000}"));
+        Assert.That(createCapacity.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        var updateMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"displayName\":\"PMMA\",\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.0,\"teethPerExtraLeadDay\":null}"));
+        Assert.That(updateMaterial.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var create = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Thirty One Teeth",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[
+            {"constructionType":"bridge","toothStart":18,"toothEnd":28},
+            {"constructionType":"bridge","toothStart":48,"toothEnd":37}
+          ],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var error = await create.Content.ReadAsStringAsync();
+        Assert.That(error, Does.Contain("Daily capacity exceeded"));
+        Assert.That(error, Does.Contain("DailyCapacityExceeded"));
     }
 
     [Test]

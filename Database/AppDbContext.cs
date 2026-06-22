@@ -98,8 +98,11 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Entities.SchedulingMaterialConfigEntity>(e =>
         {
-            e.HasKey(x => x.Material);
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Material, x.ActiveFromDate }).IsUnique();
+            e.HasIndex(x => x.Material);
             e.Property(x => x.Material).IsRequired();
+            e.Property(x => x.ActiveFromDate).IsRequired();
             e.Property(x => x.FixedLeadTimeBusinessDays).IsRequired();
             e.Property(x => x.CapacityUnitsPerTooth).HasColumnType("TEXT").IsRequired();
             e.Property(x => x.IsActive).HasDefaultValue(true);

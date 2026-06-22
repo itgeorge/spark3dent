@@ -2,6 +2,7 @@
   const PRODUCTS = {
     invoicer: { label: "Invoicer", href: "/", icon: "&#128179;", visibility: "lab" },
     scheduler: { label: "Scheduler / Orders", href: "/orders", icon: "&#128197;", visibility: "all" },
+    schedulingConfig: { label: "Scheduling Config", href: "/scheduling-config", icon: "&#9881;", visibility: "lab" },
     iam: { label: "IAM", href: "/iam", icon: "&#128101;", visibility: "lab" }
   };
 

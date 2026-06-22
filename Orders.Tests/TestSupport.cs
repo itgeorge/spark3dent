@@ -38,20 +38,40 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
 
 internal sealed class TestMaterialSchedulingConfigProvider : IMaterialSchedulingConfigProvider
 {
-    private readonly IReadOnlyDictionary<Material, MaterialSchedulingConfig> _configs;
+    private readonly IReadOnlyList<MaterialSchedulingConfig> _configs;
 
     public TestMaterialSchedulingConfigProvider(IEnumerable<MaterialSchedulingConfig>? configs = null) =>
-        _configs = (configs ?? DefaultConfigs()).ToDictionary(c => c.Material);
+        _configs = (configs ?? DefaultConfigs())
+            .OrderBy(c => c.Material)
+            .ThenBy(c => c.ActiveFromDate)
+            .ToArray();
 
     public Task<MaterialSchedulingConfig> GetAsync(Material material, CancellationToken ct = default)
     {
-        if (_configs.TryGetValue(material, out var config))
-            return Task.FromResult(config);
-        throw new InvalidOperationException($"Material scheduling config is missing for {material}.");
+        var config = _configs.Where(c => c.Material == material)
+            .OrderByDescending(c => c.ActiveFromDate)
+            .FirstOrDefault();
+        return config != null
+            ? Task.FromResult(config)
+            : throw new InvalidOperationException($"Material scheduling config is missing for {material}.");
+    }
+
+    public Task<MaterialSchedulingConfig> GetForDateAsync(Material material, DateOnly deadlineDate, CancellationToken ct = default)
+    {
+        var config = _configs.Where(c => c.Material == material && c.ActiveFromDate <= deadlineDate)
+            .OrderByDescending(c => c.ActiveFromDate)
+            .FirstOrDefault();
+        return config != null
+            ? Task.FromResult(config)
+            : throw new InvalidOperationException($"Material scheduling config is missing for {material} on {deadlineDate:yyyy-MM-dd}.");
     }
 
     public Task<IReadOnlyList<MaterialSchedulingConfig>> ListAsync(CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<MaterialSchedulingConfig>>(_configs.Values.OrderBy(c => c.SortOrder).ToArray());
+        Task.FromResult<IReadOnlyList<MaterialSchedulingConfig>>(_configs
+            .GroupBy(c => c.Material)
+            .Select(g => g.OrderByDescending(c => c.ActiveFromDate).First())
+            .OrderBy(c => c.Material)
+            .ToArray());
 
     public static MaterialSchedulingConfig DefaultConfig(Material material) => material switch
     {

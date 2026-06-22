@@ -59,6 +59,7 @@ public class SqliteMaterialSchedulingConfigProviderTest
             Assert.That(pmma.TeethPerExtraLeadDay, Is.Null);
             Assert.That(pmma.IsActive, Is.True);
             Assert.That(pmma.SortOrder, Is.EqualTo(10));
+            Assert.That(pmma.ActiveFromDate, Is.EqualTo(new DateOnly(2026, 1, 1)));
         });
         var pfm = rows.Single(r => r.Material == nameof(Material.Pfm));
         Assert.Multiple(() =>
@@ -67,6 +68,66 @@ public class SqliteMaterialSchedulingConfigProviderTest
             Assert.That(pfm.TeethPerExtraLeadDay, Is.EqualTo(10));
             Assert.That(pfm.CapacityUnitsPerTooth, Is.EqualTo(1.0m));
         });
+    }
+
+    [Test]
+    public async Task GetForDateAsync_UsesLatestMaterialRowOnOrBeforeDeadlineDate()
+    {
+        await using (var ctx = _contextFactory())
+        {
+            ctx.SchedulingMaterialConfigs.Add(new SchedulingMaterialConfigEntity
+            {
+                Material = nameof(Material.Pmma),
+                ActiveFromDate = new DateOnly(2026, 7, 1),
+                DisplayName = "PMMA Future",
+                FixedLeadTimeBusinessDays = 4,
+                CapacityUnitsPerTooth = 2.5m,
+                IsActive = true,
+                SortOrder = 10,
+                CreatedAt = DateTimeOffset.Parse("2026-06-22T00:00:00Z"),
+                UpdatedAt = DateTimeOffset.Parse("2026-06-22T00:00:00Z")
+            });
+            await ctx.SaveChangesAsync();
+        }
+        var provider = new SqliteMaterialSchedulingConfigProvider(_contextFactory);
+
+        var before = await provider.GetForDateAsync(Material.Pmma, new DateOnly(2026, 6, 30));
+        var onOrAfter = await provider.GetForDateAsync(Material.Pmma, new DateOnly(2026, 7, 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(before.FixedLeadTimeBusinessDays, Is.EqualTo(2));
+            Assert.That(before.CapacityUnitsPerTooth, Is.EqualTo(1.0m));
+            Assert.That(onOrAfter.FixedLeadTimeBusinessDays, Is.EqualTo(4));
+            Assert.That(onOrAfter.CapacityUnitsPerTooth, Is.EqualTo(2.5m));
+        });
+    }
+
+    [Test]
+    public async Task ListAsync_ReturnsOnlyLatestMaterialRows()
+    {
+        await using (var ctx = _contextFactory())
+        {
+            ctx.SchedulingMaterialConfigs.Add(new SchedulingMaterialConfigEntity
+            {
+                Material = nameof(Material.Pmma),
+                ActiveFromDate = new DateOnly(2026, 7, 1),
+                DisplayName = "PMMA Future",
+                FixedLeadTimeBusinessDays = 4,
+                CapacityUnitsPerTooth = 2.5m,
+                IsActive = true,
+                SortOrder = 10,
+                CreatedAt = DateTimeOffset.Parse("2026-06-22T00:00:00Z"),
+                UpdatedAt = DateTimeOffset.Parse("2026-06-22T00:00:00Z")
+            });
+            await ctx.SaveChangesAsync();
+        }
+        var provider = new SqliteMaterialSchedulingConfigProvider(_contextFactory);
+
+        var rows = await provider.ListAsync();
+
+        Assert.That(rows.Count(r => r.Material == Material.Pmma), Is.EqualTo(1));
+        Assert.That(rows.Single(r => r.Material == Material.Pmma).FixedLeadTimeBusinessDays, Is.EqualTo(4));
     }
 
     [Test]
@@ -131,6 +192,7 @@ public class SqliteMaterialSchedulingConfigProviderTest
             {
                 Material = "UnknownMaterial",
                 DisplayName = "Unknown",
+                ActiveFromDate = new DateOnly(2026, 1, 1),
                 FixedLeadTimeBusinessDays = 1,
                 CapacityUnitsPerTooth = 1m,
                 IsActive = true,

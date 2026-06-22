@@ -4,7 +4,7 @@ using Orders;
 
 namespace Database;
 
-public sealed class SqliteSchedulingCapacityConfigProvider : ISchedulingCapacityConfigProvider
+public sealed class SqliteSchedulingCapacityConfigProvider : ISchedulingCapacityConfigAdminRepository
 {
     private readonly Func<AppDbContext> _contextFactory;
 
@@ -36,6 +36,46 @@ public sealed class SqliteSchedulingCapacityConfigProvider : ISchedulingCapacity
         return entities.Select(ToDomain).ToArray();
     }
 
+    public async Task<IReadOnlyList<SchedulingCapacityConfigAdminRecord>> ListAdminAsync(CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var entities = await ctx.SchedulingCapacityConfigs.AsNoTracking()
+            .OrderByDescending(c => c.ActiveFromDate)
+            .ThenByDescending(c => c.Id)
+            .ToListAsync(ct);
+        return entities.Select(ToAdminRecord).ToArray();
+    }
+
+    public async Task<SchedulingCapacityConfigAdminRecord> CreateAsync(SchedulingCapacityConfigCreate create, DateTimeOffset now, CancellationToken ct = default)
+    {
+        SchedulingConfigValidation.Validate(create);
+        await using var ctx = _contextFactory();
+        if (await ctx.SchedulingCapacityConfigs.AnyAsync(c => c.ActiveFromDate == create.ActiveFromDate, ct))
+            throw new DuplicateSchedulingCapacityConfigDateException(create.ActiveFromDate);
+
+        var entity = new SchedulingCapacityConfigEntity
+        {
+            ActiveFromDate = create.ActiveFromDate,
+            DailyCapacityUnits = create.DailyCapacityUnits,
+            WeeklyCapacityUnits = create.WeeklyCapacityUnits,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        ctx.SchedulingCapacityConfigs.Add(entity);
+        try
+        {
+            await ctx.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            throw new DuplicateSchedulingCapacityConfigDateException(create.ActiveFromDate);
+        }
+        return ToAdminRecord(entity);
+    }
+
     private static SchedulingCapacityConfig ToDomain(SchedulingCapacityConfigEntity entity) =>
         new(entity.Id, entity.ActiveFromDate, entity.DailyCapacityUnits, entity.WeeklyCapacityUnits);
+
+    private static SchedulingCapacityConfigAdminRecord ToAdminRecord(SchedulingCapacityConfigEntity entity) =>
+        new(entity.Id, entity.ActiveFromDate, entity.DailyCapacityUnits, entity.WeeklyCapacityUnits, entity.CreatedAt, entity.UpdatedAt);
 }

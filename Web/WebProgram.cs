@@ -63,8 +63,12 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER")));
 builder.Services.AddSingleton<INonWorkingDayProvider, BulgariaHardcodedNonWorkingDayProvider>();
 builder.Services.AddSingleton<DateAvailabilityService>();
-builder.Services.AddScoped<IMaterialSchedulingConfigProvider, SqliteMaterialSchedulingConfigProvider>();
-builder.Services.AddScoped<ISchedulingCapacityConfigProvider, SqliteSchedulingCapacityConfigProvider>();
+builder.Services.AddScoped<SqliteMaterialSchedulingConfigProvider>();
+builder.Services.AddScoped<IMaterialSchedulingConfigProvider>(sp => sp.GetRequiredService<SqliteMaterialSchedulingConfigProvider>());
+builder.Services.AddScoped<IMaterialSchedulingConfigAdminRepository>(sp => sp.GetRequiredService<SqliteMaterialSchedulingConfigProvider>());
+builder.Services.AddScoped<SqliteSchedulingCapacityConfigProvider>();
+builder.Services.AddScoped<ISchedulingCapacityConfigProvider>(sp => sp.GetRequiredService<SqliteSchedulingCapacityConfigProvider>());
+builder.Services.AddScoped<ISchedulingCapacityConfigAdminRepository>(sp => sp.GetRequiredService<SqliteSchedulingCapacityConfigProvider>());
 builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
@@ -144,6 +148,15 @@ app.MapGet("/iam", async (HttpContext ctx, SchedulingAuthService auth) =>
         return denied;
 
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("iam.html", webAssembly);
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
+app.MapGet("/scheduling-config", async (HttpContext ctx, SchedulingAuthService auth) =>
+{
+    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
+        return denied;
+
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("scheduling-config.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
 

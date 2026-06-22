@@ -2,7 +2,9 @@ namespace Database.Entities;
 
 public class SchedulingMaterialConfigEntity
 {
+    public long Id { get; set; }
     public string Material { get; set; } = string.Empty;
+    public DateOnly ActiveFromDate { get; set; }
     public string? DisplayName { get; set; }
     public int FixedLeadTimeBusinessDays { get; set; }
     public decimal CapacityUnitsPerTooth { get; set; }

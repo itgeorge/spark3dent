@@ -103,6 +103,30 @@ public class DeadlineRecommendationServiceTest
     }
 
     [Test]
+    public async Task ValidateRequestedDateAsync_UsesMaterialConfigEffectiveForDeadlineDate()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 5, 10, 30);
+        var service = CreateService(
+            configs:
+            [
+                TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { ActiveFromDate = new DateOnly(2026, 1, 1), CapacityUnitsPerTooth = 1.0m },
+                TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { ActiveFromDate = new DateOnly(2026, 6, 10), CapacityUnitsPerTooth = 2.0m }
+            ],
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1.5m, 100m)]);
+
+        var beforeFutureConfig = await service.ValidateRequestedDateAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 9));
+        var onFutureConfig = await service.ValidateRequestedDateAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 10));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(beforeFutureConfig.FailedRules, Does.Not.Contain(DeadlineValidationRule.DailyCapacityExceeded));
+            Assert.That(beforeFutureConfig.OrderCapacityUnits, Is.EqualTo(1.0m));
+            Assert.That(onFutureConfig.FailedRules, Does.Contain(DeadlineValidationRule.DailyCapacityExceeded));
+            Assert.That(onFutureConfig.OrderCapacityUnits, Is.EqualTo(2.0m));
+        });
+    }
+
+    [Test]
     public async Task RecommendCapacityAwareDateAsync_GivenDailyCapacityFull_ReturnsNextSelectableDateAndMarksReason()
     {
         var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
@@ -359,18 +383,16 @@ public class DeadlineRecommendationServiceTest
         Assert.That(days, Is.EqualTo(2));
     }
 
-    [TestCase(0, 1, true, "fixed lead-time")]
-    [TestCase(2, 0, true, "capacity units")]
-    [TestCase(2, 1, false, "inactive")]
-    public void RecommendAsync_GivenInvalidConfig_FailsClearly(int fixedLeadDays, decimal capacityUnitsPerTooth, bool isActive, string expectedMessage)
+    [TestCase(0, 1, "fixed lead-time")]
+    [TestCase(2, 0, "capacity units")]
+    public void RecommendAsync_GivenInvalidConfig_FailsClearly(int fixedLeadDays, decimal capacityUnitsPerTooth, string expectedMessage)
     {
         var service = CreateService(configs:
         [
             TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with
             {
                 FixedLeadTimeBusinessDays = fixedLeadDays,
-                CapacityUnitsPerTooth = capacityUnitsPerTooth,
-                IsActive = isActive
+                CapacityUnitsPerTooth = capacityUnitsPerTooth
             }
         ]);
 
