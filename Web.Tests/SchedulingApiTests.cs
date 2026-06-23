@@ -436,6 +436,96 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingDates_DailyCapacityExceeded_WhenExistingUsageIs11AndNewOrderIs2_ShowsWarningAndRejectsClinicCreate()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 12.0m, 100.0m);
+        await UpdateMaterialConfigAsync(fixture.DbPath, Material.FullContourZirconia, capacityUnitsPerTooth: 1.0m);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var existing = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Existing Eleven Units",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"bridge","toothStart":18,"toothEnd":23}],
+          "requestedDeliveryDate":"2026-06-11"
+        }
+        """));
+        Assert.That(existing.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"New Two Units",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"bridge","toothStart":24,"toothEnd":25}],
+          "start":"2026-06-11",
+          "end":"2026-06-12"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        Assert.That(statuses["2026-06-11"].GetProperty("reason").GetString(), Is.EqualTo("Daily capacity exceeded"));
+
+        var rejected = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Rejected Two Units",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"bridge","toothStart":24,"toothEnd":25}],
+          "requestedDeliveryDate":"2026-06-11"
+        }
+        """));
+        Assert.That(rejected.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+    }
+
+    [Test]
+    public async Task SchedulingDates_DailyCapacityExceeded_WhenSingleOrderWouldBe13AgainstCap12_ShowsWarningAndRejectsClinicCreate()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 12.0m, 100.0m);
+        await UpdateMaterialConfigAsync(fixture.DbPath, Material.FullContourZirconia, capacityUnitsPerTooth: 1.0m);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Thirteen Units",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"bridge","toothStart":18,"toothEnd":25}],
+          "start":"2026-06-11",
+          "end":"2026-06-12"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        Assert.That(statuses["2026-06-11"].GetProperty("reason").GetString(), Is.EqualTo("Daily capacity exceeded"));
+
+        var rejected = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Rejected Thirteen Units",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"bridge","toothStart":18,"toothEnd":25}],
+          "requestedDeliveryDate":"2026-06-11"
+        }
+        """));
+        Assert.That(rejected.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+    }
+
+    [Test]
     public async Task SchedulingFlow_UpdateExcludesSelfButRejectsMoveOntoFullDate()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -1652,7 +1742,7 @@ public class SchedulingApiTests
         await ctx.SaveChangesAsync();
     }
 
-    private static async Task UpdateMaterialConfigAsync(string dbPath, Material material, int? fixedLeadTimeBusinessDays = null, int? teethPerExtraLeadDay = null)
+    private static async Task UpdateMaterialConfigAsync(string dbPath, Material material, int? fixedLeadTimeBusinessDays = null, int? teethPerExtraLeadDay = null, decimal? capacityUnitsPerTooth = null)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlite($"Data Source={dbPath}")
@@ -1666,6 +1756,7 @@ public class SchedulingApiTests
             .FirstAsync();
         if (fixedLeadTimeBusinessDays.HasValue) row.FixedLeadTimeBusinessDays = fixedLeadTimeBusinessDays.Value;
         if (teethPerExtraLeadDay.HasValue) row.TeethPerExtraLeadDay = teethPerExtraLeadDay.Value;
+        if (capacityUnitsPerTooth.HasValue) row.CapacityUnitsPerTooth = capacityUnitsPerTooth.Value;
         row.UpdatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z");
         await ctx.SaveChangesAsync();
     }
