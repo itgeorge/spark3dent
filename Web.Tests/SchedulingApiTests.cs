@@ -89,6 +89,93 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingDates_AndClinicCreate_BlockFirstBusinessDayAfterWeekend()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 2, 25, 7, 30, 0, TimeSpan.Zero));
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"After Weekend",
+          "impressionDate":"2026-02-25",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-03-02",
+          "end":"2026-03-05"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(statuses["2026-03-02"].GetProperty("isFirstBusinessDayAfterClosure").GetBoolean(), Is.True);
+            Assert.That(statuses["2026-03-02"].GetProperty("isSelectable").GetBoolean(), Is.False);
+            Assert.That(statuses["2026-03-02"].GetProperty("reason").GetString(), Is.EqualTo("First business day after weekend/closure"));
+            Assert.That(statuses["2026-03-03"].GetProperty("isClosed").GetBoolean(), Is.True);
+            Assert.That(statuses["2026-03-04"].GetProperty("isFirstBusinessDayAfterClosure").GetBoolean(), Is.True);
+            Assert.That(statuses["2026-03-05"].GetProperty("isSelectable").GetBoolean(), Is.True);
+        });
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Blocked Monday",
+          "impressionDate":"2026-02-25",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-03-02"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await create.Content.ReadAsStringAsync(), Does.Contain("First business day after weekend/closure"));
+    }
+
+    [Test]
+    public async Task SchedulingDates_AndClinicCreate_BlockFirstBusinessDayAfterHoliday()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 2, 25, 7, 30, 0, TimeSpan.Zero));
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"After Holiday",
+          "impressionDate":"2026-02-25",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-03-03",
+          "end":"2026-03-05"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(statuses["2026-03-03"].GetProperty("isClosed").GetBoolean(), Is.True);
+            Assert.That(statuses["2026-03-04"].GetProperty("isFirstBusinessDayAfterClosure").GetBoolean(), Is.True);
+            Assert.That(statuses["2026-03-04"].GetProperty("isSelectable").GetBoolean(), Is.False);
+            Assert.That(statuses["2026-03-04"].GetProperty("reason").GetString(), Is.EqualTo("First business day after weekend/closure"));
+            Assert.That(statuses["2026-03-05"].GetProperty("isSelectable").GetBoolean(), Is.True);
+        });
+
+        var create = await client.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Blocked After Holiday",
+          "impressionDate":"2026-02-25",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-03-04"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await create.Content.ReadAsStringAsync(), Does.Contain("First business day after weekend/closure"));
+    }
+
+    [Test]
     public async Task SchedulingConfig_ReturnsDbBackedMaterialSchedulingConfig()
     {
         using var fixture = NewSchedulingFixture();
