@@ -555,7 +555,9 @@ public class SchedulingApiTests
         }
         """));
         Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        var datesDoc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
+        var statuses = datesDoc.RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(datesDoc.RootElement.GetProperty("recommendedDate").GetString(), Is.EqualTo("2026-06-12"));
         Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.False);
         Assert.That(statuses["2026-06-11"].GetProperty("reason").GetString(), Is.EqualTo("Daily capacity exceeded"));
 
@@ -594,7 +596,9 @@ public class SchedulingApiTests
         }
         """));
         Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        var datesDoc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
+        var statuses = datesDoc.RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.That(datesDoc.RootElement.GetProperty("recommendedDate").ValueKind, Is.EqualTo(JsonValueKind.Null));
         Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.False);
         Assert.That(statuses["2026-06-11"].GetProperty("reason").GetString(), Is.EqualTo("Daily capacity exceeded"));
 
@@ -610,6 +614,35 @@ public class SchedulingApiTests
         """));
         Assert.That(rejected.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+    }
+
+    [Test]
+    public async Task SchedulingDates_ReturnsRecommendedDateOutsideVisibleMonth_WhenEarliestSelectableIsNextMonth()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 30, 7, 30, 0, TimeSpan.Zero));
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Month Jump",
+          "impressionDate":"2026-06-30",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-06-01",
+          "end":"2026-06-30"
+        }
+        """));
+
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(doc.RootElement.GetProperty("minimumDate").GetString(), Is.EqualTo("2026-07-02"));
+            Assert.That(doc.RootElement.GetProperty("recommendedDate").GetString(), Is.EqualTo("2026-07-02"));
+            Assert.That(doc.RootElement.GetProperty("dates").EnumerateArray().All(x => x.GetProperty("isSelectable").GetBoolean() == false), Is.True);
+        });
     }
 
     [Test]

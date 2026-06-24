@@ -58,13 +58,28 @@ public sealed class SchedulingOrderService
         return recommendation.EarliestSelectableDeadline;
     }
 
-    public Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
-        GetDateStatusesAsync(draft, start, end, _clock.UtcNow, excludedOrderId: null, ct);
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        (await GetDateStatusesResultAsync(draft, start, end, _clock.UtcNow, excludedOrderId: null, ct)).Statuses;
 
-    public Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default) =>
-        GetDateStatusesAsync(draft, start, end, impressionTimestampUtc, excludedOrderId: null, ct);
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default) =>
+        (await GetDateStatusesResultAsync(draft, start, end, impressionTimestampUtc, excludedOrderId: null, ct)).Statuses;
 
     public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(
+        OrderDraft draft,
+        DateOnly start,
+        DateOnly end,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        CancellationToken ct = default) =>
+        (await GetDateStatusesResultAsync(draft, start, end, impressionTimestampUtc, excludedOrderId, ct)).Statuses;
+
+    public Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        GetDateStatusesResultAsync(draft, start, end, _clock.UtcNow, excludedOrderId: null, ct);
+
+    public Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default) =>
+        GetDateStatusesResultAsync(draft, start, end, impressionTimestampUtc, excludedOrderId: null, ct);
+
+    public async Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(
         OrderDraft draft,
         DateOnly start,
         DateOnly end,
@@ -73,13 +88,12 @@ public sealed class SchedulingOrderService
         CancellationToken ct = default)
     {
         ValidateOrderWorkItems(draft);
-        var result = await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
+        return await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
             new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc, excludedOrderId),
             start,
             end,
             orderRepositoryOverride: null,
             ct);
-        return result.Statuses;
     }
 
     public Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, CancellationToken ct = default) =>

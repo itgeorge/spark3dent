@@ -196,9 +196,9 @@ public static class SchedulingApi
                     ? await orders.CalculateMinimumDeliveryDateAsync(draft, impressionTimestampUtc.Value, ctx.RequestAborted)
                     : await orders.CalculateMinimumDeliveryDateAsync(draft, ctx.RequestAborted);
                 var statuses = impressionTimestampUtc.HasValue
-                    ? await orders.GetDateStatusesAsync(draft, body.Start, body.End, impressionTimestampUtc.Value, excludedOrderId, ctx.RequestAborted)
-                    : await orders.GetDateStatusesAsync(draft, body.Start, body.End, ctx.RequestAborted);
-                return Results.Json(new { minimumDate = minimum, dates = statuses }, JsonOptions);
+                    ? await orders.GetDateStatusesResultAsync(draft, body.Start, body.End, impressionTimestampUtc.Value, excludedOrderId, ctx.RequestAborted)
+                    : await orders.GetDateStatusesResultAsync(draft, body.Start, body.End, ctx.RequestAborted);
+                return Results.Json(new { minimumDate = minimum, recommendedDate = statuses.RecommendedDate, dates = statuses.Statuses }, JsonOptions);
             }
             catch (KeyNotFoundException ex)
             {
