@@ -112,7 +112,8 @@ public class DeadlineRecommendationServiceTest
                 TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { ActiveFromDate = new DateOnly(2026, 1, 1), CapacityUnitsPerTooth = 1.0m },
                 TestMaterialSchedulingConfigProvider.DefaultConfig(Material.Pmma) with { ActiveFromDate = new DateOnly(2026, 6, 10), CapacityUnitsPerTooth = 2.0m }
             ],
-            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1.5m, 100m)]);
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 2.5m, 100m)],
+            orders: [BuildOrder(1, "EXISTING", new DateOnly(2026, 6, 10))]);
 
         var beforeFutureConfig = await service.ValidateRequestedDateAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 9));
         var onFutureConfig = await service.ValidateRequestedDateAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 10));
@@ -204,6 +205,27 @@ public class DeadlineRecommendationServiceTest
         var recommended = await service.RecommendCapacityAwareDateAsync(Input(Material.Pmma, createdAtUtc));
 
         Assert.That(recommended, Is.EqualTo(new DateOnly(2026, 6, 5)));
+    }
+
+    [Test]
+    public async Task ValidateRequestedDateAsync_AllowsLargeOrderOverDailyCapacity_WhenDayHasNoOtherOrders()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 8, 10, 30);
+        var service = CreateService(
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 12m, 100m)]);
+        var input = new OrderSchedulingInput(
+            Material.Pmma,
+            [new OrderWorkItem(ConstructionType.Bridge, new ToothRange(18, 25))],
+            createdAtUtc);
+
+        var result = await service.ValidateRequestedDateAsync(input, new DateOnly(2026, 6, 11));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Status.IsSelectable, Is.True);
+            Assert.That(result.Status.IsDailyCapacityExceeded, Is.False);
+            Assert.That(result.OrderCapacityUnits, Is.EqualTo(13m));
+        });
     }
 
     [Test]

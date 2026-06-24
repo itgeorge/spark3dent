@@ -265,7 +265,7 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task SchedulingConfigAdmin_ChangedCapacityBlocksClinicOrderOverDailyLimit()
+    public async Task SchedulingConfigAdmin_ChangedCapacityBlocksClinicOrderOverDailyLimit_WhenDayAlreadyHasOrders()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
         using var labClient = fixture.Client;
@@ -279,6 +279,19 @@ public class SchedulingApiTests
 
         using var clinicClient = fixture.CreateClient();
         await LoginAsync(clinicClient);
+
+        var existing = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Existing One Tooth",
+          "impressionDate":"2026-06-08",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+        Assert.That(existing.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
         var create = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
         {
           "caseName":"Thirty One Teeth",
@@ -576,7 +589,7 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task SchedulingDates_DailyCapacityExceeded_WhenSingleOrderWouldBe13AgainstCap12_ShowsWarningAndRejectsClinicCreate()
+    public async Task SchedulingDates_WhenSingleOrderWouldBe13AgainstCap12_ButDayIsEmpty_AllowsClinicCreate()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
         await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 12.0m, 100.0m);
@@ -598,13 +611,13 @@ public class SchedulingApiTests
         Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var datesDoc = JsonDocument.Parse(await dates.Content.ReadAsStringAsync());
         var statuses = datesDoc.RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
-        Assert.That(datesDoc.RootElement.GetProperty("recommendedDate").ValueKind, Is.EqualTo(JsonValueKind.Null));
-        Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.False);
-        Assert.That(statuses["2026-06-11"].GetProperty("reason").GetString(), Is.EqualTo("Daily capacity exceeded"));
+        Assert.That(datesDoc.RootElement.GetProperty("recommendedDate").GetString(), Is.EqualTo("2026-06-11"));
+        Assert.That(statuses["2026-06-11"].GetProperty("isSelectable").GetBoolean(), Is.True);
+        Assert.That(statuses["2026-06-11"].GetProperty("isDailyCapacityExceeded").GetBoolean(), Is.False);
 
-        var rejected = await client.PostAsync("/api/scheduling/orders", Json("""
+        var created = await client.PostAsync("/api/scheduling/orders", Json("""
         {
-          "caseName":"Rejected Thirteen Units",
+          "caseName":"Allowed Thirteen Units",
           "impressionDate":"2026-06-08",
           "productCategory":"permanent",
           "material":"fullContourZirconia",
@@ -612,8 +625,7 @@ public class SchedulingApiTests
           "requestedDeliveryDate":"2026-06-11"
         }
         """));
-        Assert.That(rejected.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(await rejected.Content.ReadAsStringAsync(), Does.Contain("Daily capacity exceeded"));
+        Assert.That(created.StatusCode, Is.EqualTo(HttpStatusCode.Created));
     }
 
     [Test]

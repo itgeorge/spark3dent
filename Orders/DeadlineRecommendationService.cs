@@ -259,7 +259,7 @@ public sealed class DeadlineRecommendationService
         var capacityConfig = await _capacityConfigs.GetForDateAsync(date, ct);
         ValidateCapacityConfig(capacityConfig);
         var usage = await GetCapacityUsageAsync(date, excludedOrderId, orderRepositoryOverride, ct);
-        var isDailyCapacityExceeded = usage.DailyUsed + orderCapacityUnits > capacityConfig.DailyCapacityUnits;
+        var isDailyCapacityExceeded = usage.DailyUsed > 0m && usage.DailyUsed + orderCapacityUnits > capacityConfig.DailyCapacityUnits;
         var isWeeklyCapacityExceeded = usage.WeeklyUsed + orderCapacityUnits > capacityConfig.WeeklyCapacityUnits;
         var reason = baseStatus.Reason ?? GetCapacityReason(isDailyCapacityExceeded, isWeeklyCapacityExceeded);
         var isSelectable = baseStatus.IsSelectable && !isDailyCapacityExceeded && !isWeeklyCapacityExceeded;
