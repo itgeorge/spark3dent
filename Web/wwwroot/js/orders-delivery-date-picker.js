@@ -49,6 +49,7 @@
         iso: iso,
         orderClinics: options.orderClinics || {},
         isLab: !!options.isLab,
+        capacity: options.capacity,
         orderClicksEnabled: options.orderClicksEnabled !== false,
         onOpenOrder: options.onOpenOrder,
         onOpenDay: options.onOpenDay

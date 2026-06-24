@@ -96,6 +96,9 @@ public sealed class SchedulingOrderService
             ct);
     }
 
+    public Task<IReadOnlyDictionary<DateOnly, DailyCapacityUsage>> GetDailyCapacityUsageByDateAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        _deadlineRecommendations.GetDailyCapacityUsageByDateAsync(start, end, ct);
+
     public Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, CancellationToken ct = default) =>
         CreateOrderAsync(actor, draft, ip, userAgent, targetClinicCode: null, deadlineOverride: null, ct);
 

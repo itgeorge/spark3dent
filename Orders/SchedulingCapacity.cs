@@ -14,6 +14,8 @@ public interface ISchedulingCapacityConfigProvider
 
 public sealed record CapacityUsage(decimal DailyUsed, decimal WeeklyUsed);
 
+public sealed record DailyCapacityUsage(DateOnly Date, decimal Used, decimal Limit);
+
 public enum DeadlineValidationRule
 {
     MinimumLeadTime,

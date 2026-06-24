@@ -296,12 +296,16 @@ public static class SchedulingApi
 
             var items = await orders.ListCalendarOrdersAsync(actor, start.Value, end.Value, ctx.RequestAborted);
             Dictionary<string, object>? clinics = null;
+            IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate = null;
             if (actor.IsLab)
+            {
                 clinics = await BuildClinicsMetaMapAsync(identities, items, ctx.RequestAborted);
+                capacityByDate = await orders.GetDailyCapacityUsageByDateAsync(start.Value, end.Value, ctx.RequestAborted);
+            }
             var days = items
                 .GroupBy(o => o.RequestedDeliveryDate)
                 .OrderBy(g => g.Key)
-                .Select(g => new { date = g.Key, orders = g.Select(o => ToDto(o)) });
+                .Select(g => ToCalendarDayDto(g.Key, g, capacityByDate));
             return Results.Json(ToCalendarDto(start.Value, end.Value, days, clinics), JsonOptions);
         });
 
@@ -502,6 +506,20 @@ public static class SchedulingApi
             return new { start, end, days };
         return new { start, end, days, clinics };
     }
+
+    private static object ToCalendarDayDto(DateOnly date, IEnumerable<OrderRecord> orders, IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate)
+    {
+        var orderDtos = orders.Select(o => ToDto(o));
+        if (capacityByDate != null && capacityByDate.TryGetValue(date, out var capacity))
+            return new { date, orders = orderDtos, capacity = ToDailyCapacityDto(capacity) };
+        return new { date, orders = orderDtos };
+    }
+
+    private static object ToDailyCapacityDto(DailyCapacityUsage capacity) => new
+    {
+        capacity.Used,
+        capacity.Limit
+    };
 
     private static object ToClinicMetaDto(SchedulingClinic clinic) => new
     {

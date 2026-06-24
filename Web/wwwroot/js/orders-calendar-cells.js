@@ -70,6 +70,35 @@
     parent.appendChild(bar);
   }
 
+  function normalizeCapacity(capacity){
+    if(!capacity) return null;
+    var used = Number(capacity.used ?? capacity.Used ?? capacity.dailyUsed ?? capacity.DailyUsed);
+    var limit = Number(capacity.limit ?? capacity.Limit ?? capacity.dailyCapacityLimit ?? capacity.DailyCapacityLimit);
+    if(!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return null;
+    return { used: used, limit: limit };
+  }
+
+  function buildCapacityIndicator(capacity){
+    var c = normalizeCapacity(capacity);
+    if(!c) return null;
+    var ratio = c.used / c.limit;
+    var level = ratio < 0.4 ? 'low' : (ratio < 0.8 ? 'medium' : 'high');
+    var el = document.createElement('span');
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-' + level;
+    var usedText = String(Math.round(c.used));
+    var limitText = String(Math.round(c.limit));
+    el.textContent = usedText + '/' + limitText;
+    el.title = 'Capacity used: ' + usedText + ' / ' + limitText;
+    el.setAttribute('aria-label', 'Capacity used ' + usedText + ' of ' + limitText);
+    return el;
+  }
+
+  function appendCapacityIndicator(parent, capacity, isLab){
+    if(!isLab) return;
+    var indicator = buildCapacityIndicator(capacity);
+    if(indicator) parent.appendChild(indicator);
+  }
+
   function buildOrdersCalendarCountButton(dayOrders, onOpen, orderClinics, isLab){
     var count = document.createElement('button');
     count.type = 'button';
@@ -114,6 +143,7 @@
     var orderClicksEnabled = options.orderClicksEnabled !== false;
     var openDay = function(){ onOpenDay(options.iso, dayOrders); };
 
+    appendCapacityIndicator(content, options.capacity, isLab);
     content.appendChild(buildOrdersCalendarCountButton(dayOrders, openDay, orderClinics, isLab));
     dayOrders.slice(0, maxChips).forEach(function(o){
       var chip = document.createElement(orderClicksEnabled ? 'button' : 'span');
@@ -142,6 +172,7 @@
     orderTeethLabel: orderTeethLabel,
     orderToothCount: orderToothCount,
     dayToothTotalText: dayToothTotalText,
+    normalizeCapacity: normalizeCapacity,
     renderDayOrders: renderDayOrders
   };
 })(typeof window !== 'undefined' ? window : globalThis);

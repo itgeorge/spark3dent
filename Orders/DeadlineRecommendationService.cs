@@ -179,6 +179,31 @@ public sealed class DeadlineRecommendationService
         return config.FixedLeadTimeBusinessDays + extraLeadDays;
     }
 
+    public async Task<IReadOnlyDictionary<DateOnly, DailyCapacityUsage>> GetDailyCapacityUsageByDateAsync(DateOnly start, DateOnly end, CancellationToken ct = default)
+    {
+        if (end < start)
+            throw new InvalidOperationException("End date must be on or after start date.");
+
+        var orders = await _orders.ListActiveOrdersByDeadlineRangeAsync(start, end, ct);
+        var materialCache = new Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig>();
+        var usedByDate = new Dictionary<DateOnly, decimal>();
+        foreach (var order in orders)
+        {
+            var orderCapacityUnits = await ResolveOrderCapacityUnitsAsync(order, materialCache, ct);
+            usedByDate[order.RequestedDeliveryDate] = usedByDate.GetValueOrDefault(order.RequestedDeliveryDate) + orderCapacityUnits;
+        }
+
+        var result = new Dictionary<DateOnly, DailyCapacityUsage>();
+        foreach (var (date, used) in usedByDate)
+        {
+            var capacityConfig = await _capacityConfigs.GetForDateAsync(date, ct);
+            ValidateCapacityConfig(capacityConfig);
+            result[date] = new DailyCapacityUsage(date, used, capacityConfig.DailyCapacityUnits);
+        }
+
+        return result;
+    }
+
     private static bool UsesToothCountExtraLeadTime(Material material) =>
         material is Material.Pfm or Material.PfzLayeredZrCrown;
 
