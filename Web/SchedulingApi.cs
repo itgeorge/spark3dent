@@ -547,10 +547,24 @@ public static class SchedulingApi
 
     private static string? CapacityLoadLevel(DeliveryDateStatus status)
     {
-        if (!status.ExistingDailyCapacityUsed.HasValue || !status.DailyCapacityLimit.HasValue || status.DailyCapacityLimit.Value <= 0m)
+        var daily = CapacityLoadRank(status.ExistingDailyCapacityUsed, status.DailyCapacityLimit);
+        var weekly = CapacityLoadRank(status.ExistingWeeklyCapacityUsed, status.WeeklyCapacityLimit);
+        var rank = Math.Max(daily ?? -1, weekly ?? -1);
+        return rank switch
+        {
+            0 => "low",
+            1 => "medium",
+            2 => "high",
+            _ => null
+        };
+    }
+
+    private static int? CapacityLoadRank(decimal? used, decimal? limit)
+    {
+        if (!used.HasValue || !limit.HasValue || limit.Value <= 0m)
             return null;
-        var ratio = status.ExistingDailyCapacityUsed.Value / status.DailyCapacityLimit.Value;
-        return ratio < 0.4m ? "low" : ratio < 0.8m ? "medium" : "high";
+        var ratio = used.Value / limit.Value;
+        return ratio < 0.4m ? 0 : ratio < 0.8m ? 1 : 2;
     }
 
     private static object ToCalendarDayDto(DateOnly date, IEnumerable<OrderRecord> orders, IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate)

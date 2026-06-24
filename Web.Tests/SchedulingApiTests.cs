@@ -628,6 +628,39 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingDates_CapacityLoadLevel_UsesMostConstrainedDailyOrWeeklyLoad()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 10.0m, 10.0m);
+        await SeedOrderAsync(fixture.DbPath, "260609-W0", "Week Load 0", "DEMO", "2026-06-09");
+        await SeedOrderAsync(fixture.DbPath, "260609-W1", "Week Load 1", "DEMO", "2026-06-09");
+        await SeedOrderAsync(fixture.DbPath, "260610-W2", "Week Load 2", "DEMO", "2026-06-10");
+        await SeedOrderAsync(fixture.DbPath, "260610-W3", "Week Load 3", "DEMO", "2026-06-10");
+        await SeedOrderAsync(fixture.DbPath, "260611-W4", "Daily Low But Week High", "DEMO", "2026-06-11");
+        await SeedOrderAsync(fixture.DbPath, "260612-W5", "Week Load 5", "DEMO", "2026-06-12");
+        await SeedOrderAsync(fixture.DbPath, "260612-W6", "Week Load 6", "DEMO", "2026-06-12");
+        await SeedOrderAsync(fixture.DbPath, "260612-W7", "Week Load 7", "DEMO", "2026-06-12");
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Weekly Load Preview",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":21,"toothEnd":21}],
+          "start":"2026-06-11",
+          "end":"2026-06-11"
+        }
+        """));
+
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var status = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().Single();
+        Assert.That(status.GetProperty("capacityLoadLevel").GetString(), Is.EqualTo("high"));
+    }
+
+    [Test]
     public async Task SchedulingDates_WhenSingleOrderWouldBe13AgainstCap12_ButDayIsEmpty_AllowsClinicCreate()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
