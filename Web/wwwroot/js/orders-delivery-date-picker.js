@@ -44,6 +44,10 @@
 
     var orders = document.createElement('div');
     orders.className = 'delivery-calendar-orders';
+    if(S3DOrders.CalendarCells && !options.isLab && options.capacityLoadLevel){
+      var load = S3DOrders.CalendarCells.buildLoadIndicator(options.capacityLoadLevel);
+      if(load) orders.appendChild(load);
+    }
     if(S3DOrders.CalendarCells && dayOrders.length){
       S3DOrders.CalendarCells.renderDayOrders(orders, dayOrders, {
         iso: iso,

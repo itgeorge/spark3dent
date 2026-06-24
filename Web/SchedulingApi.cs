@@ -198,7 +198,7 @@ public static class SchedulingApi
                 var statuses = impressionTimestampUtc.HasValue
                     ? await orders.GetDateStatusesResultAsync(draft, body.Start, body.End, impressionTimestampUtc.Value, excludedOrderId, ctx.RequestAborted)
                     : await orders.GetDateStatusesResultAsync(draft, body.Start, body.End, ctx.RequestAborted);
-                return Results.Json(new { minimumDate = minimum, recommendedDate = statuses.RecommendedDate, dates = statuses.Statuses }, JsonOptions);
+                return Results.Json(new { minimumDate = minimum, recommendedDate = statuses.RecommendedDate, dates = statuses.Statuses.Select(s => ToDateStatusDto(s, actor.IsLab)) }, JsonOptions);
             }
             catch (KeyNotFoundException ex)
             {
@@ -505,6 +505,52 @@ public static class SchedulingApi
         if (clinics == null || clinics.Count == 0)
             return new { start, end, days };
         return new { start, end, days, clinics };
+    }
+
+    private static object ToDateStatusDto(DeliveryDateStatus status, bool includeExactCapacity)
+    {
+        var capacityLoadLevel = CapacityLoadLevel(status);
+        if (includeExactCapacity)
+        {
+            return new
+            {
+                status.Date,
+                status.IsClosed,
+                status.IsFirstBusinessDayAfterClosure,
+                status.IsBeforeMinimum,
+                status.IsSelectable,
+                status.Reason,
+                status.IsDailyCapacityExceeded,
+                status.IsWeeklyCapacityExceeded,
+                capacityLoadLevel,
+                status.OrderCapacityUnits,
+                status.ExistingDailyCapacityUsed,
+                status.ExistingWeeklyCapacityUsed,
+                status.DailyCapacityLimit,
+                status.WeeklyCapacityLimit
+            };
+        }
+
+        return new
+        {
+            status.Date,
+            status.IsClosed,
+            status.IsFirstBusinessDayAfterClosure,
+            status.IsBeforeMinimum,
+            status.IsSelectable,
+            status.Reason,
+            status.IsDailyCapacityExceeded,
+            status.IsWeeklyCapacityExceeded,
+            capacityLoadLevel
+        };
+    }
+
+    private static string? CapacityLoadLevel(DeliveryDateStatus status)
+    {
+        if (!status.ExistingDailyCapacityUsed.HasValue || !status.DailyCapacityLimit.HasValue || status.DailyCapacityLimit.Value <= 0m)
+            return null;
+        var ratio = status.ExistingDailyCapacityUsed.Value / status.DailyCapacityLimit.Value;
+        return ratio < 0.4m ? "low" : ratio < 0.8m ? "medium" : "high";
     }
 
     private static object ToCalendarDayDto(DateOnly date, IEnumerable<OrderRecord> orders, IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate)

@@ -589,6 +589,45 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingDates_ForClinic_ReturnsDailyCapacityLoadLevelWithoutExactCapacityNumbers()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 10.0m, 100.0m);
+        for (var i = 0; i < 3; i++)
+            await SeedOrderAsync(fixture.DbPath, $"260611-L{i}", $"Low {i}", "DEMO", "2026-06-11");
+        for (var i = 0; i < 5; i++)
+            await SeedOrderAsync(fixture.DbPath, $"260612-M{i}", $"Medium {i}", "DEMO", "2026-06-12");
+        for (var i = 0; i < 8; i++)
+            await SeedOrderAsync(fixture.DbPath, $"260616-H{i}", $"High {i}", "DEMO", "2026-06-16");
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var dates = await client.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Load Preview",
+          "impressionDate":"2026-06-08",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":21,"toothEnd":21}],
+          "start":"2026-06-11",
+          "end":"2026-06-16"
+        }
+        """));
+
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(statuses["2026-06-11"].GetProperty("capacityLoadLevel").GetString(), Is.EqualTo("low"));
+            Assert.That(statuses["2026-06-12"].GetProperty("capacityLoadLevel").GetString(), Is.EqualTo("medium"));
+            Assert.That(statuses["2026-06-16"].GetProperty("capacityLoadLevel").GetString(), Is.EqualTo("high"));
+            Assert.That(statuses["2026-06-11"].TryGetProperty("existingDailyCapacityUsed", out _), Is.False);
+            Assert.That(statuses["2026-06-11"].TryGetProperty("dailyCapacityLimit", out _), Is.False);
+            Assert.That(statuses["2026-06-11"].TryGetProperty("orderCapacityUnits", out _), Is.False);
+        });
+    }
+
+    [Test]
     public async Task SchedulingDates_WhenSingleOrderWouldBe13AgainstCap12_ButDayIsEmpty_AllowsClinicCreate()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));

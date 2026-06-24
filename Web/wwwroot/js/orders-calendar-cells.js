@@ -78,6 +78,30 @@
     return { used: used, limit: limit };
   }
 
+  function normalizeLoadLevel(level){
+    level = String(level || '').toLowerCase();
+    return level === 'low' || level === 'medium' || level === 'high' ? level : '';
+  }
+
+  function loadLevelLabel(level){
+    return level === 'low' ? 'Low' : (level === 'medium' ? 'Medium' : 'High');
+  }
+
+  function loadLevelMouthPath(level){
+    if(level === 'low') return 'M8 14.2c1.2 1.5 2.6 2.3 4 2.3s2.8-.8 4-2.3';
+    if(level === 'medium') return 'M8.5 15h7';
+    return 'M8 16.2c1.2-1.5 2.6-2.3 4-2.3s2.8.8 4 2.3';
+  }
+
+  function loadLevelSvgHtml(level){
+    return '<svg class="orders-calendar-load-icon" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="2"></circle>'
+      + '<circle cx="9" cy="10" r="1.15" fill="currentColor"></circle>'
+      + '<circle cx="15" cy="10" r="1.15" fill="currentColor"></circle>'
+      + '<path d="' + loadLevelMouthPath(level) + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>'
+      + '</svg>';
+  }
+
   function buildCapacityIndicator(capacity){
     var c = normalizeCapacity(capacity);
     if(!c) return null;
@@ -90,6 +114,18 @@
     el.textContent = usedText + '/' + limitText;
     el.title = 'Capacity used: ' + usedText + ' / ' + limitText;
     el.setAttribute('aria-label', 'Capacity used ' + usedText + ' of ' + limitText);
+    return el;
+  }
+
+  function buildLoadIndicator(level){
+    level = normalizeLoadLevel(level);
+    if(!level) return null;
+    var el = document.createElement('span');
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-' + level + ' orders-calendar-load-level';
+    var label = loadLevelLabel(level);
+    el.innerHTML = loadLevelSvgHtml(level);
+    el.title = label + ' lab load';
+    el.setAttribute('aria-label', label + ' lab load');
     return el;
   }
 
@@ -173,6 +209,7 @@
     orderToothCount: orderToothCount,
     dayToothTotalText: dayToothTotalText,
     normalizeCapacity: normalizeCapacity,
+    buildLoadIndicator: buildLoadIndicator,
     renderDayOrders: renderDayOrders
   };
 })(typeof window !== 'undefined' ? window : globalThis);
