@@ -228,7 +228,8 @@ public sealed class DeadlineRecommendationService
                 continue;
             var capacityConfig = await _capacityConfigs.GetForDateAsync(weekEnd, ct);
             ValidateCapacityConfig(capacityConfig);
-            result[weekEnd] = new WeeklyCapacityUsage(weekEnd, used, capacityConfig.WeeklyCapacityUnits);
+            var weeklyCapacityLimit = await GetEffectiveWeeklyCapacityUnitsAsync(capacityConfig, weekEnd, ct);
+            result[weekEnd] = new WeeklyCapacityUsage(weekEnd, used, weeklyCapacityLimit);
         }
 
         return result;
@@ -314,8 +315,9 @@ public sealed class DeadlineRecommendationService
         var capacityConfig = await _capacityConfigs.GetForDateAsync(date, ct);
         ValidateCapacityConfig(capacityConfig);
         var usage = await GetCapacityUsageAsync(date, excludedOrderId, orderRepositoryOverride, ct);
+        var weeklyCapacityLimit = await GetEffectiveWeeklyCapacityUnitsAsync(capacityConfig, date, ct);
         var isDailyCapacityExceeded = usage.DailyUsed > 0m && usage.DailyUsed + orderCapacityUnits > capacityConfig.DailyCapacityUnits;
-        var isWeeklyCapacityExceeded = usage.WeeklyUsed + orderCapacityUnits > capacityConfig.WeeklyCapacityUnits;
+        var isWeeklyCapacityExceeded = usage.WeeklyUsed + orderCapacityUnits > weeklyCapacityLimit;
         var reason = baseStatus.Reason ?? GetCapacityReason(isDailyCapacityExceeded, isWeeklyCapacityExceeded);
         var isSelectable = baseStatus.IsSelectable && !isDailyCapacityExceeded && !isWeeklyCapacityExceeded;
 
@@ -332,7 +334,21 @@ public sealed class DeadlineRecommendationService
             usage.DailyUsed,
             usage.WeeklyUsed,
             capacityConfig.DailyCapacityUnits,
-            capacityConfig.WeeklyCapacityUnits);
+            weeklyCapacityLimit);
+    }
+
+    private async Task<decimal> GetEffectiveWeeklyCapacityUnitsAsync(SchedulingCapacityConfig capacityConfig, DateOnly date, CancellationToken ct)
+    {
+        var (weekStart, _) = SchedulingWeek.GetRange(date);
+        var openWeekdays = 0;
+        for (var offset = 0; offset < 5; offset++)
+        {
+            var weekday = weekStart.AddDays(offset);
+            if (!await _availability.IsClosedAsync(weekday, ct))
+                openWeekdays++;
+        }
+
+        return capacityConfig.WeeklyCapacityUnits * openWeekdays / 5m;
     }
 
     private async Task<CapacityUsage> GetCapacityUsageAsync(DateOnly date, long? excludedOrderId, IOrderRepository? orderRepositoryOverride, CancellationToken ct)
