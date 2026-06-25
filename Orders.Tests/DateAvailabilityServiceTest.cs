@@ -71,6 +71,33 @@ public class DateAvailabilityServiceTest
     }
 
     [Test]
+    public async Task GetStatusAsync_GivenLabOffday_ReturnsClosedAndBlocksNextBusinessDay()
+    {
+        var service = new DateAvailabilityService(new FixedNonWorkingDayProvider(new DateOnly(2026, 6, 3)));
+
+        var offday = await service.GetStatusAsync(new DateOnly(2026, 6, 3), new DateOnly(2026, 6, 1));
+        var dayAfter = await service.GetStatusAsync(new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(offday.IsClosed, Is.True);
+            Assert.That(offday.IsSelectable, Is.False);
+            Assert.That(dayAfter.IsFirstBusinessDayAfterClosure, Is.True);
+            Assert.That(dayAfter.IsSelectable, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task CalculateMinimumDateAsync_SkipsLabOffday()
+    {
+        var service = new DateAvailabilityService(new FixedNonWorkingDayProvider(new DateOnly(2026, 6, 3)));
+
+        var minimum = await service.CalculateMinimumDateAsync(new DateOnly(2026, 6, 1), 3);
+
+        Assert.That(minimum, Is.EqualTo(new DateOnly(2026, 6, 5)));
+    }
+
+    [Test]
     public async Task GetStatusesAsync_LoadsNonWorkingDaysOncePerYearForRange()
     {
         var provider = new CountingNonWorkingDayProvider();
@@ -118,5 +145,18 @@ public class DateAvailabilityServiceTest
             CallsByYear[year] = CallsByYear.GetValueOrDefault(year) + 1;
             return new WeekendOnlyNonWorkingDayProvider().GetNonWorkingDaysAsync(year, ct);
         }
+    }
+
+    private sealed class FixedNonWorkingDayProvider : INonWorkingDayProvider
+    {
+        private readonly HashSet<DateOnly> _dates;
+
+        public FixedNonWorkingDayProvider(params DateOnly[] dates)
+        {
+            _dates = dates.ToHashSet();
+        }
+
+        public Task<IReadOnlySet<DateOnly>> GetNonWorkingDaysAsync(int year, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlySet<DateOnly>>(_dates.Where(d => d.Year == year).ToHashSet());
     }
 }

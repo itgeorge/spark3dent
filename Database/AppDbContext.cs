@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
     public DbSet<Entities.SchedulingMaterialConfigEntity> SchedulingMaterialConfigs { get; set; }
     public DbSet<Entities.SchedulingCapacityConfigEntity> SchedulingCapacityConfigs { get; set; }
+    public DbSet<Entities.SchedulingLabOffdayEntity> SchedulingLabOffdays { get; set; }
     public DbSet<Entities.SchedulingDeadlineRecommendationLogEntity> SchedulingDeadlineRecommendationLogs { get; set; }
     public DbSet<Entities.SchedulingDeadlineOverrideLogEntity> SchedulingDeadlineOverrideLogs { get; set; }
     public DbSet<Entities.AuditEventEntity> AuditEvents { get; set; }
@@ -131,6 +132,15 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.ActiveFromDate).IsUnique();
             e.Property(x => x.DailyCapacityUnits).HasColumnType("TEXT").IsRequired();
             e.Property(x => x.WeeklyCapacityUnits).HasColumnType("TEXT").IsRequired();
+        });
+
+        modelBuilder.Entity<Entities.SchedulingLabOffdayEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.StartDate);
+            e.HasIndex(x => x.EndDate);
+            e.Property(x => x.StartDate).IsRequired();
+            e.Property(x => x.EndDate).IsRequired();
         });
 
         modelBuilder.Entity<Entities.SchedulingDeadlineRecommendationLogEntity>(e =>
