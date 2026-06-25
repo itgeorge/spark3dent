@@ -109,7 +109,9 @@ public static class SchedulingConfigValidation
             throw new InvalidOperationException("Fixed lead-time business days must be positive.");
         if (create.CapacityUnitsPerTooth <= 0)
             throw new InvalidOperationException("Capacity units per tooth must be positive.");
-        if (UsesToothCountExtraLeadTime(material) && (create.TeethPerExtraLeadDay is null or <= 0))
+        if (create.TeethPerExtraLeadDay is <= 0)
+            throw new InvalidOperationException("Teeth per extra lead day must be positive when set.");
+        if (UsesToothCountExtraLeadTime(material) && create.TeethPerExtraLeadDay is null)
             throw new InvalidOperationException($"{material} requires positive teeth per extra lead day.");
     }
 
@@ -119,7 +121,9 @@ public static class SchedulingConfigValidation
             throw new InvalidOperationException("Fixed lead-time business days must be positive.");
         if (update.CapacityUnitsPerTooth <= 0)
             throw new InvalidOperationException("Capacity units per tooth must be positive.");
-        if (UsesToothCountExtraLeadTime(material) && (update.TeethPerExtraLeadDay is null or <= 0))
+        if (update.TeethPerExtraLeadDay is <= 0)
+            throw new InvalidOperationException("Teeth per extra lead day must be positive when set.");
+        if (UsesToothCountExtraLeadTime(material) && update.TeethPerExtraLeadDay is null)
             throw new InvalidOperationException($"{material} requires positive teeth per extra lead day.");
     }
 

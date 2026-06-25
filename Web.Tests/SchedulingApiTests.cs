@@ -262,6 +262,26 @@ public class SchedulingApiTests
 
         var badMaterial = await labClient.PutAsync("/api/scheduling/config/materials/pfm", Json("{\"fixedLeadTimeBusinessDays\":4,\"capacityUnitsPerTooth\":1,\"teethPerExtraLeadDay\":null}"));
         Assert.That(badMaterial.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var badOptionalTeeth = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1,\"teethPerExtraLeadDay\":0}"));
+        Assert.That(badOptionalTeeth.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task SchedulingConfigAdmin_AllowsOptionalTeethPerExtraLeadDayForNonPfmMaterials()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var update = await labClient.PutAsync("/api/scheduling/config/materials/pmma", Json("{\"fixedLeadTimeBusinessDays\":2,\"capacityUnitsPerTooth\":1.25,\"teethPerExtraLeadDay\":7}"));
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var get = await labClient.GetAsync("/api/scheduling/config");
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        var pmma = doc.RootElement.GetProperty("materialSchedulingConfigs").EnumerateArray().Single(c => c.GetProperty("material").GetString() == "pmma");
+        Assert.That(pmma.GetProperty("teethPerExtraLeadDay").GetInt32(), Is.EqualTo(7));
     }
 
     [Test]
