@@ -102,16 +102,32 @@
       + '</svg>';
   }
 
+  function capacityLevel(ratio){
+    return ratio < 0.4 ? 'low' : (ratio < 0.8 ? 'medium' : 'high');
+  }
+
+  function appendCapacityPie(el, ratio){
+    var pie = document.createElement('span');
+    pie.className = 'orders-calendar-capacity-pie';
+    pie.setAttribute('aria-hidden', 'true');
+    pie.style.setProperty('--capacity-deg', Math.max(0, Math.min(1, ratio)) * 360 + 'deg');
+    el.appendChild(pie);
+  }
+
   function buildCapacityIndicator(capacity){
     var c = normalizeCapacity(capacity);
     if(!c) return null;
     var ratio = c.used / c.limit;
-    var level = ratio < 0.4 ? 'low' : (ratio < 0.8 ? 'medium' : 'high');
+    var level = capacityLevel(ratio);
     var el = document.createElement('span');
-    el.className = 'orders-calendar-capacity orders-calendar-capacity-' + level;
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-exact orders-calendar-capacity-' + level;
     var usedText = String(Math.round(c.used));
     var limitText = String(Math.round(c.limit));
-    el.textContent = usedText + '/' + limitText;
+    var text = document.createElement('span');
+    text.className = 'orders-calendar-capacity-text';
+    text.textContent = usedText + '/' + limitText;
+    el.appendChild(text);
+    appendCapacityPie(el, ratio);
     el.title = 'Capacity used: ' + usedText + ' / ' + limitText;
     el.setAttribute('aria-label', 'Capacity used ' + usedText + ' of ' + limitText);
     return el;
@@ -121,18 +137,22 @@
     var c = normalizeCapacity(capacity);
     if(!c) return null;
     var ratio = c.used / c.limit;
-    var level = ratio < 0.4 ? 'low' : (ratio < 0.8 ? 'medium' : 'high');
+    var level = capacityLevel(ratio);
     var el = document.createElement('span');
-    el.className = 'orders-calendar-capacity orders-calendar-weekly-capacity orders-calendar-capacity-' + level;
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-exact orders-calendar-weekly-capacity orders-calendar-capacity-' + level;
     var usedText = String(Math.round(c.used));
     var limitText = String(Math.round(c.limit));
+    var text = document.createElement('span');
+    text.className = 'orders-calendar-capacity-text';
     var longLabel = document.createElement('span');
     longLabel.className = 'orders-calendar-week-label-long';
     longLabel.textContent = 'week';
     var shortLabel = document.createElement('span');
     shortLabel.className = 'orders-calendar-week-label-short';
     shortLabel.textContent = 'W';
-    el.append(longLabel, shortLabel, document.createTextNode(': ' + usedText + '/' + limitText));
+    text.append(longLabel, shortLabel, document.createTextNode(': ' + usedText + '/' + limitText));
+    el.appendChild(text);
+    appendCapacityPie(el, ratio);
     el.title = 'Weekly capacity used: ' + usedText + ' / ' + limitText;
     el.setAttribute('aria-label', 'Weekly capacity used ' + usedText + ' of ' + limitText);
     return el;
