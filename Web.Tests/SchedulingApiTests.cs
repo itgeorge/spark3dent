@@ -1172,6 +1172,93 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task LabOffdayCrud_RequiresLabRejectsOverlapAndAuditsChanges()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var anonymous = fixture.CreateClient();
+        var unauthenticated = await anonymous.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-17\",\"endDate\":\"2026-06-18\"}"));
+        Assert.That(unauthenticated.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var clinicCreate = await clinicClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-17\",\"endDate\":\"2026-06-18\"}"));
+        Assert.That(clinicCreate.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var create = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-17\",\"endDate\":\"2026-06-18\"}"));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var id = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("labOffday").GetProperty("id").GetInt64();
+
+        var overlap = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-18\",\"endDate\":\"2026-06-19\"}"));
+        Assert.That(overlap.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+
+        var update = await labClient.PutAsync($"/api/scheduling/config/lab-offdays/{id}", Json("{\"startDate\":\"2026-06-19\",\"endDate\":\"2026-06-19\"}"));
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var list = await labClient.GetAsync("/api/scheduling/config/lab-offdays?start=2026-06-01&end=2026-06-30");
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var listDoc = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        Assert.That(listDoc.RootElement.GetProperty("dates").EnumerateArray().Select(x => x.GetString()), Is.EqualTo(new[] { "2026-06-19" }));
+
+        var delete = await labClient.DeleteAsync($"/api/scheduling/config/lab-offdays/{id}");
+        Assert.That(delete.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        var operations = await ctx.AuditEvents.AsNoTracking().Select(e => e.Operation).ToArrayAsync();
+        Assert.That(operations, Does.Contain("SchedulingLabOffdayCreated"));
+        Assert.That(operations, Does.Contain("SchedulingLabOffdayUpdated"));
+        Assert.That(operations, Does.Contain("SchedulingLabOffdayDeleted"));
+    }
+
+    [Test]
+    public async Task LabOffdays_FlowThroughNonWorkingDaysDatesAndOrderValidation()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 1, 7, 30, 0, TimeSpan.Zero));
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var createOffday = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-04\",\"endDate\":\"2026-06-04\"}"));
+        Assert.That(createOffday.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var nonWorking = await clinicClient.GetAsync("/api/scheduling/non-working-days?start=2026-06-01&end=2026-06-07");
+        var nonWorkingDates = JsonDocument.Parse(await nonWorking.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().Select(x => x.GetString()).ToArray();
+        Assert.That(nonWorkingDates, Does.Contain("2026-06-04"));
+
+        var dates = await clinicClient.PostAsync("/api/scheduling/dates", Json("""
+        {
+          "caseName":"Lab Offday",
+          "impressionDate":"2026-06-01",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "start":"2026-06-04",
+          "end":"2026-06-05"
+        }
+        """));
+        Assert.That(dates.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var statuses = JsonDocument.Parse(await dates.Content.ReadAsStringAsync()).RootElement.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(statuses["2026-06-04"].GetProperty("isClosed").GetBoolean(), Is.True);
+            Assert.That(statuses["2026-06-05"].GetProperty("isFirstBusinessDayAfterClosure").GetBoolean(), Is.True);
+        });
+
+        var blocked = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Blocked Offday",
+          "impressionDate":"2026-06-01",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-04"
+        }
+        """));
+        Assert.That(blocked.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await blocked.Content.ReadAsStringAsync(), Does.Contain("Closed/non-working day"));
+    }
+
+    [Test]
     public async Task SchedulingCalendarEndpoint_ForLab_ReturnsWeeklyCapacityOnSundayCell()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));

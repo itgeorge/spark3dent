@@ -1,4 +1,5 @@
 using System.Net;
+using Database;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Orders;
@@ -22,14 +23,17 @@ public class ApiHealthTests
     }
 
     [Test]
-    public void ServiceProvider_ResolvesNonWorkingDayProvider()
+    public async Task ServiceProvider_ResolvesNonWorkingDayProvider()
     {
         using var fixture = new ApiTestFixture(runtimeHostingMode: "Desktop", runtimePort: null);
         using var scope = fixture.Services.CreateScope();
 
         var provider = scope.ServiceProvider.GetRequiredService<INonWorkingDayProvider>();
+        var days = await provider.GetNonWorkingDaysAsync(2026);
 
-        Assert.That(provider, Is.InstanceOf<BulgariaHardcodedNonWorkingDayProvider>());
+        Assert.That(provider, Is.InstanceOf<DbBackedLabNonWorkingDayProvider>());
+        Assert.That(days, Does.Contain(new DateOnly(2026, 3, 3)));
+        Assert.That(days, Does.Contain(new DateOnly(2026, 6, 6)));
     }
 
     [Test]

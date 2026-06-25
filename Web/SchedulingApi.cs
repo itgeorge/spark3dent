@@ -105,6 +105,92 @@ public static class SchedulingApi
             }
         });
 
+        app.MapGet("/api/scheduling/config/lab-offdays", async (HttpContext ctx, SchedulingAuthService auth, ILabOffdayRepository labOffdays, DateOnly? start, DateOnly? end) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            if (start == null || end == null)
+                return Results.Json(new { error = "Lab offday start and end query parameters are required." }, statusCode: 400, options: JsonOptions);
+            if (start > end)
+                return Results.Json(new { error = "Lab offday start date must be before or equal to end date." }, statusCode: 400, options: JsonOptions);
+            if (end.Value.DayNumber - start.Value.DayNumber + 1 > 370)
+                return Results.Json(new { error = "Lab offday date range cannot exceed 370 days." }, statusCode: 400, options: JsonOptions);
+
+            var rows = await labOffdays.ListIntersectingAsync(start.Value, end.Value, ctx.RequestAborted);
+            var dates = ExpandLabOffdayDates(rows, start.Value, end.Value).Select(d => d.ToString("yyyy-MM-dd")).ToArray();
+            return Results.Json(new { start, end, items = rows.Select(ToLabOffdayDto), dates }, JsonOptions);
+        });
+
+        app.MapPost("/api/scheduling/config/lab-offdays", async (HttpContext ctx, SchedulingAuthService auth, ILabOffdayRepository labOffdays, IAuditLog auditLog, IClock clock) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var body = await ReadJson<LabOffdayCreate>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var created = await labOffdays.CreateAsync(body, clock.UtcNow, ctx.RequestAborted);
+                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingLabOffdayCreated", "SchedulingLabOffday", created.Id.ToString(), LabOffdayDisplay(created), new { @new = created });
+                return Results.Json(new { labOffday = ToLabOffdayDto(created) }, statusCode: 201, options: JsonOptions);
+            }
+            catch (LabOffdayOverlapException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 409, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapPut("/api/scheduling/config/lab-offdays/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, ILabOffdayRepository labOffdays, IAuditLog auditLog, IClock clock) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var body = await ReadJson<LabOffdayUpdate>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var old = (await labOffdays.ListAllAsync(ctx.RequestAborted)).FirstOrDefault(x => x.Id == id);
+                var updated = await labOffdays.UpdateAsync(id, body, clock.UtcNow, ctx.RequestAborted);
+                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingLabOffdayUpdated", "SchedulingLabOffday", updated.Id.ToString(), LabOffdayDisplay(updated), new { old, @new = updated });
+                return Results.Json(new { labOffday = ToLabOffdayDto(updated) }, options: JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (LabOffdayOverlapException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 409, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapDelete("/api/scheduling/config/lab-offdays/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, ILabOffdayRepository labOffdays, IAuditLog auditLog, IClock clock) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            try
+            {
+                var old = (await labOffdays.ListAllAsync(ctx.RequestAborted)).FirstOrDefault(x => x.Id == id);
+                await labOffdays.DeleteAsync(id, ctx.RequestAborted);
+                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingLabOffdayDeleted", "SchedulingLabOffday", id.ToString(), old == null ? id.ToString() : LabOffdayDisplay(old), new { old });
+                return Results.Json(new { ok = true }, options: JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+        });
+
         app.MapPost("/api/scheduling/config/materials", async (HttpContext ctx, SchedulingAuthService auth, IMaterialSchedulingConfigAdminRepository materialConfigs, IAuditLog auditLog, IClock clock) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -740,6 +826,34 @@ public static class SchedulingApi
             Status = status,
             IsCurrent = currentId == c.Id
         };
+    }
+
+    private static object ToLabOffdayDto(LabOffdayRecord c) => new
+    {
+        c.Id,
+        c.StartDate,
+        c.EndDate,
+        c.CreatedAt,
+        c.UpdatedAt
+    };
+
+    private static string LabOffdayDisplay(LabOffdayRecord c) =>
+        c.StartDate == c.EndDate
+            ? c.StartDate.ToString("yyyy-MM-dd")
+            : $"{c.StartDate:yyyy-MM-dd} - {c.EndDate:yyyy-MM-dd}";
+
+    private static IReadOnlyList<DateOnly> ExpandLabOffdayDates(IEnumerable<LabOffdayRecord> rows, DateOnly start, DateOnly end)
+    {
+        var dates = new SortedSet<DateOnly>();
+        foreach (var row in rows)
+        {
+            var rangeStart = row.StartDate < start ? start : row.StartDate;
+            var rangeEnd = row.EndDate > end ? end : row.EndDate;
+            for (var d = rangeStart; d <= rangeEnd; d = d.AddDays(1))
+                dates.Add(d);
+        }
+
+        return dates.ToArray();
     }
 
     private static Task AppendSchedulingConfigAuditAsync(IAuditLog auditLog, IClock clock, HttpContext ctx, string operation, string entityType, string entityId, string? entityDisplay, object metadata)

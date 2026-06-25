@@ -191,6 +191,38 @@ public class DeadlineRecommendationServiceTest
     }
 
     [Test]
+    public async Task RecommendCapacityAwareDateAsync_GivenHolidayWeek_ReducesWeeklyCapacityProportionally()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 2, 10, 30);
+        var holidayMonday = new DateOnly(2026, 6, 1);
+        var existingOrders = new[]
+        {
+            BuildOrder(1, "EX-HOLIDAY-WEEK", new DateOnly(2026, 6, 3)) with { CalculatedCapacityUnits = 4m }
+        };
+        var service = CreateService(
+            extraClosedDates: [holidayMonday],
+            orders: existingOrders,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 10m, 5m)]);
+
+        var recommended = await service.RecommendCapacityAwareDateAsync(Input(Material.Pmma, createdAtUtc));
+        var statuses = await service.GetCapacityAwareDateStatusesAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 5));
+        var weeklyUsage = await service.GetWeeklyCapacityUsageByWeekEndAsync(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 7));
+        var thursday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 4));
+        var friday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 5));
+        var weekEnd = new DateOnly(2026, 6, 7);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(recommended, Is.EqualTo(new DateOnly(2026, 6, 9)));
+            Assert.That(thursday.IsWeeklyCapacityExceeded, Is.True);
+            Assert.That(thursday.WeeklyCapacityLimit, Is.EqualTo(4m));
+            Assert.That(friday.IsWeeklyCapacityExceeded, Is.True);
+            Assert.That(weeklyUsage[weekEnd].Used, Is.EqualTo(4m));
+            Assert.That(weeklyUsage[weekEnd].Limit, Is.EqualTo(4m));
+        });
+    }
+
+    [Test]
     public async Task RecommendCapacityAwareDateAsync_CancelledOrdersDoNotConsumeCapacity()
     {
         var createdAtUtc = SofiaLocal(2026, 6, 3, 10, 30);
