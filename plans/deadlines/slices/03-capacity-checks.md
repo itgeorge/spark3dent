@@ -240,6 +240,8 @@ Do not remove or rename existing fields the frontend relies on: `date`, `isClose
 
 ### Save validation behavior
 
+Post-implementation note: the current code intentionally permits a single large order to exceed the daily capacity limit when the selected day has no existing active usage. Daily capacity is treated as a same-day stacking guard; once `ExistingDailyCapacityUsed > 0`, additional orders are rejected if they exceed the daily limit. Weekly capacity still rejects oversized/overbooked weeks unless a valid lab override is used.
+
 Create/update must revalidate against capacity before saving.
 
 For this slice:

@@ -111,6 +111,8 @@ The maximum normal capacity units allowed for a specific deadline date.
 
 Daily capacity is primarily a safeguard against too many orders being due on the same day.
 
+Implementation note (post-V1 slices): the current scheduler intentionally treats daily capacity as a same-day stacking guard rather than a hard maximum for a single order. A single large order may exceed the nominal daily capacity when the day has no other active orders; once a day already has usage, additional orders are blocked if `existingDailyUsed + orderCapacityUnits > dailyLimit`. Weekly capacity remains a hard rough-cut cap unless explicitly overridden by a lab user.
+
 ### 3.7 Weekly capacity
 
 The maximum normal capacity units allowed for the week containing a candidate deadline date.
@@ -273,7 +275,9 @@ When an order is rescheduled:
 
 The recommendation algorithm must search at most 60 calendar days forward (from order impression date).
 
-If no acceptable deadline date is found within 60 calendar days, the system must return an error/manual-scheduling-required result.
+Implementation note (post-V1 slices): the current code applies the 60-calendar-day search window from the resolved effective intake business date, not directly from the raw impression timestamp. This was kept intentionally because all recommendation candidates are evaluated from the lab-effective intake date after cutoff/weekend/holiday adjustment.
+
+If no acceptable deadline date is found within the search window, the system must return an error/manual-scheduling-required result.
 
 This prevents infinite loops caused by invalid configuration, such as zero capacity for all future dates.
 
