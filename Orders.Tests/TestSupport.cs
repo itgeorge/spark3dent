@@ -46,16 +46,6 @@ internal sealed class TestMaterialSchedulingConfigProvider : IMaterialScheduling
             .ThenBy(c => c.ActiveFromDate)
             .ToArray();
 
-    public Task<MaterialSchedulingConfig> GetLatestAsync(Material material, CancellationToken ct = default)
-    {
-        var config = _configs.Where(c => c.Material == material)
-            .OrderByDescending(c => c.ActiveFromDate)
-            .FirstOrDefault();
-        return config != null
-            ? Task.FromResult(config)
-            : throw new InvalidOperationException($"Material scheduling config is missing for {material}.");
-    }
-
     public Task<MaterialSchedulingConfig> GetForDateAsync(Material material, DateOnly deadlineDate, CancellationToken ct = default)
     {
         var config = _configs.Where(c => c.Material == material && c.ActiveFromDate <= deadlineDate)

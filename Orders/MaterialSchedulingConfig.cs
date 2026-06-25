@@ -9,7 +9,6 @@ public sealed record MaterialSchedulingConfig(
 
 public interface IMaterialSchedulingConfigProvider
 {
-    Task<MaterialSchedulingConfig> GetLatestAsync(Material material, CancellationToken ct = default);
     Task<MaterialSchedulingConfig> GetForDateAsync(Material material, DateOnly deadlineDate, CancellationToken ct = default);
     Task<IReadOnlyList<MaterialSchedulingConfig>> ListAsync(CancellationToken ct = default);
 }

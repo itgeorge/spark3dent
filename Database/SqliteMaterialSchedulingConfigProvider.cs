@@ -13,19 +13,6 @@ public sealed class SqliteMaterialSchedulingConfigProvider : IMaterialScheduling
         _contextFactory = contextFactory;
     }
 
-    public async Task<MaterialSchedulingConfig> GetLatestAsync(Material material, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var entity = await ctx.SchedulingMaterialConfigs.AsNoTracking()
-            .Where(c => c.Material == material)
-            .OrderByDescending(c => c.ActiveFromDate)
-            .ThenByDescending(c => c.Id)
-            .FirstOrDefaultAsync(ct);
-        if (entity == null)
-            throw new InvalidOperationException($"Material scheduling config is missing for {material}.");
-        return ToDomain(entity);
-    }
-
     public async Task<MaterialSchedulingConfig> GetForDateAsync(Material material, DateOnly deadlineDate, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();

@@ -170,11 +170,11 @@ public class SqliteMaterialSchedulingConfigProviderTest
     }
 
     [Test]
-    public async Task GetLatestAsync_ReturnsSeededPfmConfig()
+    public async Task GetForDateAsync_ReturnsSeededPfmConfig()
     {
         var provider = new SqliteMaterialSchedulingConfigProvider(_contextFactory);
 
-        var config = await provider.GetLatestAsync(Material.Pfm);
+        var config = await provider.GetForDateAsync(Material.Pfm, new DateOnly(2026, 6, 10));
 
         Assert.Multiple(() =>
         {
@@ -186,7 +186,7 @@ public class SqliteMaterialSchedulingConfigProviderTest
     }
 
     [Test]
-    public async Task GetLatestAsync_ReflectsDatabaseEditsWithoutHardcodedFallback()
+    public async Task GetForDateAsync_ReflectsDatabaseEditsWithoutHardcodedFallback()
     {
         await using (var ctx = _contextFactory())
         {
@@ -197,14 +197,14 @@ public class SqliteMaterialSchedulingConfigProviderTest
         }
         var provider = new SqliteMaterialSchedulingConfigProvider(_contextFactory);
 
-        var config = await provider.GetLatestAsync(Material.Pmma);
+        var config = await provider.GetForDateAsync(Material.Pmma, new DateOnly(2026, 6, 10));
 
         Assert.That(config.FixedLeadTimeBusinessDays, Is.EqualTo(5));
         Assert.That(config.CapacityUnitsPerTooth, Is.EqualTo(1.25m));
     }
 
     [Test]
-    public async Task GetLatestAsync_GivenMissingRow_FailsClearly()
+    public async Task GetForDateAsync_GivenMissingRow_FailsClearly()
     {
         await using (var ctx = _contextFactory())
         {
@@ -214,7 +214,7 @@ public class SqliteMaterialSchedulingConfigProviderTest
         }
         var provider = new SqliteMaterialSchedulingConfigProvider(_contextFactory);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await provider.GetLatestAsync(Material.Pmma));
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await provider.GetForDateAsync(Material.Pmma, new DateOnly(2026, 6, 10)));
 
         Assert.That(ex!.Message, Does.Contain("missing").IgnoreCase);
         Assert.That(ex.Message, Does.Contain(nameof(Material.Pmma)));
