@@ -44,11 +44,20 @@
 
     var orders = document.createElement('div');
     orders.className = 'delivery-calendar-orders';
+    if(S3DOrders.CalendarCells && options.isLab && options.weeklyCapacity && S3DOrders.CalendarCells.buildWeeklyCapacityIndicator){
+      var weekly = S3DOrders.CalendarCells.buildWeeklyCapacityIndicator(options.weeklyCapacity);
+      if(weekly) orders.appendChild(weekly);
+    }
+    if(S3DOrders.CalendarCells && !options.isLab && options.capacityLoadLevel){
+      var load = S3DOrders.CalendarCells.buildLoadIndicator(options.capacityLoadLevel);
+      if(load) orders.appendChild(load);
+    }
     if(S3DOrders.CalendarCells && dayOrders.length){
       S3DOrders.CalendarCells.renderDayOrders(orders, dayOrders, {
         iso: iso,
         orderClinics: options.orderClinics || {},
         isLab: !!options.isLab,
+        capacity: options.capacity,
         orderClicksEnabled: options.orderClicksEnabled !== false,
         onOpenOrder: options.onOpenOrder,
         onOpenDay: options.onOpenDay

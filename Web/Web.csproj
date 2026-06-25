@@ -36,6 +36,7 @@
         <EmbeddedResource Include="wwwroot\index.html" />
         <EmbeddedResource Include="wwwroot\orders.html" />
         <EmbeddedResource Include="wwwroot\iam.html" />
+        <EmbeddedResource Include="wwwroot\scheduling-config.html" />
         <EmbeddedResource Include="..\licenses\*.txt">
             <LogicalName>Web.licenses.%(Filename)%(Extension)</LogicalName>
         </EmbeddedResource>

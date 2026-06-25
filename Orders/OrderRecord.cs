@@ -21,4 +21,5 @@ public sealed record OrderRecord(
     DateTimeOffset UpdatedAt,
     string CreatedIp,
     string CreatedUserAgent,
-    string? ColorNote = null);
+    string? ColorNote = null,
+    decimal? CalculatedCapacityUnits = null);

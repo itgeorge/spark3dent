@@ -337,6 +337,35 @@ namespace Database.Migrations
                     b.ToTable("SchedulingAuthSessions");
                 });
 
+            modelBuilder.Entity("Database.Entities.SchedulingCapacityConfigEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("ActiveFromDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DailyCapacityUnits")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("WeeklyCapacityUnits")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActiveFromDate")
+                        .IsUnique();
+
+                    b.ToTable("SchedulingCapacityConfigs");
+                });
+
             modelBuilder.Entity("Database.Entities.SchedulingClinicEntity", b =>
                 {
                     b.Property<string>("Code")
@@ -364,6 +393,209 @@ namespace Database.Migrations
                     b.HasKey("Code");
 
                     b.ToTable("SchedulingClinics");
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingDeadlineOverrideLogEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CalendarReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUnixTimeMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByMemberId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByMemberLabel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByOrganizationCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByOrganizationType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("DailyCapacityAfterOverride")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("DailyCapacityLimitUsed")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExistingDailyCapacityUsed")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExistingWeeklyCapacityUsed")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("MinimumDeadlineDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("OrderCapacityUnits")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrderCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OverrideReason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RecommendationLogId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RulesBypassedJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SelectedDeadlineDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("SystemRecommendedDeadlineDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("WeeklyCapacityAfterOverride")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("WeeklyCapacityLimitUsed")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUnixTimeMilliseconds");
+
+                    b.HasIndex("OrderCode");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("SchedulingDeadlineOverrideLogs");
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingDeadlineRecommendationLogEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("CalculatedOrderCapacityUnits")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CandidateChecksJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CapacityUnitsPerToothUsed")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConfigSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUnixTimeMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByMemberId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByMemberLabel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByOrganizationCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedByOrganizationType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<TimeOnly>("CutoffTimeUsed")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveIntakeBusinessDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ExtraLeadTimeBusinessDaysUsed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FailureReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("FinalRecommendedDeadlineDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FixedLeadTimeBusinessDaysUsed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LeadTimeBusinessDaysUsed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Material")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("MinimumDeadlineDateFromLeadTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrderCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("OrderCreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ResultStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SearchEndedAtDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SearchLimitDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SearchStartedAtDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SelectedDeadlineDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TeethPerExtraLeadDayUsed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ToothCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUnixTimeMilliseconds");
+
+                    b.HasIndex("OrderCode");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("SchedulingDeadlineRecommendationLogs");
                 });
 
             modelBuilder.Entity("Database.Entities.SchedulingLabEntity", b =>
@@ -397,6 +629,44 @@ namespace Database.Migrations
                         {
                             t.HasCheckConstraint("CK_SchedulingLabs_Singleton", "Id = 1");
                         });
+                });
+
+            modelBuilder.Entity("Database.Entities.SchedulingMaterialConfigEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("ActiveFromDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CapacityUnitsPerTooth")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FixedLeadTimeBusinessDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Material")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TeethPerExtraLeadDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Material");
+
+                    b.HasIndex("Material", "ActiveFromDate")
+                        .IsUnique();
+
+                    b.ToTable("SchedulingMaterialConfigs");
                 });
 
             modelBuilder.Entity("Database.Entities.SchedulingMemberEntity", b =>
@@ -439,6 +709,9 @@ namespace Database.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("CalculatedCapacityUnits")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CaseName")
                         .IsRequired()

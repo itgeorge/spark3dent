@@ -134,6 +134,28 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task CreateAndUpdateOrderAsync_PersistsCalculatedCapacityUnits_AsDecimalOrNull()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("CAP-234", "capacity", DateTimeOffset.Parse("2026-05-31T10:00:00Z")) with
+        {
+            CalculatedCapacityUnits = 1.5m
+        });
+        await repo.CreateOrderAsync(BuildOrder("NULL-234", "legacy", DateTimeOffset.Parse("2026-05-31T10:01:00Z")) with
+        {
+            CalculatedCapacityUnits = null
+        });
+
+        var updated = await repo.UpdateOrderAsync((await repo.GetOrderByCodeAsync("CAP-234"))! with { CalculatedCapacityUnits = 2.75m });
+        var withCapacity = await repo.GetOrderByCodeAsync("CAP-234");
+        var withoutCapacity = await repo.GetOrderByCodeAsync("NULL-234");
+
+        Assert.That(updated.CalculatedCapacityUnits, Is.EqualTo(2.75m));
+        Assert.That(withCapacity!.CalculatedCapacityUnits, Is.EqualTo(2.75m));
+        Assert.That(withoutCapacity!.CalculatedCapacityUnits, Is.Null);
+    }
+
+    [Test]
     public async Task UpdateOrderAsync_PersistsChangedFieldsAndCancelledStatus()
     {
         var repo = new SqliteOrderRepo(_contextFactory);
@@ -260,6 +282,20 @@ public class SqliteOrderRepoTest
         var orders = await repo.ListOrdersForClinicAsync("DEMO");
 
         Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "CCC-234", "AAA-234" }));
+    }
+
+    [Test]
+    public async Task ListActiveOrdersByDeadlineRangeAsync_ReturnsAllClinicsAndExcludesCancelled()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("AAA-234", "demo", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), clinicCode: "DEMO", requestedDeliveryDate: new DateOnly(2026, 6, 5)));
+        var cancelled = await repo.CreateOrderAsync(BuildOrder("BBB-234", "cancelled", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), clinicCode: "DEMO", requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+        await repo.UpdateOrderAsync(cancelled with { Status = OrderStatus.Cancelled });
+        await repo.CreateOrderAsync(BuildOrder("CCC-234", "other", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), clinicCode: "OTHER", requestedDeliveryDate: new DateOnly(2026, 6, 7)));
+
+        var orders = await repo.ListActiveOrdersByDeadlineRangeAsync(new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 7));
+
+        Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "AAA-234", "CCC-234" }));
     }
 
     [Test]

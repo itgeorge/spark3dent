@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
 using Accounting;
@@ -62,10 +63,20 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(_ => new PinHasher(config.App.SchedulingPinPepper ?? Environment.GetEnvironmentVariable("SCHEDULING_PIN_PEPPER")));
 builder.Services.AddSingleton<INonWorkingDayProvider, BulgariaHardcodedNonWorkingDayProvider>();
 builder.Services.AddSingleton<DateAvailabilityService>();
+builder.Services.AddScoped<SqliteMaterialSchedulingConfigProvider>();
+builder.Services.AddScoped<IMaterialSchedulingConfigProvider>(sp => sp.GetRequiredService<SqliteMaterialSchedulingConfigProvider>());
+builder.Services.AddScoped<IMaterialSchedulingConfigAdminRepository>(sp => sp.GetRequiredService<SqliteMaterialSchedulingConfigProvider>());
+builder.Services.AddScoped<SqliteSchedulingCapacityConfigProvider>();
+builder.Services.AddScoped<ISchedulingCapacityConfigProvider>(sp => sp.GetRequiredService<SqliteSchedulingCapacityConfigProvider>());
+builder.Services.AddScoped<ISchedulingCapacityConfigAdminRepository>(sp => sp.GetRequiredService<SqliteSchedulingCapacityConfigProvider>());
 builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator>();
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
+builder.Services.AddScoped<IDeadlineRecommendationLogRepository, SqliteDeadlineRecommendationLogRepository>();
+builder.Services.AddScoped<IDeadlineOverrideLogRepository, SqliteDeadlineOverrideLogRepository>();
+builder.Services.AddScoped<ISchedulingWriteTransaction, SqliteSchedulingWriteTransaction>();
+builder.Services.AddScoped<DeadlineRecommendationService>();
 builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
 builder.Services.AddScoped<SchedulingAuthService>();
 builder.Services.AddScoped<SchedulingOrderService>();
@@ -137,6 +148,15 @@ app.MapGet("/iam", async (HttpContext ctx, SchedulingAuthService auth) =>
         return denied;
 
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("iam.html", webAssembly);
+    return Results.Content(html, "text/html; charset=utf-8");
+});
+
+app.MapGet("/scheduling-config", async (HttpContext ctx, SchedulingAuthService auth) =>
+{
+    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
+        return denied;
+
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("scheduling-config.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
@@ -222,13 +242,27 @@ if (shouldOpenBrowser)
 {
     Console.WriteLine($"Spark3Dent Web running at {browserUrl}");
     if (!string.Equals(browserUrl, url, StringComparison.OrdinalIgnoreCase))
+    {
         Console.WriteLine($"Listening on all interfaces at {url}");
+        var lanVisitUrl = FormatLanVisitUrl(port);
+        if (lanVisitUrl is not null)
+            Console.WriteLine($"From another device on your LAN, visit {lanVisitUrl}");
+    }
     Console.WriteLine("Press Ctrl+C to stop.");
     Process.Start(new ProcessStartInfo { FileName = browserUrl, UseShellExecute = true });
 }
 else
 {
     Console.WriteLine("NOT auto-starting browser. To open the browser automatically, set `App.ShouldOpenBrowserOnStart: true` in appsettings.json, or set `ASPNETCORE_ENVIRONMENT=LanDev` (or Mvp).");
+    if (config.Runtime.HostingMode == HostingMode.Desktop
+        && !string.Equals(env, LanDevEnvName, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(env, MvpEnvName, StringComparison.OrdinalIgnoreCase))
+    {
+        var lanVisitHint = ResolvePrimaryLanIpv4() is { } lanIp
+            ? $"http://{lanIp}:<port>"
+            : "http://<your-lan-ip>:<port>";
+        Console.WriteLine($"To run in LanDev mode (LAN access, auto-open browser): dotnet run --project Web -e ASPNETCORE_ENVIRONMENT=LanDev. From another device on your LAN, visit {lanVisitHint} (port shown at startup).");
+    }
 }
 
 if (shouldWaitForShutdown)
@@ -241,6 +275,92 @@ static string ResolveSchedulingConfigPath(Config config, string contentRootPath)
             ? config.App.SchedulingConfigPath
             : Path.Combine(contentRootPath, config.App.SchedulingConfigPath);
     return Path.Combine(contentRootPath, "scheduling.walking-skeleton.json");
+}
+
+static string? FormatLanVisitUrl(int port)
+{
+    var lanIp = ResolvePrimaryLanIpv4();
+    return lanIp is null ? null : $"http://{lanIp}:{port}";
+}
+
+static string? ResolvePrimaryLanIpv4()
+{
+    string? class192 = null;
+    string? class172 = null;
+    string? class10 = null;
+    string? fallback = null;
+
+    foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+    {
+        if (networkInterface.OperationalStatus != OperationalStatus.Up
+            || networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+            continue;
+
+        var isVirtual = IsLikelyVirtualNetworkInterface(networkInterface);
+
+        foreach (var address in networkInterface.GetIPProperties().UnicastAddresses)
+        {
+            if (address.Address.AddressFamily != AddressFamily.InterNetwork
+                || IPAddress.IsLoopback(address.Address))
+                continue;
+
+            var bytes = address.Address.GetAddressBytes();
+            if (IsLinkLocalIpv4(bytes))
+                continue;
+
+            var ip = address.Address.ToString();
+            if (isVirtual)
+            {
+                fallback ??= ip;
+                continue;
+            }
+
+            if (bytes[0] == 192 && bytes[1] == 168)
+                class192 ??= ip;
+            else if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+                class172 ??= ip;
+            else if (bytes[0] == 10)
+                class10 ??= ip;
+            else
+                fallback ??= ip;
+        }
+    }
+
+    return class192 ?? class172 ?? class10 ?? fallback;
+}
+
+static bool IsLinkLocalIpv4(byte[] bytes) => bytes[0] == 169 && bytes[1] == 254;
+
+static bool IsLikelyVirtualNetworkInterface(NetworkInterface networkInterface)
+{
+    if (networkInterface.NetworkInterfaceType is NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp)
+        return true;
+
+    var label = $"{networkInterface.Name} {networkInterface.Description}";
+    ReadOnlySpan<string> keywords =
+    [
+        "Hamachi",
+        "Tailscale",
+        "WireGuard",
+        "OpenVPN",
+        "Wintun",
+        "ZeroTier",
+        "Radmin",
+        "NordLynx",
+        "Hyper-V",
+        "Virtual",
+        "VPN",
+        "TAP-Windows",
+        "TAP",
+        "TUN",
+    ];
+    foreach (var keyword in keywords)
+    {
+        if (label.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            return true;
+    }
+
+    return false;
 }
 
 static string ToBrowserUrl(string bindAddress, int port)

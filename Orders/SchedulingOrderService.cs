@@ -5,67 +5,123 @@ namespace Orders;
 
 public sealed class SchedulingOrderService
 {
-    private readonly ISchedulingConfigProvider _configProvider;
     private readonly ISchedulingIdentityRepository _identities;
     private readonly IOrderRepository _orders;
     private readonly DateAvailabilityService _availability;
+    private readonly DeadlineRecommendationService _deadlineRecommendations;
+    private readonly ISchedulingWriteTransaction _writeTransaction;
     private readonly IOrderCodeGenerator _codeGenerator;
     private readonly IClock _clock;
     private const int DefaultPageLimit = 50;
     private const int MaxPageLimit = 100;
 
     private readonly IAuditLog _auditLog;
+    private readonly IDeadlineRecommendationLogRepository _deadlineRecommendationLogs;
+    private readonly IDeadlineOverrideLogRepository _deadlineOverrideLogs;
     private readonly int _maxOrderCodeAttempts;
 
     public SchedulingOrderService(
-        ISchedulingConfigProvider configProvider,
         ISchedulingIdentityRepository identities,
         IOrderRepository orders,
         DateAvailabilityService availability,
+        DeadlineRecommendationService deadlineRecommendations,
+        ISchedulingWriteTransaction writeTransaction,
         IOrderCodeGenerator codeGenerator,
         IClock clock,
         int maxOrderCodeAttempts = 20,
-        IAuditLog? auditLog = null)
+        IAuditLog? auditLog = null,
+        IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null,
+        IDeadlineOverrideLogRepository? deadlineOverrideLogs = null)
     {
-        _configProvider = configProvider;
         _identities = identities;
         _orders = orders;
         _availability = availability;
+        _deadlineRecommendations = deadlineRecommendations;
+        _writeTransaction = writeTransaction;
         _codeGenerator = codeGenerator;
         _clock = clock;
         _auditLog = auditLog ?? NoOpAuditLog.Instance;
+        _deadlineRecommendationLogs = deadlineRecommendationLogs ?? NoOpDeadlineRecommendationLogRepository.Instance;
+        _deadlineOverrideLogs = deadlineOverrideLogs ?? NoOpDeadlineOverrideLogRepository.Instance;
         _maxOrderCodeAttempts = maxOrderCodeAttempts;
     }
 
-    public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default)
+    public Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, CancellationToken ct = default) =>
+        CalculateMinimumDeliveryDateAsync(draft, _clock.UtcNow, ct);
+
+    public async Task<DateOnly> CalculateMinimumDeliveryDateAsync(OrderDraft draft, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default)
     {
         ValidateOrderWorkItems(draft);
-        var workItems = draft.WorkItems;
-        var requiredBusinessDays = workItems.Sum(item =>
-        {
-            var workType = WorkTypeFor(draft.ProductCategory, draft.Material, item.ConstructionType);
-            return _configProvider.Current.FindWorkRule(draft.ProductCategory, workType, draft.Material, item.ConstructionType).MinBusinessDays;
-        });
-        return await _availability.CalculateMinimumDateAsync(draft.ImpressionDate, requiredBusinessDays, ct);
+        var recommendation = await _deadlineRecommendations.RecommendAsync(
+            new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc),
+            ct);
+        return recommendation.EarliestSelectableDeadline;
     }
 
-    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default)
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        (await GetDateStatusesResultAsync(draft, start, end, _clock.UtcNow, excludedOrderId: null, ct)).Statuses;
+
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default) =>
+        (await GetDateStatusesResultAsync(draft, start, end, impressionTimestampUtc, excludedOrderId: null, ct)).Statuses;
+
+    public async Task<IReadOnlyList<DeliveryDateStatus>> GetDateStatusesAsync(
+        OrderDraft draft,
+        DateOnly start,
+        DateOnly end,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        CancellationToken ct = default) =>
+        (await GetDateStatusesResultAsync(draft, start, end, impressionTimestampUtc, excludedOrderId, ct)).Statuses;
+
+    public Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(OrderDraft draft, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        GetDateStatusesResultAsync(draft, start, end, _clock.UtcNow, excludedOrderId: null, ct);
+
+    public Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(OrderDraft draft, DateOnly start, DateOnly end, DateTimeOffset impressionTimestampUtc, CancellationToken ct = default) =>
+        GetDateStatusesResultAsync(draft, start, end, impressionTimestampUtc, excludedOrderId: null, ct);
+
+    public async Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(
+        OrderDraft draft,
+        DateOnly start,
+        DateOnly end,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        CancellationToken ct = default)
     {
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
-        return await _availability.GetStatusesAsync(start, end, minimum, ct);
+        ValidateOrderWorkItems(draft);
+        return await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
+            new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc, excludedOrderId),
+            start,
+            end,
+            orderRepositoryOverride: null,
+            ct);
     }
+
+    public Task<IReadOnlyDictionary<DateOnly, DailyCapacityUsage>> GetDailyCapacityUsageByDateAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        _deadlineRecommendations.GetDailyCapacityUsageByDateAsync(start, end, ct);
+
+    public Task<IReadOnlyDictionary<DateOnly, WeeklyCapacityUsage>> GetWeeklyCapacityUsageByWeekEndAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        _deadlineRecommendations.GetWeeklyCapacityUsageByWeekEndAsync(start, end, ct);
 
     public Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, CancellationToken ct = default) =>
-        CreateOrderAsync(actor, draft, ip, userAgent, targetClinicCode: null, ct);
+        CreateOrderAsync(actor, draft, ip, userAgent, targetClinicCode: null, deadlineOverride: null, ct);
 
-    public async Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, string? targetClinicCode, CancellationToken ct = default)
+    public Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, string? targetClinicCode, CancellationToken ct = default) =>
+        CreateOrderAsync(actor, draft, ip, userAgent, targetClinicCode, deadlineOverride: null, ct);
+
+    public async Task<OrderRecord> CreateOrderAsync(AuthenticatedActor actor, OrderDraft draft, string ip, string userAgent, string? targetClinicCode, DeadlineOverrideRequest? deadlineOverride, CancellationToken ct = default)
     {
         ValidateDraft(draft);
-        await ValidateDeliveryDateForActorAsync(actor, draft, ct);
 
         var targetClinic = await ResolveTargetClinicAsync(actor, targetClinicCode, ct);
-        var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent);
-        var created = await CreateWithUniqueCodeAsync(orderWithoutCode, draft, ct);
+        var createTimestamp = _clock.UtcNow;
+        var createResult = await _writeTransaction.ExecuteAsync(async txOrders =>
+        {
+            var decision = await DecideDeadlineCommitAsync(actor, draft, createTimestamp, excludedOrderId: null, txOrders, deadlineOverride, ct);
+            var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent, decision.ValidationWithAudit.Validation.OrderCapacityUnits, createTimestamp);
+            var createdOrder = await CreateWithUniqueCodeAsync(orderWithoutCode, draft, txOrders, ct);
+            return (Order: createdOrder, decision.ValidationWithAudit.Audit, Decision: decision);
+        }, ct);
+        var created = createResult.Order;
         await AppendOrderAuditAsync(
             actor,
             "OrderCreated",
@@ -85,35 +141,47 @@ public sealed class SchedulingOrderService
                 totalToothCount = OrderWorkItem.AllTeeth(created.WorkItems).Length
             },
             ct);
+        var recommendationLog = await PersistDeadlineRecommendationLogAsync(actor, created, createResult.Audit, ct);
+        await PersistDeadlineOverrideLogIfNeededAsync(actor, created, createResult.Decision, recommendationLog.Id, ct);
         return created;
     }
 
     public Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, CancellationToken ct = default) =>
-        UpdateOrderAsync(actor, orderCode, draft, ip: null, userAgent: null, ct);
+        UpdateOrderAsync(actor, orderCode, draft, ip: null, userAgent: null, deadlineOverride: null, ct);
 
-    public async Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, string? ip, string? userAgent, CancellationToken ct = default)
+    public Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, string? ip, string? userAgent, CancellationToken ct = default) =>
+        UpdateOrderAsync(actor, orderCode, draft, ip, userAgent, deadlineOverride: null, ct);
+
+    public async Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, string? ip, string? userAgent, DeadlineOverrideRequest? deadlineOverride, CancellationToken ct = default)
     {
-        var existing = await GetAuthorizedOrderAsync(actor, orderCode, ct);
-        if (existing.Status == OrderStatus.Cancelled)
-            throw new InvalidOperationException("Cancelled orders cannot be modified.");
-
         ValidateDraft(draft);
-        await ValidateDeliveryDateForActorAsync(actor, draft, ct);
-
-        var updated = existing with
+        var result = await _writeTransaction.ExecuteAsync(async txOrders =>
         {
-            CaseName = draft.CaseName.Trim(),
-            ImpressionDate = draft.ImpressionDate,
-            ProductCategory = draft.ProductCategory,
-            Material = draft.Material,
-            WorkItems = draft.WorkItems,
-            RequestedDeliveryDate = draft.RequestedDeliveryDate,
-            Shade = draft.Shade,
-            Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
-            ColorNote = string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
-            UpdatedAt = _clock.UtcNow
-        };
-        var saved = await _orders.UpdateOrderAsync(updated, ct);
+            var existing = await GetAuthorizedOrderAsync(actor, orderCode, txOrders, ct);
+            if (existing.Status == OrderStatus.Cancelled)
+                throw new InvalidOperationException("Cancelled orders cannot be modified.");
+
+            var decision = await DecideDeadlineCommitAsync(actor, draft, existing.CreatedAt, existing.Id, txOrders, deadlineOverride, ct);
+
+            var updated = existing with
+            {
+                CaseName = draft.CaseName.Trim(),
+                ImpressionDate = draft.ImpressionDate,
+                ProductCategory = draft.ProductCategory,
+                Material = draft.Material,
+                WorkItems = draft.WorkItems,
+                RequestedDeliveryDate = draft.RequestedDeliveryDate,
+                Shade = draft.Shade,
+                Notes = string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(),
+                ColorNote = string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
+                CalculatedCapacityUnits = decision.ValidationWithAudit.Validation.OrderCapacityUnits,
+                UpdatedAt = _clock.UtcNow
+            };
+            var saved = await txOrders.UpdateOrderAsync(updated, ct);
+            return (Existing: existing, Saved: saved, decision.ValidationWithAudit.Audit, Decision: decision);
+        }, ct);
+        var existing = result.Existing;
+        var saved = result.Saved;
         await AppendOrderAuditAsync(
             actor,
             "OrderUpdated",
@@ -132,6 +200,8 @@ public sealed class SchedulingOrderService
                 newWorkItems = WorkItemsEqual(existing.WorkItems, saved.WorkItems) ? null : WorkItemsAudit(saved.WorkItems)
             },
             ct);
+        var recommendationLog = await PersistDeadlineRecommendationLogAsync(actor, saved, result.Audit, ct);
+        await PersistDeadlineOverrideLogIfNeededAsync(actor, saved, result.Decision, recommendationLog.Id, ct);
         return saved;
     }
 
@@ -245,6 +315,74 @@ public sealed class SchedulingOrderService
         return _auditLog.AppendAsync(auditEvent, ct);
     }
 
+    private Task<DeadlineRecommendationLog> PersistDeadlineRecommendationLogAsync(AuthenticatedActor actor, OrderRecord order, DeadlineRecommendationAudit audit, CancellationToken ct)
+    {
+        var log = new DeadlineRecommendationLog(
+            0,
+            order.Id,
+            order.OrderCode,
+            _clock.UtcNow,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
+            audit.ImpressionTimestampUtc,
+            audit.EffectiveIntakeBusinessDate,
+            audit.CutoffTimeUsed,
+            audit.Material,
+            audit.ToothCount,
+            audit.LeadTimeBusinessDaysUsed,
+            audit.FixedLeadTimeBusinessDaysUsed,
+            audit.ExtraLeadTimeBusinessDaysUsed,
+            audit.TeethPerExtraLeadDayUsed,
+            audit.CapacityUnitsPerToothUsed,
+            audit.CalculatedOrderCapacityUnits,
+            audit.MinimumDeadlineDateFromLeadTime,
+            audit.FinalRecommendedDeadlineDate,
+            audit.SelectedDeadlineDate,
+            audit.SearchStartedAtDate,
+            audit.SearchEndedAtDate,
+            audit.SearchLimitDate,
+            audit.ResultStatus,
+            audit.FailureReason,
+            audit.CandidateChecksJson,
+            audit.ConfigSnapshotJson);
+        return _deadlineRecommendationLogs.AddAsync(log, ct);
+    }
+
+    private Task PersistDeadlineOverrideLogIfNeededAsync(AuthenticatedActor actor, OrderRecord order, DeadlineCommitDecision decision, long? recommendationLogId, CancellationToken ct)
+    {
+        if (!decision.IsOverride || string.IsNullOrWhiteSpace(decision.OverrideReason))
+            return Task.CompletedTask;
+
+        var validation = decision.ValidationWithAudit.Validation;
+        var status = validation.Status;
+        var log = new DeadlineOverrideLog(
+            0,
+            order.Id,
+            order.OrderCode,
+            _clock.UtcNow,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
+            order.RequestedDeliveryDate,
+            validation.RecommendedDate,
+            validation.MinimumDate,
+            validation.OrderCapacityUnits,
+            JsonSerializer.Serialize(decision.RulesBypassed.Select(r => r.ToString()).ToArray()),
+            decision.OverrideReason.Trim(),
+            recommendationLogId is > 0 ? recommendationLogId : null,
+            status.ExistingDailyCapacityUsed,
+            status.ExistingWeeklyCapacityUsed,
+            status.DailyCapacityLimit,
+            status.WeeklyCapacityLimit,
+            status.ExistingDailyCapacityUsed.HasValue ? status.ExistingDailyCapacityUsed.Value + validation.OrderCapacityUnits : null,
+            status.ExistingWeeklyCapacityUsed.HasValue ? status.ExistingWeeklyCapacityUsed.Value + validation.OrderCapacityUnits : null,
+            status.IsClosed || status.IsFirstBusinessDayAfterClosure || status.IsBeforeMinimum ? status.Reason : null);
+        return _deadlineOverrideLogs.AddAsync(log, ct);
+    }
+
     private static string[] ChangedFields(OrderRecord oldOrder, OrderRecord newOrder)
     {
         var changed = new List<string>();
@@ -260,14 +398,67 @@ public sealed class SchedulingOrderService
         return changed.ToArray();
     }
 
-    private async Task ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct)
+    private Task<DeadlineValidationResult> ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, CancellationToken ct) =>
+        ValidateDeliveryDateForActorAsync(actor, draft, _clock.UtcNow, excludedOrderId: null, orderRepositoryOverride: null, ct: ct);
+
+    private Task<DeadlineValidationResult> ValidateDeliveryDateForActorAsync(AuthenticatedActor actor, OrderDraft draft, DateTimeOffset impressionTimestampUtc, CancellationToken ct) =>
+        ValidateDeliveryDateForActorAsync(actor, draft, impressionTimestampUtc, excludedOrderId: null, orderRepositoryOverride: null, ct: ct);
+
+    private async Task<DeadlineValidationResult> ValidateDeliveryDateForActorAsync(
+        AuthenticatedActor actor,
+        OrderDraft draft,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        IOrderRepository? orderRepositoryOverride,
+        CancellationToken ct) =>
+        (await ValidateDeliveryDateForActorWithAuditAsync(actor, draft, impressionTimestampUtc, excludedOrderId, orderRepositoryOverride, ct)).Validation;
+
+    private async Task<DeadlineValidationWithAuditResult> ValidateDeliveryDateForActorWithAuditAsync(
+        AuthenticatedActor actor,
+        OrderDraft draft,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        IOrderRepository? orderRepositoryOverride,
+        CancellationToken ct) =>
+        (await DecideDeadlineCommitAsync(actor, draft, impressionTimestampUtc, excludedOrderId, orderRepositoryOverride, deadlineOverride: null, ct)).ValidationWithAudit;
+
+    private async Task<DeadlineCommitDecision> DecideDeadlineCommitAsync(
+        AuthenticatedActor actor,
+        OrderDraft draft,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        IOrderRepository? orderRepositoryOverride,
+        DeadlineOverrideRequest? deadlineOverride,
+        CancellationToken ct)
     {
-        var minimum = await CalculateMinimumDeliveryDateAsync(draft, ct);
-        var status = await _availability.GetStatusAsync(draft.RequestedDeliveryDate, minimum, ct);
-        if (status.IsSelectable) return;
-        if (actor.IsLab && status.IsBeforeMinimum && !status.IsClosed && !status.IsFirstBusinessDayAfterClosure) return;
-        throw new InvalidOperationException($"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {status.Reason}.");
+        var result = await _deadlineRecommendations.ValidateRequestedDateWithAuditAsync(
+            new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc, excludedOrderId),
+            draft.RequestedDeliveryDate,
+            orderRepositoryOverride,
+            ct);
+        var validation = result.Validation;
+        if (validation.Status.IsSelectable)
+            return new DeadlineCommitDecision(result, false, [], null);
+
+        var rulesBypassed = validation.FailedRules;
+        var message = $"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {validation.Status.Reason}.";
+        if (!actor.IsLab)
+            throw new DeadlineOverrideRequiredException(message, overrideAllowed: false, rulesBypassed, validation.RecommendedDate);
+
+        if (deadlineOverride?.ConfirmDeadlineOverride != true)
+            throw new DeadlineOverrideRequiredException($"{message} Lab deadline override confirmation is required.", overrideAllowed: true, rulesBypassed, validation.RecommendedDate);
+
+        if (string.IsNullOrWhiteSpace(deadlineOverride.DeadlineOverrideReason))
+            throw new DeadlineOverrideRequiredException($"{message} Deadline override reason is required.", overrideAllowed: true, rulesBypassed, validation.RecommendedDate);
+
+        return new DeadlineCommitDecision(result, true, rulesBypassed, deadlineOverride.DeadlineOverrideReason.Trim());
     }
+
+    private sealed record DeadlineCommitDecision(
+        DeadlineValidationWithAuditResult ValidationWithAudit,
+        bool IsOverride,
+        IReadOnlyList<DeadlineValidationRule> RulesBypassed,
+        string? OverrideReason);
 
     private static void ValidateDraft(OrderDraft draft)
     {
@@ -281,13 +472,6 @@ public sealed class SchedulingOrderService
         if (draft.WorkItems == null)
             throw new InvalidOperationException("At least one order work item is required.");
         OrderWorkItem.ValidateAll(draft.WorkItems);
-    }
-
-    private static WorkType WorkTypeFor(ProductCategory productCategory, Material material, ConstructionType constructionType)
-    {
-        if (material is Material.Pmma or Material.PmmaTelio || productCategory == ProductCategory.Temporary)
-            return WorkType.TemporaryCrownBridge;
-        return constructionType == ConstructionType.Bridge ? WorkType.Bridge : WorkType.Crown;
     }
 
     private static bool WorkItemsEqual(IReadOnlyList<OrderWorkItem> left, IReadOnlyList<OrderWorkItem> right) =>
@@ -320,17 +504,19 @@ public sealed class SchedulingOrderService
         return await RequireActiveClinicAsync(targetClinicCode.Trim(), ct);
     }
 
-    private async Task<OrderRecord> GetAuthorizedOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct)
+    private Task<OrderRecord> GetAuthorizedOrderAsync(AuthenticatedActor actor, string orderCode, CancellationToken ct) =>
+        GetAuthorizedOrderAsync(actor, orderCode, _orders, ct);
+
+    private async Task<OrderRecord> GetAuthorizedOrderAsync(AuthenticatedActor actor, string orderCode, IOrderRepository orders, CancellationToken ct)
     {
-        var order = await _orders.GetOrderByCodeAsync(orderCode, ct);
+        var order = await orders.GetOrderByCodeAsync(orderCode, ct);
         if (order == null || !CanActorSeeOrder(actor, order))
             throw new KeyNotFoundException("Order not found.");
         return order;
     }
 
-    private OrderRecord BuildOrder(AuthenticatedActor actor, SchedulingClinic targetClinic, OrderDraft draft, string ip, string userAgent)
+    private OrderRecord BuildOrder(AuthenticatedActor actor, SchedulingClinic targetClinic, OrderDraft draft, string ip, string userAgent, decimal calculatedCapacityUnits, DateTimeOffset now)
     {
-        var now = _clock.UtcNow;
         return new OrderRecord(
             0,
             "",
@@ -352,17 +538,18 @@ public sealed class SchedulingOrderService
             now,
             ip,
             userAgent,
-            string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim());
+            string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
+            calculatedCapacityUnits);
     }
 
-    private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, CancellationToken ct)
+    private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, IOrderRepository orders, CancellationToken ct)
     {
         for (var attempt = 1; attempt <= _maxOrderCodeAttempts; attempt++)
         {
             var code = _codeGenerator.Generate(draft);
             try
             {
-                return await _orders.CreateOrderAsync(orderWithoutCode with { OrderCode = code }, ct);
+                return await orders.CreateOrderAsync(orderWithoutCode with { OrderCode = code }, ct);
             }
             catch (DuplicateOrderCodeException) when (attempt < _maxOrderCodeAttempts)
             {

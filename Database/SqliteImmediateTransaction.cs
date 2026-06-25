@@ -15,27 +15,39 @@ public static class SqliteImmediateTransaction
     /// Executes <paramref name="operation"/> within a BEGIN IMMEDIATE transaction.
     /// The operation receives the context; it should perform reads/writes and call SaveChangesAsync.
     /// </summary>
-    public static async Task ExecuteAsync(
+    public static Task ExecuteAsync(
         AppDbContext ctx,
-        Func<AppDbContext, Task> operation)
+        Func<AppDbContext, Task> operation,
+        CancellationToken ct = default) =>
+        ExecuteAsync<object?>(ctx, async c =>
+        {
+            await operation(c);
+            return null;
+        }, ct);
+
+    public static async Task<T> ExecuteAsync<T>(
+        AppDbContext ctx,
+        Func<AppDbContext, Task<T>> operation,
+        CancellationToken ct = default)
     {
         var conn = ctx.Database.GetDbConnection();
         if (conn.State != ConnectionState.Open)
-            await conn.OpenAsync();
+            await conn.OpenAsync(ct);
 
         var sqliteConn = (SqliteConnection)conn;
         await using var tx = sqliteConn.BeginTransaction(IsolationLevel.Serializable, deferred: false);
 
-        await ctx.Database.UseTransactionAsync(tx);
+        await ctx.Database.UseTransactionAsync(tx, ct);
 
         try
         {
-            await operation(ctx);
-            await tx.CommitAsync();
+            var result = await operation(ctx);
+            await tx.CommitAsync(ct);
+            return result;
         }
         catch
         {
-            await tx.RollbackAsync();
+            await tx.RollbackAsync(ct);
             throw;
         }
     }

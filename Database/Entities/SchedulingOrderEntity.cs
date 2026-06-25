@@ -24,6 +24,7 @@ public class SchedulingOrderEntity
     public DateTimeOffset CreatedAt { get; set; }
     public long CreatedAtUnixTimeMilliseconds { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public decimal? CalculatedCapacityUnits { get; set; }
     public string CreatedIp { get; set; } = string.Empty;
     public string CreatedUserAgent { get; set; } = string.Empty;
 }

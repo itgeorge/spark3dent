@@ -15,120 +15,152 @@ public sealed class SqliteOrderRepo : IOrderRepository
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    private readonly Func<AppDbContext> _contextFactory;
+    private readonly Func<AppDbContext>? _contextFactory;
+    private readonly AppDbContext? _sharedContext;
 
     public SqliteOrderRepo(Func<AppDbContext> contextFactory)
     {
         _contextFactory = contextFactory;
     }
 
-    public async Task<OrderRecord> CreateOrderAsync(OrderRecord order, CancellationToken ct = default)
+    internal SqliteOrderRepo(AppDbContext sharedContext)
     {
-        await using var ctx = _contextFactory();
-        var entity = ToEntity(order);
-        ctx.SchedulingOrders.Add(entity);
-        try
+        _sharedContext = sharedContext;
+    }
+
+    public Task<OrderRecord> CreateOrderAsync(OrderRecord order, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
         {
+            var entity = ToEntity(order);
+            ctx.SchedulingOrders.Add(entity);
+            try
+            {
+                await ctx.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                ctx.Entry(entity).State = EntityState.Detached;
+                throw new DuplicateOrderCodeException(order.OrderCode, ex);
+            }
+            return ToDomain(entity);
+        });
+
+    public Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var entity = await ctx.SchedulingOrders.AsNoTracking().FirstOrDefaultAsync(o => o.OrderCode == orderCode, ct);
+            return entity == null ? null : ToDomain(entity);
+        });
+
+    public Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var entity = await ctx.SchedulingOrders.FirstOrDefaultAsync(o => o.OrderCode == order.OrderCode, ct)
+                ?? throw new InvalidOperationException("Order not found.");
+            ApplyToEntity(entity, order);
             await ctx.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            return ToDomain(entity);
+        });
+
+    public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
         {
-            throw new DuplicateOrderCodeException(order.OrderCode, ex);
-        }
-        return ToDomain(entity);
-    }
+            var items = await OrderedLimited(ctx.SchedulingOrders.AsNoTracking(), limit).ToListAsync(ct);
+            return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
+        });
 
-    public async Task<OrderRecord?> GetOrderByCodeAsync(string orderCode, CancellationToken ct = default)
+    public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var items = await OrderedLimited(
+                    ctx.SchedulingOrders.AsNoTracking().Where(o => o.ClinicCode == clinicCode),
+                    limit)
+                .ToListAsync(ct);
+            return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
+        });
+
+    public Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var query = ScopedOrders(ctx, clinicCode);
+            if (cursor != null)
+                query = query.Where(o =>
+                    o.RequestedDeliveryDate < cursor.RequestedDeliveryDate
+                    || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds < cursor.CreatedAtUnixTimeMilliseconds)
+                    || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds == cursor.CreatedAtUnixTimeMilliseconds && o.Id < cursor.Id));
+
+            return await MaterializePageAsync(query, limit, ct);
+        });
+
+    public Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var query = ScopedOrders(ctx, clinicCode);
+            var targetCreatedMs = target.CreatedAt.ToUnixTimeMilliseconds();
+            var beforeCount = await query.CountAsync(o =>
+                o.RequestedDeliveryDate > target.RequestedDeliveryDate
+                || (o.RequestedDeliveryDate == target.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds > targetCreatedMs)
+                || (o.RequestedDeliveryDate == target.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds == targetCreatedMs && o.Id > target.Id), ct);
+            var pageStart = beforeCount / limit * limit;
+            return await MaterializePageAsync(query, limit, ct, pageStart);
+        });
+
+    public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var normalized = codeSuffix.Trim().ToUpperInvariant();
+            if (normalized.Length == 0)
+                return (IReadOnlyList<OrderRecord>)[];
+
+            var items = await Ordered(ScopedOrders(ctx, clinicCode))
+                .Where(o => o.OrderCode.EndsWith(normalized))
+                .Take(Math.Clamp(limit, 1, 20))
+                .ToListAsync(ct);
+            return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
+        });
+
+    public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var query = ctx.SchedulingOrders.AsNoTracking()
+                .Where(o => o.Status != nameof(OrderStatus.Cancelled)
+                    && o.RequestedDeliveryDate >= start
+                    && o.RequestedDeliveryDate <= end);
+            if (!string.IsNullOrWhiteSpace(clinicCode))
+                query = query.Where(o => o.ClinicCode == clinicCode);
+
+            var items = await query
+                .OrderBy(o => o.RequestedDeliveryDate)
+                .ThenBy(o => o.ClinicDisplayName)
+                .ThenBy(o => o.CaseName)
+                .ThenBy(o => o.OrderCode)
+                .ToListAsync(ct);
+            return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
+        });
+
+    public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersByDeadlineRangeAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        WithContextAsync(async ctx =>
+        {
+            var items = await ctx.SchedulingOrders.AsNoTracking()
+                .Where(o => o.Status != nameof(OrderStatus.Cancelled)
+                    && o.RequestedDeliveryDate >= start
+                    && o.RequestedDeliveryDate <= end)
+                .OrderBy(o => o.RequestedDeliveryDate)
+                .ThenBy(o => o.Id)
+                .ToListAsync(ct);
+            return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
+        });
+
+    private async Task<T> WithContextAsync<T>(Func<AppDbContext, Task<T>> operation)
     {
+        if (_sharedContext != null)
+            return await operation(_sharedContext);
+
+        if (_contextFactory == null)
+            throw new InvalidOperationException("Order repository context is not configured.");
+
         await using var ctx = _contextFactory();
-        var entity = await ctx.SchedulingOrders.AsNoTracking().FirstOrDefaultAsync(o => o.OrderCode == orderCode, ct);
-        return entity == null ? null : ToDomain(entity);
-    }
-
-    public async Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var entity = await ctx.SchedulingOrders.FirstOrDefaultAsync(o => o.OrderCode == order.OrderCode, ct)
-            ?? throw new InvalidOperationException("Order not found.");
-        ApplyToEntity(entity, order);
-        await ctx.SaveChangesAsync(ct);
-        return ToDomain(entity);
-    }
-
-    public async Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var items = await OrderedLimited(ctx.SchedulingOrders.AsNoTracking(), limit).ToListAsync(ct);
-        return items.Select(ToDomain).ToList();
-    }
-
-    public async Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var items = await OrderedLimited(
-                ctx.SchedulingOrders.AsNoTracking().Where(o => o.ClinicCode == clinicCode),
-                limit)
-            .ToListAsync(ct);
-        return items.Select(ToDomain).ToList();
-    }
-
-    public async Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var query = ScopedOrders(ctx, clinicCode);
-        if (cursor != null)
-            query = query.Where(o =>
-                o.RequestedDeliveryDate < cursor.RequestedDeliveryDate
-                || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds < cursor.CreatedAtUnixTimeMilliseconds)
-                || (o.RequestedDeliveryDate == cursor.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds == cursor.CreatedAtUnixTimeMilliseconds && o.Id < cursor.Id));
-
-        return await MaterializePageAsync(query, limit, ct);
-    }
-
-    public async Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var query = ScopedOrders(ctx, clinicCode);
-        var targetCreatedMs = target.CreatedAt.ToUnixTimeMilliseconds();
-        var beforeCount = await query.CountAsync(o =>
-            o.RequestedDeliveryDate > target.RequestedDeliveryDate
-            || (o.RequestedDeliveryDate == target.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds > targetCreatedMs)
-            || (o.RequestedDeliveryDate == target.RequestedDeliveryDate && o.CreatedAtUnixTimeMilliseconds == targetCreatedMs && o.Id > target.Id), ct);
-        var pageStart = beforeCount / limit * limit;
-        return await MaterializePageAsync(query, limit, ct, pageStart);
-    }
-
-    public async Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var normalized = codeSuffix.Trim().ToUpperInvariant();
-        if (normalized.Length == 0)
-            return [];
-
-        var items = await Ordered(ScopedOrders(ctx, clinicCode))
-            .Where(o => o.OrderCode.EndsWith(normalized))
-            .Take(Math.Clamp(limit, 1, 20))
-            .ToListAsync(ct);
-        return items.Select(ToDomain).ToList();
-    }
-
-    public async Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default)
-    {
-        await using var ctx = _contextFactory();
-        var query = ctx.SchedulingOrders.AsNoTracking()
-            .Where(o => o.Status != nameof(OrderStatus.Cancelled)
-                && o.RequestedDeliveryDate >= start
-                && o.RequestedDeliveryDate <= end);
-        if (!string.IsNullOrWhiteSpace(clinicCode))
-            query = query.Where(o => o.ClinicCode == clinicCode);
-
-        var items = await query
-            .OrderBy(o => o.RequestedDeliveryDate)
-            .ThenBy(o => o.ClinicDisplayName)
-            .ThenBy(o => o.CaseName)
-            .ThenBy(o => o.OrderCode)
-            .ToListAsync(ct);
-        return items.Select(ToDomain).ToList();
+        return await operation(ctx);
     }
 
     private static IQueryable<SchedulingOrderEntity> ScopedOrders(AppDbContext ctx, string? clinicCode)
@@ -191,6 +223,7 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.CreatedAt = order.CreatedAt;
         entity.CreatedAtUnixTimeMilliseconds = order.CreatedAt.ToUnixTimeMilliseconds();
         entity.UpdatedAt = order.UpdatedAt;
+        entity.CalculatedCapacityUnits = order.CalculatedCapacityUnits;
         entity.CreatedIp = order.CreatedIp;
         entity.CreatedUserAgent = order.CreatedUserAgent;
     }
@@ -218,7 +251,8 @@ public sealed class SqliteOrderRepo : IOrderRepository
             e.UpdatedAt,
             e.CreatedIp,
             e.CreatedUserAgent,
-            e.ColorNote);
+            e.ColorNote,
+            e.CalculatedCapacityUnits);
     }
 
     private static string SerializeWorkItems(IReadOnlyList<OrderWorkItem> items) =>

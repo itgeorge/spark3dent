@@ -6,7 +6,7 @@
 if(window.S3DIcons) S3DIcons.hydrate(document);
     const $=id=>document.getElementById(id);
     const ordersApi=S3DOrders.Api.create();
-    let actor=null, clinics=[];
+    let actor=null, clinics=[], materialOptions=[];
     let pendingBeforeMinimumDate='';
     let ordersRouter=null, pendingRouteAfterDiscard=null, pendingOrdersRouteError='';
     let rootView, flowView;
@@ -29,6 +29,7 @@ if(window.S3DIcons) S3DIcons.hydrate(document);
     async function ordersBeforeLeave(from,to,navOptions={}){return ordersDirtyGuard.beforeLeave(from,to,navOptions)}
     function showLogin(){document.body.classList.add('auth-locked');login.classList.remove('hidden');list.classList.add('hidden');reviewCard.classList.add('hidden');app.classList.add('hidden');if(rootView){rootView.closeFindOrder();rootView.closeOrdersDay()}closeCancelOrderConfirmPopup();if(flowView){flowView.closeDiscard();flowView.closeBeforeMinimum()}else{closeDiscardOrderFlowPopup();closeBeforeMinimumConfirmPopup()}actor=null;resetLoginButton();syncTopbar()}
     async function loadClinics(){if(!actor?.isLab)return;if(!clinics.length){const result=await ordersApi.clinics();const j=result.data;if(result.ok)clinics=j.items||[]}}
+    async function loadMaterialOptions(){if(materialOptions.length)return;const result=await ordersApi.materialOptions();const j=result.data;if(result.ok)materialOptions=j.items||[]}
     function goOrdersRoot(opts){return ordersRouter.navigate('',opts)}
     function goOrderReview(code,opts){return ordersRouter.navigate(`order/${encodeURIComponent(code)}`,opts)}
     function goNewOrder(stepToOpen=1,opts){return ordersRouter.navigate(`new/${stepToOpen}`,opts)}
@@ -39,7 +40,7 @@ if(window.S3DIcons) S3DIcons.hydrate(document);
     [clinic,pin].forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter')loginBtn.click()}));
     rootView=S3DOrders.RootView.create({api:ordersApi,getActor:()=>actor,loadClinics:loadClinics,openUiModal:openUiModal,closeUiModal:closeUiModal,onOpenOrder:code=>goOrderReview(code),onNewOrder:step=>goNewOrder(step),onShowShell:showAuthenticatedAppShell,onCloseFlowModals:()=>{if(flowView){flowView.closeDiscard();flowView.closeBeforeMinimum()}else{closeDiscardOrderFlowPopup();closeBeforeMinimumConfirmPopup()}},onCloseCancelOrder:closeCancelOrderConfirmPopup,consumeRouteError:()=>{const msg=pendingOrdersRouteError;pendingOrdersRouteError='';return msg}});
     const reviewView=S3DOrders.ReviewView.create({api:ordersApi,getActor:()=>actor,showLogin:showLogin,showShell:showAuthenticatedAppShell,closeOrdersDay:()=>rootView&&rootView.closeOrdersDay(),openUiModal:openUiModal,closeUiModal:closeUiModal,replace:(path,opts)=>ordersRouter.replace(path,opts),onRouteError:msg=>{pendingOrdersRouteError=msg},onBack:opts=>goOrdersRoot(opts),onEdit:(code,step)=>goEditOrder(code,step),clearFindHighlight:()=>rootView&&rootView.clearFindHighlight(),restoreFindHighlight:restart=>rootView&&rootView.restoreFindHighlightAfterReview(restart),onCancelled:async()=>{if(rootView){rootView.clearFindHighlight();await rootView.reload()}}});
-    flowView=S3DOrders.FlowView.create({api:ordersApi,getActor:()=>actor,getClinics:()=>clinics,loadClinics:loadClinics,showLogin:showLogin,showAuthenticatedAppShell:showAuthenticatedAppShell,closeFindOrder:()=>rootView&&rootView.closeFindOrder(),closeOrdersDay:()=>rootView&&rootView.closeOrdersDay(),openOrdersDay:(iso,dayOrders)=>rootView&&rootView.openOrdersDay(iso,dayOrders,{orderClicksEnabled:false}),closeCancelOrder:closeCancelOrderConfirmPopup,openUiModal:openUiModal,closeUiModal:closeUiModal,navigate:(path,opts)=>ordersRouter.navigate(path,opts),replace:(path,opts)=>ordersRouter.replace(path,opts),onRouteError:msg=>{pendingOrdersRouteError=msg},onEditSaved:code=>{if(rootView)rootView.markListHighlight(code)}});
+    flowView=S3DOrders.FlowView.create({api:ordersApi,getActor:()=>actor,getClinics:()=>clinics,getMaterialOptions:()=>materialOptions,loadClinics:loadClinics,loadMaterialOptions:loadMaterialOptions,showLogin:showLogin,showAuthenticatedAppShell:showAuthenticatedAppShell,closeFindOrder:()=>rootView&&rootView.closeFindOrder(),closeOrdersDay:()=>rootView&&rootView.closeOrdersDay(),openOrdersDay:(iso,dayOrders)=>rootView&&rootView.openOrdersDay(iso,dayOrders,{orderClicksEnabled:false}),closeCancelOrder:closeCancelOrderConfirmPopup,openUiModal:openUiModal,closeUiModal:closeUiModal,navigate:(path,opts)=>ordersRouter.navigate(path,opts),replace:(path,opts)=>ordersRouter.replace(path,opts),onRouteError:msg=>{pendingOrdersRouteError=msg},onEditSaved:code=>{if(rootView)rootView.markListHighlight(code)}});
     const createdConfirmationView=S3DOrders.CreatedConfirmationView.create({show:code=>flowView.showCreated(code),done:goOrdersRoot,render:()=>flowView.renderFinalOverview()});
     const appChrome=AppChrome.mount($('appChromeMount'),{product:'scheduler',logoSrc:'/images/logo.png',menuButtonClass:'btn',hideMenuWhenSignedOut:true,brandClick:()=>{if(actor)goOrdersRoot()},brandTitle:'Back to orders'});
     appChrome.onLogout(async()=>{await ordersApi.logout();actor=null;rootView.clearSession();showLogin()});

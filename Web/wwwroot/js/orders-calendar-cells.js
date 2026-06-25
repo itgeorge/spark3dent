@@ -70,6 +70,112 @@
     parent.appendChild(bar);
   }
 
+  function normalizeCapacity(capacity){
+    if(!capacity) return null;
+    var used = Number(capacity.used ?? capacity.Used ?? capacity.dailyUsed ?? capacity.DailyUsed);
+    var limit = Number(capacity.limit ?? capacity.Limit ?? capacity.dailyCapacityLimit ?? capacity.DailyCapacityLimit);
+    if(!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return null;
+    return { used: used, limit: limit };
+  }
+
+  function normalizeLoadLevel(level){
+    level = String(level || '').toLowerCase();
+    return level === 'low' || level === 'medium' || level === 'high' ? level : '';
+  }
+
+  function loadLevelLabel(level){
+    return level === 'low' ? 'Low' : (level === 'medium' ? 'Medium' : 'High');
+  }
+
+  function loadLevelMouthPath(level){
+    if(level === 'low') return 'M8 14.2c1.2 1.5 2.6 2.3 4 2.3s2.8-.8 4-2.3';
+    if(level === 'medium') return 'M8.5 15h7';
+    return 'M8 16.2c1.2-1.5 2.6-2.3 4-2.3s2.8.8 4 2.3';
+  }
+
+  function loadLevelSvgHtml(level){
+    return '<svg class="orders-calendar-load-icon" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="2"></circle>'
+      + '<circle cx="9" cy="10" r="1.15" fill="currentColor"></circle>'
+      + '<circle cx="15" cy="10" r="1.15" fill="currentColor"></circle>'
+      + '<path d="' + loadLevelMouthPath(level) + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>'
+      + '</svg>';
+  }
+
+  function capacityLevel(ratio){
+    return ratio < 0.4 ? 'low' : (ratio < 0.8 ? 'medium' : 'high');
+  }
+
+  function appendCapacityPie(el, ratio){
+    var pie = document.createElement('span');
+    pie.className = 'orders-calendar-capacity-pie';
+    pie.setAttribute('aria-hidden', 'true');
+    pie.style.setProperty('--capacity-deg', Math.max(0, Math.min(1, ratio)) * 360 + 'deg');
+    el.appendChild(pie);
+  }
+
+  function buildCapacityIndicator(capacity){
+    var c = normalizeCapacity(capacity);
+    if(!c) return null;
+    var ratio = c.used / c.limit;
+    var level = capacityLevel(ratio);
+    var el = document.createElement('span');
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-exact orders-calendar-capacity-' + level;
+    var usedText = String(Math.round(c.used));
+    var limitText = String(Math.round(c.limit));
+    var text = document.createElement('span');
+    text.className = 'orders-calendar-capacity-text';
+    text.textContent = usedText + '/' + limitText;
+    el.appendChild(text);
+    appendCapacityPie(el, ratio);
+    el.title = 'Capacity used: ' + usedText + ' / ' + limitText;
+    el.setAttribute('aria-label', 'Capacity used ' + usedText + ' of ' + limitText);
+    return el;
+  }
+
+  function buildWeeklyCapacityIndicator(capacity){
+    var c = normalizeCapacity(capacity);
+    if(!c) return null;
+    var ratio = c.used / c.limit;
+    var level = capacityLevel(ratio);
+    var el = document.createElement('span');
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-exact orders-calendar-weekly-capacity orders-calendar-capacity-' + level;
+    var usedText = String(Math.round(c.used));
+    var limitText = String(Math.round(c.limit));
+    var text = document.createElement('span');
+    text.className = 'orders-calendar-capacity-text';
+    var longLabel = document.createElement('span');
+    longLabel.className = 'orders-calendar-week-label-long';
+    longLabel.textContent = 'week';
+    var shortLabel = document.createElement('span');
+    shortLabel.className = 'orders-calendar-week-label-short';
+    shortLabel.textContent = 'W';
+    text.append(longLabel, shortLabel, document.createTextNode(': ' + usedText + '/' + limitText));
+    el.appendChild(text);
+    appendCapacityPie(el, ratio);
+    el.title = 'Weekly capacity used: ' + usedText + ' / ' + limitText;
+    el.setAttribute('aria-label', 'Weekly capacity used ' + usedText + ' of ' + limitText);
+    return el;
+  }
+
+  function buildLoadIndicator(level){
+    level = normalizeLoadLevel(level);
+    if(!level) return null;
+    var el = document.createElement('span');
+    el.className = 'orders-calendar-capacity orders-calendar-capacity-' + level + ' orders-calendar-load-level';
+    var label = loadLevelLabel(level);
+    el.innerHTML = loadLevelSvgHtml(level);
+    el.title = label + ' lab load';
+    el.setAttribute('aria-label', label + ' lab load');
+    return el;
+  }
+
+  function appendCapacityIndicator(parent, capacity, isLab){
+    if(!isLab) return;
+    var indicator = buildCapacityIndicator(capacity);
+    if(indicator) parent.appendChild(indicator);
+  }
+
   function buildOrdersCalendarCountButton(dayOrders, onOpen, orderClinics, isLab){
     var count = document.createElement('button');
     count.type = 'button';
@@ -114,6 +220,7 @@
     var orderClicksEnabled = options.orderClicksEnabled !== false;
     var openDay = function(){ onOpenDay(options.iso, dayOrders); };
 
+    appendCapacityIndicator(content, options.capacity, isLab);
     content.appendChild(buildOrdersCalendarCountButton(dayOrders, openDay, orderClinics, isLab));
     dayOrders.slice(0, maxChips).forEach(function(o){
       var chip = document.createElement(orderClicksEnabled ? 'button' : 'span');
@@ -142,6 +249,9 @@
     orderTeethLabel: orderTeethLabel,
     orderToothCount: orderToothCount,
     dayToothTotalText: dayToothTotalText,
+    normalizeCapacity: normalizeCapacity,
+    buildLoadIndicator: buildLoadIndicator,
+    buildWeeklyCapacityIndicator: buildWeeklyCapacityIndicator,
     renderDayOrders: renderDayOrders
   };
 })(typeof window !== 'undefined' ? window : globalThis);

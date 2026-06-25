@@ -36,6 +36,80 @@ internal sealed class TestSchedulingConfigProvider : ISchedulingConfigProvider
     }, DateTimeOffset.UtcNow, "test"));
 }
 
+internal sealed class TestMaterialSchedulingConfigProvider : IMaterialSchedulingConfigProvider
+{
+    private readonly IReadOnlyList<MaterialSchedulingConfig> _configs;
+
+    public TestMaterialSchedulingConfigProvider(IEnumerable<MaterialSchedulingConfig>? configs = null) =>
+        _configs = (configs ?? DefaultConfigs())
+            .OrderBy(c => c.Material)
+            .ThenBy(c => c.ActiveFromDate)
+            .ToArray();
+
+    public Task<MaterialSchedulingConfig> GetLatestAsync(Material material, CancellationToken ct = default)
+    {
+        var config = _configs.Where(c => c.Material == material)
+            .OrderByDescending(c => c.ActiveFromDate)
+            .FirstOrDefault();
+        return config != null
+            ? Task.FromResult(config)
+            : throw new InvalidOperationException($"Material scheduling config is missing for {material}.");
+    }
+
+    public Task<MaterialSchedulingConfig> GetForDateAsync(Material material, DateOnly deadlineDate, CancellationToken ct = default)
+    {
+        var config = _configs.Where(c => c.Material == material && c.ActiveFromDate <= deadlineDate)
+            .OrderByDescending(c => c.ActiveFromDate)
+            .FirstOrDefault();
+        return config != null
+            ? Task.FromResult(config)
+            : throw new InvalidOperationException($"Material scheduling config is missing for {material} on {deadlineDate:yyyy-MM-dd}.");
+    }
+
+    public Task<IReadOnlyList<MaterialSchedulingConfig>> ListAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<MaterialSchedulingConfig>>(_configs
+            .GroupBy(c => c.Material)
+            .Select(g => g.OrderByDescending(c => c.ActiveFromDate).First())
+            .OrderBy(c => c.Material)
+            .ToArray());
+
+    public static MaterialSchedulingConfig DefaultConfig(Material material) => material switch
+    {
+        Material.Pmma => new(material, 2, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.PmmaTelio => new(material, 2, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.FullContourZirconia => new(material, 3, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.GlassCeramics => new(material, 4, 1.0m, null, new DateOnly(2026, 1, 1)),
+        Material.Pfm => new(material, 4, 1.0m, 10, new DateOnly(2026, 1, 1)),
+        Material.PfzLayeredZrCrown => new(material, 4, 1.0m, 10, new DateOnly(2026, 1, 1)),
+        _ => throw new ArgumentOutOfRangeException(nameof(material), material, null)
+    };
+
+    public static IReadOnlyList<MaterialSchedulingConfig> DefaultConfigs() =>
+        Enum.GetValues<Material>().Select(DefaultConfig).ToArray();
+}
+
+internal sealed class TestSchedulingCapacityConfigProvider : ISchedulingCapacityConfigProvider
+{
+    private readonly IReadOnlyList<SchedulingCapacityConfig> _configs;
+
+    public TestSchedulingCapacityConfigProvider(IEnumerable<SchedulingCapacityConfig>? configs = null) =>
+        _configs = (configs ?? [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 100m, 500m)])
+            .OrderBy(c => c.ActiveFromDate)
+            .ThenBy(c => c.Id)
+            .ToArray();
+
+    public Task<SchedulingCapacityConfig> GetForDateAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var config = _configs.LastOrDefault(c => c.ActiveFromDate <= date);
+        if (config == null)
+            throw new InvalidOperationException($"Scheduling capacity config is missing for {date:yyyy-MM-dd}.");
+        return Task.FromResult(config);
+    }
+
+    public Task<IReadOnlyList<SchedulingCapacityConfig>> ListAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<SchedulingCapacityConfig>>(_configs);
+}
+
 internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentityRepository
 {
     private readonly Dictionary<string, SchedulingLab> _labsByCode;
@@ -119,6 +193,39 @@ internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentity
     public Task<SchedulingMember> UpdateMemberLabelAsync(OrganizationType organizationType, string organizationCode, string memberId, string label, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<SchedulingMember> SetMemberActiveAsync(OrganizationType organizationType, string organizationCode, string memberId, bool isActive, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<SchedulingMember> UpdateMemberSecretAsync(OrganizationType organizationType, string organizationCode, string memberId, string pinHash, DateTimeOffset now, CancellationToken ct = default) => throw new NotImplementedException();
+}
+
+internal sealed class InMemorySchedulingWriteTransaction : ISchedulingWriteTransaction
+{
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly IOrderRepository _orders;
+    private Func<IOrderRepository, Task>? _beforeOperationAsync;
+
+    public InMemorySchedulingWriteTransaction(IOrderRepository orders)
+    {
+        _orders = orders;
+    }
+
+    public void SetBeforeOperation(Func<IOrderRepository, Task>? beforeOperationAsync)
+    {
+        _beforeOperationAsync = beforeOperationAsync;
+    }
+
+    public async Task<T> ExecuteAsync<T>(Func<IOrderRepository, Task<T>> operation, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var beforeOperation = Interlocked.Exchange(ref _beforeOperationAsync, null);
+            if (beforeOperation != null)
+                await beforeOperation(_orders);
+            return await operation(_orders);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 }
 
 internal static class TestActors

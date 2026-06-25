@@ -6,7 +6,26 @@ public sealed record DeliveryDateStatus(
     bool IsFirstBusinessDayAfterClosure,
     bool IsBeforeMinimum,
     bool IsSelectable,
-    string? Reason);
+    string? Reason,
+    bool IsDailyCapacityExceeded = false,
+    bool IsWeeklyCapacityExceeded = false,
+    decimal? OrderCapacityUnits = null,
+    decimal? ExistingDailyCapacityUsed = null,
+    decimal? ExistingWeeklyCapacityUsed = null,
+    decimal? DailyCapacityLimit = null,
+    decimal? WeeklyCapacityLimit = null)
+{
+    public IReadOnlyList<DeadlineValidationRule> GetFailedRules()
+    {
+        var failed = new List<DeadlineValidationRule>();
+        if (IsBeforeMinimum) failed.Add(DeadlineValidationRule.MinimumLeadTime);
+        if (IsClosed || IsFirstBusinessDayAfterClosure) failed.Add(DeadlineValidationRule.CalendarDeadlineBlocked);
+        if (IsDailyCapacityExceeded) failed.Add(DeadlineValidationRule.DailyCapacityExceeded);
+        if (IsWeeklyCapacityExceeded) failed.Add(DeadlineValidationRule.WeeklyCapacityExceeded);
+        if (failed.Count == 0 && !IsSelectable) failed.Add(DeadlineValidationRule.Other);
+        return failed;
+    }
+}
 
 public sealed class DateAvailabilityService
 {
@@ -31,6 +50,25 @@ public sealed class DateAvailabilityService
         }
 
         return current;
+    }
+
+    public async Task<bool> IsClosedAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var calendar = new NonWorkingDayCalendar(_nonWorkingDayProvider);
+        return await calendar.IsClosedAsync(date, ct);
+    }
+
+    public async Task<bool> IsFirstBusinessDayAfterClosureAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var calendar = new NonWorkingDayCalendar(_nonWorkingDayProvider);
+        return await IsFirstBusinessDayAfterClosureAsync(date, calendar, ct);
+    }
+
+    public async Task<bool> CanSelectDeadlineAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var calendar = new NonWorkingDayCalendar(_nonWorkingDayProvider);
+        return !await calendar.IsClosedAsync(date, ct)
+            && !await IsFirstBusinessDayAfterClosureAsync(date, calendar, ct);
     }
 
     public async Task<DeliveryDateStatus> GetStatusAsync(DateOnly date, DateOnly minimumDate, CancellationToken ct = default)
@@ -62,10 +100,16 @@ public sealed class DateAvailabilityService
     private static async Task<DeliveryDateStatus> GetStatusAsync(DateOnly date, DateOnly minimumDate, NonWorkingDayCalendar calendar, CancellationToken ct)
     {
         var isClosed = await calendar.IsClosedAsync(date, ct);
-        var isFirst = !isClosed && await calendar.IsClosedAsync(date.AddDays(-1), ct);
+        var isFirst = await IsFirstBusinessDayAfterClosureAsync(date, calendar, ct);
         var isBeforeMinimum = date < minimumDate;
         var reason = GetUnavailableReason(date, isClosed, isFirst, isBeforeMinimum);
         return new DeliveryDateStatus(date, isClosed, isFirst, isBeforeMinimum, reason == null, reason);
+    }
+
+    private static async Task<bool> IsFirstBusinessDayAfterClosureAsync(DateOnly date, NonWorkingDayCalendar calendar, CancellationToken ct)
+    {
+        if (await calendar.IsClosedAsync(date, ct)) return false;
+        return await calendar.IsClosedAsync(date.AddDays(-1), ct);
     }
 
     private static string? GetUnavailableReason(DateOnly date, bool isClosed, bool isFirst, bool isBeforeMinimum)
