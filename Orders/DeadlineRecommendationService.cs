@@ -204,6 +204,36 @@ public sealed class DeadlineRecommendationService
         return result;
     }
 
+    public async Task<IReadOnlyDictionary<DateOnly, WeeklyCapacityUsage>> GetWeeklyCapacityUsageByWeekEndAsync(DateOnly start, DateOnly end, CancellationToken ct = default)
+    {
+        if (end < start)
+            throw new InvalidOperationException("End date must be on or after start date.");
+
+        var (expandedStart, _) = SchedulingWeek.GetRange(start);
+        var (_, expandedEnd) = SchedulingWeek.GetRange(end);
+        var orders = await _orders.ListActiveOrdersByDeadlineRangeAsync(expandedStart, expandedEnd, ct);
+        var materialCache = new Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig>();
+        var usedByWeekEnd = new Dictionary<DateOnly, decimal>();
+        foreach (var order in orders)
+        {
+            var (_, weekEnd) = SchedulingWeek.GetRange(order.RequestedDeliveryDate);
+            var orderCapacityUnits = await ResolveOrderCapacityUnitsAsync(order, materialCache, ct);
+            usedByWeekEnd[weekEnd] = usedByWeekEnd.GetValueOrDefault(weekEnd) + orderCapacityUnits;
+        }
+
+        var result = new Dictionary<DateOnly, WeeklyCapacityUsage>();
+        foreach (var (weekEnd, used) in usedByWeekEnd)
+        {
+            if (weekEnd < start || weekEnd > end)
+                continue;
+            var capacityConfig = await _capacityConfigs.GetForDateAsync(weekEnd, ct);
+            ValidateCapacityConfig(capacityConfig);
+            result[weekEnd] = new WeeklyCapacityUsage(weekEnd, used, capacityConfig.WeeklyCapacityUnits);
+        }
+
+        return result;
+    }
+
     private static bool UsesToothCountExtraLeadTime(Material material) =>
         material is Material.Pfm or Material.PfzLayeredZrCrown;
 

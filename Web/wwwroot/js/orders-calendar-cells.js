@@ -117,6 +117,27 @@
     return el;
   }
 
+  function buildWeeklyCapacityIndicator(capacity){
+    var c = normalizeCapacity(capacity);
+    if(!c) return null;
+    var ratio = c.used / c.limit;
+    var level = ratio < 0.4 ? 'low' : (ratio < 0.8 ? 'medium' : 'high');
+    var el = document.createElement('span');
+    el.className = 'orders-calendar-capacity orders-calendar-weekly-capacity orders-calendar-capacity-' + level;
+    var usedText = String(Math.round(c.used));
+    var limitText = String(Math.round(c.limit));
+    var longLabel = document.createElement('span');
+    longLabel.className = 'orders-calendar-week-label-long';
+    longLabel.textContent = 'week';
+    var shortLabel = document.createElement('span');
+    shortLabel.className = 'orders-calendar-week-label-short';
+    shortLabel.textContent = 'W';
+    el.append(longLabel, shortLabel, document.createTextNode(': ' + usedText + '/' + limitText));
+    el.title = 'Weekly capacity used: ' + usedText + ' / ' + limitText;
+    el.setAttribute('aria-label', 'Weekly capacity used ' + usedText + ' of ' + limitText);
+    return el;
+  }
+
   function buildLoadIndicator(level){
     level = normalizeLoadLevel(level);
     if(!level) return null;
@@ -210,6 +231,7 @@
     dayToothTotalText: dayToothTotalText,
     normalizeCapacity: normalizeCapacity,
     buildLoadIndicator: buildLoadIndicator,
+    buildWeeklyCapacityIndicator: buildWeeklyCapacityIndicator,
     renderDayOrders: renderDayOrders
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1172,6 +1172,35 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingCalendarEndpoint_ForLab_ReturnsWeeklyCapacityOnSundayCell()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 10.0m, 10.0m);
+        await SeedOrderAsync(fixture.DbPath, "260608-W0", "Monday Load", "DEMO", "2026-06-08");
+        await SeedOrderAsync(fixture.DbPath, "260609-W1", "Tuesday Load", "OTHER", "2026-06-09");
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+
+        var calendar = await labClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-08&end=2026-06-14");
+        var clinicCalendar = await clinicClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-08&end=2026-06-14");
+
+        Assert.That(calendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(clinicCalendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var clinicCalendarText = await clinicCalendar.Content.ReadAsStringAsync();
+        var days = JsonDocument.Parse(await calendar.Content.ReadAsStringAsync()).RootElement.GetProperty("days").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(days.ContainsKey("2026-06-14"), Is.True);
+            Assert.That(days["2026-06-14"].GetProperty("orders").GetArrayLength(), Is.EqualTo(0));
+            Assert.That(days["2026-06-14"].GetProperty("weeklyCapacity").GetProperty("used").GetDecimal(), Is.EqualTo(2.0m));
+            Assert.That(days["2026-06-14"].GetProperty("weeklyCapacity").GetProperty("limit").GetDecimal(), Is.EqualTo(10.0m));
+            Assert.That(clinicCalendarText, Does.Not.Contain("weeklyCapacity"));
+        });
+    }
+
+    [Test]
     public async Task SchedulingCalendarEndpoint_IsRoleAwareInclusiveAndExcludesCancelled()
     {
         using var fixture = NewSchedulingFixture();

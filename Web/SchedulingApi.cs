@@ -297,15 +297,21 @@ public static class SchedulingApi
             var items = await orders.ListCalendarOrdersAsync(actor, start.Value, end.Value, ctx.RequestAborted);
             Dictionary<string, object>? clinics = null;
             IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate = null;
+            IReadOnlyDictionary<DateOnly, WeeklyCapacityUsage>? weeklyCapacityByWeekEnd = null;
             if (actor.IsLab)
             {
                 clinics = await BuildClinicsMetaMapAsync(identities, items, ctx.RequestAborted);
                 capacityByDate = await orders.GetDailyCapacityUsageByDateAsync(start.Value, end.Value, ctx.RequestAborted);
+                weeklyCapacityByWeekEnd = await orders.GetWeeklyCapacityUsageByWeekEndAsync(start.Value, end.Value, ctx.RequestAborted);
             }
-            var days = items
+            var ordersByDate = items
                 .GroupBy(o => o.RequestedDeliveryDate)
-                .OrderBy(g => g.Key)
-                .Select(g => ToCalendarDayDto(g.Key, g, capacityByDate));
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<OrderRecord>)g.ToList());
+            var dayDates = ordersByDate.Keys
+                .Concat(weeklyCapacityByWeekEnd?.Keys ?? [])
+                .Distinct()
+                .OrderBy(d => d);
+            var days = dayDates.Select(date => ToCalendarDayDto(date, ordersByDate.GetValueOrDefault(date) ?? [], capacityByDate, weeklyCapacityByWeekEnd));
             return Results.Json(ToCalendarDto(start.Value, end.Value, days, clinics), JsonOptions);
         });
 
@@ -567,15 +573,33 @@ public static class SchedulingApi
         return ratio < 0.4m ? 0 : ratio < 0.8m ? 1 : 2;
     }
 
-    private static object ToCalendarDayDto(DateOnly date, IEnumerable<OrderRecord> orders, IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate)
+    private static object ToCalendarDayDto(
+        DateOnly date,
+        IEnumerable<OrderRecord> orders,
+        IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate,
+        IReadOnlyDictionary<DateOnly, WeeklyCapacityUsage>? weeklyCapacityByWeekEnd)
     {
         var orderDtos = orders.Select(o => ToDto(o));
-        if (capacityByDate != null && capacityByDate.TryGetValue(date, out var capacity))
-            return new { date, orders = orderDtos, capacity = ToDailyCapacityDto(capacity) };
+        DailyCapacityUsage? capacity = null;
+        WeeklyCapacityUsage? weeklyCapacity = null;
+        var hasDailyCapacity = capacityByDate != null && capacityByDate.TryGetValue(date, out capacity);
+        var hasWeeklyCapacity = weeklyCapacityByWeekEnd != null && weeklyCapacityByWeekEnd.TryGetValue(date, out weeklyCapacity);
+        if (hasDailyCapacity && hasWeeklyCapacity)
+            return new { date, orders = orderDtos, capacity = ToDailyCapacityDto(capacity!), weeklyCapacity = ToWeeklyCapacityDto(weeklyCapacity!) };
+        if (hasDailyCapacity)
+            return new { date, orders = orderDtos, capacity = ToDailyCapacityDto(capacity!) };
+        if (hasWeeklyCapacity)
+            return new { date, orders = orderDtos, weeklyCapacity = ToWeeklyCapacityDto(weeklyCapacity!) };
         return new { date, orders = orderDtos };
     }
 
     private static object ToDailyCapacityDto(DailyCapacityUsage capacity) => new
+    {
+        capacity.Used,
+        capacity.Limit
+    };
+
+    private static object ToWeeklyCapacityDto(WeeklyCapacityUsage capacity) => new
     {
         capacity.Used,
         capacity.Limit
