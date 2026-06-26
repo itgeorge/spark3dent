@@ -34,7 +34,7 @@ public sealed class SchedulingReservationService
 
     public async Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(ReservationDraft draft, DateOnly start, DateOnly end, long? excludedReservationId = null, CancellationToken ct = default)
     {
-        ValidateDraft(draft);
+        ValidateReservationWorkItems(draft);
         await ValidateImpressionDateAsync(draft.ImpressionDate, ct);
         return await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
             ToSchedulingInput(draft, excludedReservationId),
@@ -163,6 +163,11 @@ public sealed class SchedulingReservationService
     {
         if (string.IsNullOrWhiteSpace(draft.CaseName))
             throw new InvalidOperationException("Case name is required.");
+        ValidateReservationWorkItems(draft);
+    }
+
+    private static void ValidateReservationWorkItems(ReservationDraft draft)
+    {
         if (draft.WorkItems == null)
             throw new InvalidOperationException("At least one order work item is required.");
         OrderWorkItem.ValidateAll(draft.WorkItems);
