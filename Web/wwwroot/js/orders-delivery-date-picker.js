@@ -14,10 +14,11 @@
     var selectedIso = options.selectedIso || '';
     var impressionIso = options.impressionIso || '';
     var dayOrders = options.dayOrders || [];
+    var deliveryReservations = options.deliveryReservations || [];
     var labOverride = !!(options.isLabOverride && options.isLabOverride(status));
     var isImpression = iso === impressionIso;
     cell.classList.add('delivery-calendar-cell');
-    if(dayOrders.length) cell.classList.add('delivery-calendar-cell-has-orders');
+    if(dayOrders.length || deliveryReservations.length) cell.classList.add('delivery-calendar-cell-has-orders');
     cell.replaceChildren();
     var button = document.createElement('button');
     button.className = [
@@ -52,16 +53,29 @@
       var load = S3DOrders.CalendarCells.buildLoadIndicator(options.capacityLoadLevel);
       if(load) orders.appendChild(load);
     }
-    if(S3DOrders.CalendarCells && dayOrders.length){
-      S3DOrders.CalendarCells.renderDayOrders(orders, dayOrders, {
-        iso: iso,
-        orderClinics: options.orderClinics || {},
-        isLab: !!options.isLab,
-        capacity: options.capacity,
-        orderClicksEnabled: options.orderClicksEnabled !== false,
-        onOpenOrder: options.onOpenOrder,
-        onOpenDay: options.onOpenDay
-      });
+    if(S3DOrders.CalendarCells && (dayOrders.length || deliveryReservations.length)){
+      if(S3DOrders.CalendarCells.renderDayCalendarEntries){
+        S3DOrders.CalendarCells.renderDayCalendarEntries(orders, { orders: dayOrders, deliveryReservations: deliveryReservations }, {
+          iso: iso,
+          orderClinics: options.orderClinics || {},
+          isLab: !!options.isLab,
+          capacity: options.capacity,
+          orderClicksEnabled: options.orderClicksEnabled !== false,
+          reservationClicksEnabled: false,
+          onOpenOrder: options.onOpenOrder,
+          onOpenDay: options.onOpenDay
+        });
+      }else{
+        S3DOrders.CalendarCells.renderDayOrders(orders, dayOrders, {
+          iso: iso,
+          orderClinics: options.orderClinics || {},
+          isLab: !!options.isLab,
+          capacity: options.capacity,
+          orderClicksEnabled: options.orderClicksEnabled !== false,
+          onOpenOrder: options.onOpenOrder,
+          onOpenDay: options.onOpenDay
+        });
+      }
     }
 
     var foot = document.createElement('div');
@@ -73,7 +87,7 @@
     if(status.isSelectable || labOverride){
       var orderClicksEnabled = options.orderClicksEnabled !== false;
       button.onclick = function(e){
-        if(e.target.closest('.orders-calendar-more,.orders-calendar-count')) return;
+        if(e.target.closest('.orders-calendar-more,.orders-calendar-count,.orders-calendar-impression-dot,.orders-calendar-impression-count')) return;
         if(orderClicksEnabled && e.target.closest('.orders-calendar-chip')) return;
         if(options.onSelect) options.onSelect(iso, status);
       };

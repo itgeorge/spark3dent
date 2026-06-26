@@ -925,6 +925,7 @@ public static class SchedulingApi
         var baseDto = new
         {
             type = "reservation",
+            entityType = "reservation",
             r.Id,
             r.ClinicCode,
             r.ClinicDisplayName,

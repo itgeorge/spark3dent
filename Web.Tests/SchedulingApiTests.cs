@@ -1075,6 +1075,30 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task ReservationDateAvailability_DoesNotRequireCaseNameBeforeOverviewStep()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var response = await client.PostAsync("/api/scheduling/reservations/dates", Json("""
+        {
+          "impressionDate":"2026-06-09",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-12",
+          "start":"2026-06-10",
+          "end":"2026-06-16"
+        }
+        """));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.That(doc.GetProperty("dates").GetArrayLength(), Is.GreaterThan(0));
+    }
+
+    [Test]
     public async Task ReservationCreate_InvalidDeliveryRejectsLabOverrideForSlice1()
     {
         using var fixture = NewSchedulingFixture();
@@ -1370,6 +1394,42 @@ public class SchedulingApiTests
         var list = await clinicClient.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await list.Content.ReadAsStringAsync(), Does.Contain(demoEndCancelled));
+    }
+
+    [Test]
+    public async Task SchedulingCalendar_IncludesReservationDeliveryAndImpressionAndScopesByActor()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var demoReservationId = await CreateReservationAsync(labClient, "Demo Reservation", "2026-06-03", "2026-06-10", clinicCode: "DEMO");
+        var otherReservationId = await CreateReservationAsync(labClient, "Other Reservation", "2026-06-04", "2026-06-11", clinicCode: "OTHER");
+
+        var labCalendar = await labClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-03&end=2026-06-11");
+        Assert.That(labCalendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var labDays = JsonDocument.Parse(await labCalendar.Content.ReadAsStringAsync()).RootElement.GetProperty("days").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        var demoDelivery = labDays["2026-06-10"].GetProperty("reservations").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == demoReservationId);
+        var demoImpression = labDays["2026-06-03"].GetProperty("impressionReservations").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == demoReservationId);
+        var otherDelivery = labDays["2026-06-11"].GetProperty("reservations").EnumerateArray().Single(e => e.GetProperty("id").GetInt64() == otherReservationId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(demoDelivery.GetProperty("entityType").GetString(), Is.EqualTo("reservation"));
+            Assert.That(demoDelivery.GetProperty("requestedDeliveryDate").GetString(), Is.EqualTo("2026-06-10"));
+            Assert.That(demoDelivery.TryGetProperty("orderCode", out _), Is.False);
+            Assert.That(demoImpression.GetProperty("impressionDate").GetString(), Is.EqualTo("2026-06-03"));
+            Assert.That(otherDelivery.GetProperty("clinicCode").GetString(), Is.EqualTo("OTHER"));
+        });
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var clinicCalendar = await clinicClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-03&end=2026-06-11");
+        Assert.That(clinicCalendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var clinicDays = JsonDocument.Parse(await clinicCalendar.Content.ReadAsStringAsync()).RootElement.GetProperty("days").EnumerateArray();
+        var clinicReservationIds = clinicDays.SelectMany(d => d.GetProperty("reservations").EnumerateArray().Concat(d.GetProperty("impressionReservations").EnumerateArray())).Select(e => e.GetProperty("id").GetInt64()).ToArray();
+        Assert.That(clinicReservationIds, Does.Contain(demoReservationId));
+        Assert.That(clinicReservationIds, Does.Not.Contain(otherReservationId));
     }
 
     [Test]
@@ -2171,6 +2231,32 @@ public class SchedulingApiTests
         """));
         Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString()!;
+    }
+
+    private static async Task<long> CreateReservationAsync(
+        HttpClient client,
+        string caseName,
+        string impressionDate,
+        string requestedDeliveryDate,
+        string? clinicCode = null,
+        string material = "fullContourZirconia",
+        string productCategory = "permanent")
+    {
+        var clinicPrefix = clinicCode == null ? "" : $"\"clinicCode\":\"{clinicCode}\",";
+        var create = await client.PostAsync("/api/scheduling/reservations", Json($$"""
+        {
+          {{clinicPrefix}}
+          "caseName":"{{caseName}}",
+          "impressionDate":"{{impressionDate}}",
+          "productCategory":"{{productCategory}}",
+          "material":"{{material}}",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "shade":"A1",
+          "requestedDeliveryDate":"{{requestedDeliveryDate}}"
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("reservation").GetProperty("id").GetInt64();
     }
 
     private static async Task<string> SeedOrderAsync(string dbPath, string code, string caseName, string clinicCode, string requestedDeliveryDate, DateTimeOffset? createdAt = null)
