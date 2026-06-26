@@ -38,7 +38,7 @@
   </section>
 
   <section id="list" class="card hidden">
-    <div class="head"><div><b>Orders</b></div><div class="actions"><div class="view-toggle" role="group" aria-label="Orders view"><button class="btn" id="ordersListModeBtn" type="button">List</button><button class="btn" id="ordersCalendarModeBtn" type="button">Calendar</button></div><button class="btn circle-icon" id="openFindOrderBtn" type="button" aria-label="Find order" title="Find order"><span data-s3d-icon="search" data-s3d-icon-class="search-icon"></span></button><button class="btn circle-icon" id="reloadOrdersBtn" type="button" aria-label="Refresh">↻</button><button class="btn primary" id="newOrderBtn" type="button">+ New order</button></div></div>
+    <div class="head"><div><b>Orders</b></div><div class="actions"><div class="view-toggle" role="group" aria-label="Orders view"><button class="btn" id="ordersListModeBtn" type="button">List</button><button class="btn" id="ordersCalendarModeBtn" type="button">Calendar</button></div><button class="btn circle-icon" id="openFindOrderBtn" type="button" aria-label="Find order" title="Find order"><span data-s3d-icon="search" data-s3d-icon-class="search-icon"></span></button><button class="btn circle-icon" id="reloadOrdersBtn" type="button" aria-label="Refresh">↻</button><button class="btn teal" id="newReservationBtn" type="button">+ Reservation</button><button class="btn primary" id="newOrderBtn" type="button">+ New order</button></div></div>
     <div class="body">
       <div id="ordersListWrap" class="orders-list-wrap" style="overflow:auto"><table class="review" aria-label="Orders"><thead><tr><th class="col-code">Code</th><th class="col-case">Case</th><th class="col-teeth">Teeth</th><th class="col-shade">Shade</th><th class="col-delivery">Delivery</th><th class="col-action" aria-label="Action"></th></tr></thead><tbody id="ordersBody"></tbody></table><div style="display:flex;justify-content:center;margin-top:12px"><button class="btn" id="loadMoreOrdersBtn" type="button">Load more</button></div></div>
       <div id="ordersCalendarWrap" class="orders-calendar-wrap hidden"><div id="ordersCalendar" class="orders-calendar" aria-label="Orders calendar"></div></div>
@@ -170,7 +170,7 @@
         </div>
       </div>
       <div class="pane hidden" id="s3">
-        <input id="impression" type="date" class="hidden" aria-hidden="true" tabindex="-1">
+        <div id="reservationImpressionField" class="hidden"><label for="impression">Impression date</label><input id="impression" type="date"></div>
         <input id="deadline" type="date" class="hidden" aria-hidden="true" tabindex="-1">
         <div class="msg hidden" id="dateMsg"></div>
         <div id="deliveryCalendar" class="delivery-calendar" aria-label="Delivery date calendar"></div>

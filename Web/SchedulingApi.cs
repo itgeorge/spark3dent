@@ -296,6 +296,118 @@ public static class SchedulingApi
             }
         });
 
+        app.MapPost("/api/scheduling/reservations/dates", async (HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var body = await ReadJson<ReservationDateAvailabilityRequest>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var draft = ToReservationDraft(body, body.RequestedDeliveryDate == default ? body.Start : body.RequestedDeliveryDate);
+                var statuses = await reservations.GetDateStatusesResultAsync(draft, body.Start, body.End, body.ReservationId, ctx.RequestAborted);
+                return Results.Json(new { minimumDate = statuses.MinimumDate, recommendedDate = statuses.RecommendedDate, dates = statuses.Statuses.Select(s => ToDateStatusDto(s, actor.IsLab)) }, JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapPost("/api/scheduling/reservations", async (HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var body = await ReadJson<CreateReservationRequest>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var created = await reservations.CreateReservationAsync(actor, ToReservationDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), body.ClinicCode, ToDeadlineOverrideRequest(body), ctx.RequestAborted);
+                return Results.Json(new { reservation = ToDto(created) }, statusCode: 201, options: JsonOptions);
+            }
+            catch (DeadlineOverrideRequiredException ex)
+            {
+                return Results.Json(ToDeadlineOverrideErrorDto(ex), statusCode: 400, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapGet("/api/scheduling/reservations", async (HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations, ISchedulingIdentityRepository identities, int? limit) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var items = await reservations.ListActiveReservationsForActorAsync(actor, limit ?? 100, ctx.RequestAborted);
+            Dictionary<string, object>? clinics = null;
+            if (actor.IsLab)
+                clinics = await BuildClinicsMetaMapAsync(identities, items.Select(r => r.ClinicCode), ctx.RequestAborted);
+            return Results.Json(new { items = items.Select(r => ToDto(r)), clinics }, JsonOptions);
+        });
+
+        app.MapGet("/api/scheduling/reservations/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations, ISchedulingIdentityRepository identities) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            try
+            {
+                var reservation = await reservations.GetReservationForActorAsync(actor, id, ctx.RequestAborted);
+                SchedulingClinic? liveClinic = null;
+                if (actor.IsLab)
+                    liveClinic = await identities.GetClinicAsync(reservation.ClinicCode, includeInactive: false, ctx.RequestAborted);
+                return Results.Json(new { reservation = ToDto(reservation, liveClinic) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+        });
+
+        app.MapPut("/api/scheduling/reservations/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            var body = await ReadJson<UpdateReservationRequest>(ctx);
+            if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
+            try
+            {
+                var updated = await reservations.UpdateReservationAsync(actor, id, ToReservationDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), ToDeadlineOverrideRequest(body), ctx.RequestAborted);
+                return Results.Json(new { reservation = ToDto(updated) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (DeadlineOverrideRequiredException ex)
+            {
+                return Results.Json(ToDeadlineOverrideErrorDto(ex), statusCode: 400, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
+        app.MapDelete("/api/scheduling/reservations/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            try
+            {
+                var cancelled = await reservations.CancelReservationAsync(actor, id, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
+                return Results.Json(new { reservation = ToDto(cancelled) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
         app.MapPost("/api/scheduling/orders", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -369,7 +481,7 @@ public static class SchedulingApi
             }
         });
 
-        app.MapGet("/api/scheduling/orders/calendar", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities, DateOnly? start, DateOnly? end) =>
+        app.MapGet("/api/scheduling/orders/calendar", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, SchedulingReservationService reservations, ISchedulingIdentityRepository identities, DateOnly? start, DateOnly? end) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
@@ -381,23 +493,32 @@ public static class SchedulingApi
                 return Results.Json(new { error = "Calendar date range cannot exceed 93 days." }, statusCode: 400, options: JsonOptions);
 
             var items = await orders.ListCalendarOrdersAsync(actor, start.Value, end.Value, ctx.RequestAborted);
+            var reservationItems = await reservations.ListCalendarReservationsAsync(actor, start.Value, end.Value, ctx.RequestAborted);
             Dictionary<string, object>? clinics = null;
             IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate = null;
             IReadOnlyDictionary<DateOnly, WeeklyCapacityUsage>? weeklyCapacityByWeekEnd = null;
             if (actor.IsLab)
             {
-                clinics = await BuildClinicsMetaMapAsync(identities, items, ctx.RequestAborted);
+                clinics = await BuildClinicsMetaMapAsync(identities, items.Select(o => o.ClinicCode).Concat(reservationItems.Select(r => r.ClinicCode)), ctx.RequestAborted);
                 capacityByDate = await orders.GetDailyCapacityUsageByDateAsync(start.Value, end.Value, ctx.RequestAborted);
                 weeklyCapacityByWeekEnd = await orders.GetWeeklyCapacityUsageByWeekEndAsync(start.Value, end.Value, ctx.RequestAborted);
             }
             var ordersByDate = items
                 .GroupBy(o => o.RequestedDeliveryDate)
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<OrderRecord>)g.ToList());
+            var reservationsByDeliveryDate = reservationItems
+                .GroupBy(r => r.RequestedDeliveryDate)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<ReservationRecord>)g.ToList());
+            var reservationsByImpressionDate = reservationItems
+                .GroupBy(r => r.ImpressionDate)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<ReservationRecord>)g.ToList());
             var dayDates = ordersByDate.Keys
+                .Concat(reservationsByDeliveryDate.Keys)
+                .Concat(reservationsByImpressionDate.Keys)
                 .Concat(weeklyCapacityByWeekEnd?.Keys ?? [])
                 .Distinct()
                 .OrderBy(d => d);
-            var days = dayDates.Select(date => ToCalendarDayDto(date, ordersByDate.GetValueOrDefault(date) ?? [], capacityByDate, weeklyCapacityByWeekEnd));
+            var days = dayDates.Select(date => ToCalendarDayDto(date, ordersByDate.GetValueOrDefault(date) ?? [], reservationsByDeliveryDate.GetValueOrDefault(date) ?? [], reservationsByImpressionDate.GetValueOrDefault(date) ?? [], capacityByDate, weeklyCapacityByWeekEnd));
             return Results.Json(ToCalendarDto(start.Value, end.Value, days, clinics), JsonOptions);
         });
 
@@ -556,9 +677,7 @@ public static class SchedulingApi
 
     private static OrderDraft ToDraft(OrderShape body, DateOnly deliveryDate)
     {
-        var workItems = body.WorkItems?
-            .Select(i => new OrderWorkItem(i.ConstructionType, new ToothRange(i.ToothStart, i.ToothEnd)))
-            .ToArray() ?? [];
+        var workItems = ToWorkItems(body);
         return new OrderDraft(
             body.CaseName ?? "",
             body.ImpressionDate,
@@ -570,6 +689,22 @@ public static class SchedulingApi
             body.Notes,
             body.ColorNote);
     }
+
+    private static ReservationDraft ToReservationDraft(OrderShape body, DateOnly deliveryDate) => new(
+        body.CaseName ?? "",
+        body.ImpressionDate,
+        body.ProductCategory,
+        body.Material,
+        ToWorkItems(body),
+        deliveryDate,
+        body.Shade,
+        body.Notes,
+        body.ColorNote);
+
+    private static OrderWorkItem[] ToWorkItems(OrderShape body) =>
+        body.WorkItems?
+            .Select(i => new OrderWorkItem(i.ConstructionType, new ToothRange(i.ToothStart, i.ToothEnd)))
+            .ToArray() ?? [];
 
     private static object ToPageDto(OrderPage page, Dictionary<string, object>? clinics = null)
     {
@@ -662,21 +797,25 @@ public static class SchedulingApi
     private static object ToCalendarDayDto(
         DateOnly date,
         IEnumerable<OrderRecord> orders,
+        IEnumerable<ReservationRecord> deliveryReservations,
+        IEnumerable<ReservationRecord> impressionReservations,
         IReadOnlyDictionary<DateOnly, DailyCapacityUsage>? capacityByDate,
         IReadOnlyDictionary<DateOnly, WeeklyCapacityUsage>? weeklyCapacityByWeekEnd)
     {
         var orderDtos = orders.Select(o => ToDto(o));
+        var deliveryReservationDtos = deliveryReservations.Select(r => ToDto(r));
+        var impressionReservationDtos = impressionReservations.Select(r => ToDto(r));
         DailyCapacityUsage? capacity = null;
         WeeklyCapacityUsage? weeklyCapacity = null;
         var hasDailyCapacity = capacityByDate != null && capacityByDate.TryGetValue(date, out capacity);
         var hasWeeklyCapacity = weeklyCapacityByWeekEnd != null && weeklyCapacityByWeekEnd.TryGetValue(date, out weeklyCapacity);
         if (hasDailyCapacity && hasWeeklyCapacity)
-            return new { date, orders = orderDtos, capacity = ToDailyCapacityDto(capacity!), weeklyCapacity = ToWeeklyCapacityDto(weeklyCapacity!) };
+            return new { date, orders = orderDtos, reservations = deliveryReservationDtos, impressionReservations = impressionReservationDtos, capacity = ToDailyCapacityDto(capacity!), weeklyCapacity = ToWeeklyCapacityDto(weeklyCapacity!) };
         if (hasDailyCapacity)
-            return new { date, orders = orderDtos, capacity = ToDailyCapacityDto(capacity!) };
+            return new { date, orders = orderDtos, reservations = deliveryReservationDtos, impressionReservations = impressionReservationDtos, capacity = ToDailyCapacityDto(capacity!) };
         if (hasWeeklyCapacity)
-            return new { date, orders = orderDtos, weeklyCapacity = ToWeeklyCapacityDto(weeklyCapacity!) };
-        return new { date, orders = orderDtos };
+            return new { date, orders = orderDtos, reservations = deliveryReservationDtos, impressionReservations = impressionReservationDtos, weeklyCapacity = ToWeeklyCapacityDto(weeklyCapacity!) };
+        return new { date, orders = orderDtos, reservations = deliveryReservationDtos, impressionReservations = impressionReservationDtos };
     }
 
     private static object ToDailyCapacityDto(DailyCapacityUsage capacity) => new
@@ -699,13 +838,18 @@ public static class SchedulingApi
         linkedClientNickname = clinic.LinkedClientNickname
     };
 
-    private static async Task<Dictionary<string, object>> BuildClinicsMetaMapAsync(
+    private static Task<Dictionary<string, object>> BuildClinicsMetaMapAsync(
         ISchedulingIdentityRepository identities,
         IEnumerable<OrderRecord> orders,
+        CancellationToken ct) =>
+        BuildClinicsMetaMapAsync(identities, orders.Select(o => o.ClinicCode), ct);
+
+    private static async Task<Dictionary<string, object>> BuildClinicsMetaMapAsync(
+        ISchedulingIdentityRepository identities,
+        IEnumerable<string> clinicCodes,
         CancellationToken ct)
     {
-        var needed = orders
-            .Select(o => o.ClinicCode)
+        var needed = clinicCodes
             .Where(c => !string.IsNullOrWhiteSpace(c))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -724,6 +868,7 @@ public static class SchedulingApi
         {
             return new
             {
+                type = "order",
                 o.Id,
                 o.OrderCode,
                 shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
@@ -749,6 +894,7 @@ public static class SchedulingApi
 
         return new
         {
+            type = "order",
             o.Id,
             o.OrderCode,
             shortenedOrderCode = DescriptiveOrderCodeGenerator.ToShortenedCode(o.OrderCode),
@@ -772,6 +918,38 @@ public static class SchedulingApi
             o.CreatedAt,
             o.UpdatedAt
         };
+    }
+
+    private static object ToDto(ReservationRecord r, SchedulingClinic? liveClinic = null)
+    {
+        var baseDto = new
+        {
+            type = "reservation",
+            r.Id,
+            r.ClinicCode,
+            r.ClinicDisplayName,
+            clinicDisplayColor = liveClinic?.DisplayColor,
+            linkedClientNickname = liveClinic?.LinkedClientNickname,
+            r.MemberId,
+            r.MemberLabel,
+            r.CaseName,
+            r.ImpressionDate,
+            r.ProductCategory,
+            r.Material,
+            workItems = r.WorkItems.Select(ToWorkItemDto),
+            r.RequestedDeliveryDate,
+            r.Status,
+            r.Shade,
+            r.Notes,
+            r.ColorNote,
+            r.CalculatedCapacityUnits,
+            r.CreatedAt,
+            r.UpdatedAt,
+            r.PromotedOrderId,
+            r.PromotedOrderCode,
+            r.PromotedAt
+        };
+        return baseDto;
     }
 
     private static object ToWorkItemDto(OrderWorkItem item) => new
@@ -972,6 +1150,25 @@ public static class SchedulingApi
     }
 
     public sealed record UpdateOrderRequest : OrderShape
+    {
+        public DateOnly RequestedDeliveryDate { get; init; }
+    }
+
+    public sealed record ReservationDateAvailabilityRequest : OrderShape
+    {
+        public DateOnly Start { get; init; }
+        public DateOnly End { get; init; }
+        public DateOnly RequestedDeliveryDate { get; init; }
+        public long? ReservationId { get; init; }
+    }
+
+    public sealed record CreateReservationRequest : OrderShape
+    {
+        public DateOnly RequestedDeliveryDate { get; init; }
+        public string? ClinicCode { get; init; }
+    }
+
+    public sealed record UpdateReservationRequest : OrderShape
     {
         public DateOnly RequestedDeliveryDate { get; init; }
     }

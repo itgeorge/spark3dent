@@ -44,6 +44,12 @@
       createOrder: function(payload){ return jsonRequest('/api/scheduling/orders', { method:'POST', body: JSON.stringify(payload || {}) }, { error:'Could not save order.' }); },
       updateOrder: function(code, payload){ return jsonRequest('/api/scheduling/orders/' + encodeURIComponent(code), { method:'PUT', body: JSON.stringify(payload || {}) }, { error:'Could not save order.' }); },
       deleteOrder: function(code){ return jsonRequest('/api/scheduling/orders/' + encodeURIComponent(code), { method:'DELETE' }, { error:'Could not cancel order.' }); },
+      listReservations: function(options){ var query = qs({ limit: options && options.limit || '100' }); return jsonRequest('/api/scheduling/reservations?' + query, undefined, { error:'Could not load reservations.' }); },
+      getReservation: function(id){ return jsonRequest('/api/scheduling/reservations/' + encodeURIComponent(id), undefined, { error:'Could not load reservation.' }); },
+      createReservation: function(payload){ return jsonRequest('/api/scheduling/reservations', { method:'POST', body: JSON.stringify(payload || {}) }, { error:'Could not save reservation.' }); },
+      updateReservation: function(id, payload){ return jsonRequest('/api/scheduling/reservations/' + encodeURIComponent(id), { method:'PUT', body: JSON.stringify(payload || {}) }, { error:'Could not save reservation.' }); },
+      deleteReservation: function(id){ return jsonRequest('/api/scheduling/reservations/' + encodeURIComponent(id), { method:'DELETE' }, { error:'Could not cancel reservation.' }); },
+      reservationDateAvailability: function(payload){ return jsonRequest('/api/scheduling/reservations/dates', { method:'POST', body: JSON.stringify(payload || {}) }); },
       clinics: function(){ return jsonRequest('/api/scheduling/clinics', undefined, { items: [] }); },
       materialOptions: function(){ return jsonRequest('/api/scheduling/material-options', undefined, { items: [] }); },
       dateAvailability: function(payload){ return jsonRequest('/api/scheduling/dates', { method:'POST', body: JSON.stringify(payload || {}) }); }
