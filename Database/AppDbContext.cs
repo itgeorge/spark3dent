@@ -117,6 +117,7 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.RequestedDeliveryDate);
             e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
             e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.PromotedFromReservationId);
             e.Property(x => x.OrderCode).IsRequired();
             e.Property(x => x.ClinicCode).IsRequired();
             e.Property(x => x.MemberId).HasColumnName("CredentialId").IsRequired();

@@ -389,6 +389,29 @@ public static class SchedulingApi
             }
         });
 
+        app.MapPost("/api/scheduling/reservations/{id:long}/promote", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            try
+            {
+                var promoted = await reservations.PromoteReservationAsync(actor, id, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
+                return Results.Json(new { reservation = ToDto(promoted.Reservation), order = ToDto(promoted.Order) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+            catch (DeadlineOverrideRequiredException ex)
+            {
+                return Results.Json(ToDeadlineOverrideErrorDto(ex), statusCode: 400, options: JsonOptions);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 400, options: JsonOptions);
+            }
+        });
+
         app.MapDelete("/api/scheduling/reservations/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -887,6 +910,7 @@ public static class SchedulingApi
                 o.Notes,
                 o.ColorNote,
                 o.CalculatedCapacityUnits,
+                o.PromotedFromReservationId,
                 o.CreatedAt,
                 o.UpdatedAt
             };
@@ -915,6 +939,7 @@ public static class SchedulingApi
             o.Notes,
             o.ColorNote,
             o.CalculatedCapacityUnits,
+            o.PromotedFromReservationId,
             o.CreatedAt,
             o.UpdatedAt
         };
