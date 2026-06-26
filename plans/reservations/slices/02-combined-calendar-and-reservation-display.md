@@ -26,22 +26,29 @@ Explicitly out of scope:
 
 ## Current State / Context
 
-After Slice 1, reservations can be created/edited/cancelled and consume capacity. Current order calendar frontend uses:
+After Slice 1, reservations can be created/edited/cancelled and consume capacity. Some combined display groundwork already exists:
 
-- `/api/scheduling/orders/calendar`;
-- `orders-root-view.js` calendar loader;
-- `orders-calendar-cells.js` shared cell rendering;
-- `orders-delivery-date-picker.js` for delivery picker cells.
+- `/api/scheduling/orders/calendar` already injects active non-expired reservations into each day DTO using current field names:
+  - `reservations` for reservations whose requested delivery date is that day;
+  - `impressionReservations` for reservations whose impression date is that day.
+- Calendar capacity indicators already use backend capacity usage that includes active reservations.
+- Root/list view already loads active reservations through `/api/scheduling/reservations` and renders reservation rows mixed with orders.
+- Reservation routes already exist (`reservation/:id`, `reservation-edit/:id/:step`).
 
-Calendar DTOs currently assume `orders` arrays, and order chips open order review.
+The main remaining gap for this slice is the month calendar/day-popup UI: `orders-root-view.js` currently still maps only `d.orders` into `ordersCalendarByDate`, and `orders-calendar-cells.js` still assumes entries are orders with `orderCode`. Reservation delivery chips, reservation impression indicators, and mixed day-popup click routing are not yet implemented.
+
+Relevant frontend files:
+
+- `Web/wwwroot/js/orders-root-view.js` calendar loader and day popup;
+- `Web/wwwroot/js/orders-calendar-cells.js` shared cell rendering;
+- `Web/wwwroot/js/orders-delivery-date-picker.js` if shared calendar cell helpers are reused in the reservation/order flow;
+- `Web/wwwroot/orders.html` CSS block for chip/indicator styling.
 
 ## Desired End State
 
 ### API shape
 
-Extend the calendar/list API or add a new combined endpoint so the frontend receives typed entries.
-
-Preferred additive response for `/api/scheduling/orders/calendar`:
+Use the existing additive response shape from Slice 1 unless there is a strong reason to rename fields:
 
 ```json
 {
@@ -49,8 +56,8 @@ Preferred additive response for `/api/scheduling/orders/calendar`:
     {
       "date": "2026-06-24",
       "orders": [ ...existing order dtos... ],
-      "reservationDeliveries": [ ...reservation dtos... ],
-      "reservationImpressions": [ ...reservation dtos... ],
+      "reservations": [ ...reservation dtos whose delivery date is this day... ],
+      "impressionReservations": [ ...reservation dtos whose impression date is this day... ],
       "capacity": { "used": 10, "limit": 30 },
       "weeklyCapacity": { "used": 100, "limit": 150 }
     }
@@ -59,7 +66,7 @@ Preferred additive response for `/api/scheduling/orders/calendar`:
 }
 ```
 
-Alternatively use a unified entry array with `type` and `dateRole`, as long as existing order consumers remain compatible or are updated.
+Do not remove or rename `orders`; existing order rendering depends on it. If field names are changed, update all frontend consumers and tests deliberately.
 
 Reservation DTOs should include enough display data:
 
@@ -81,13 +88,13 @@ No order code should be emitted for reservations.
 
 ### Root list view
 
-The list view should render active non-expired reservations among orders or in a combined list ordering that remains understandable.
+Slice 1 already includes a basic active reservation list display mixed with orders. For this slice, preserve that behavior and only adjust it if needed to support calendar/day-popup consistency.
 
-Requirements:
+Requirements to keep true:
 
 - order rows remain unchanged;
-- reservation rows have a `Reservation` badge;
-- reservation primary text is compact material + tooth count + case name;
+- reservation rows have a `Reservation` badge/label;
+- reservation primary text is compact material + tooth count and/or case name;
 - delivery date remains visible;
 - impression date is visible in row secondary text or date column;
 - clicking opens reservation detail/edit flow.
@@ -127,24 +134,31 @@ Capacity used/limit indicators for lab users must include active reservations fr
 
 ## Implementation Plan
 
-1. Decide combined DTO shape and update API tests first.
-2. Extend calendar backend query to load active non-expired reservations by delivery and impression range.
-3. Build clinic metadata map from orders plus reservations for lab users.
-4. Update frontend API handling maps:
-   - `ordersCalendarByDate` remains for orders;
-   - add `reservationsByDeliveryDate`;
-   - add `reservationsByImpressionDate`.
-5. Extend `orders-calendar-cells.js` or add `reservations-calendar-cells.js` helpers.
+1. Keep or explicitly confirm the existing calendar DTO shape (`orders`, `reservations`, `impressionReservations`) and add/adjust API tests around it.
+2. Verify backend calendar query loads active non-expired reservations by both delivery and impression range; fix only if tests expose a gap.
+3. Verify clinic metadata map includes clinics referenced by orders and reservations for lab users.
+4. Update frontend API handling maps in `orders-root-view.js`:
+   - keep `ordersCalendarByDate` for orders;
+   - add `reservationsCalendarByDeliveryDate` (or similar) from `d.reservations`;
+   - add `reservationsCalendarByImpressionDate` (or similar) from `d.impressionReservations`.
+5. Extend `orders-calendar-cells.js` or add `reservations-calendar-cells.js` helpers for:
+   - reservation delivery chips;
+   - reservation impression dot/count indicators;
+   - mixed order/reservation popup rows.
 6. Add CSS classes for reservation chips and impression dots.
-7. Update day popup rendering and click routing.
-8. Ensure reservation opening route exists from Slice 1; if not, add minimal route wiring.
+7. Update day popup rendering and click routing:
+   - orders call `onOpenOrder(orderCode)`;
+   - reservations call `onOpenReservation(id)`;
+   - rows/labels distinguish `Delivery`, `Impression`, or both.
+8. Ensure delivery-date picker cells do not accidentally render reservation entries as clickable orders. If shared day-order rendering receives reservations, pass explicit entry type/click handlers or keep reservation entries static in the picker until later slices.
 
 ## TDD Plan
 
 ### API tests
 
-- Calendar response includes reservation delivery on requested delivery date.
-- Calendar response includes reservation impression indicator on impression date.
+- Calendar response includes reservation delivery in `reservations` on requested delivery date.
+- Calendar response includes reservation impression in `impressionReservations` on impression date.
+- If impression date and delivery date are the same visible day, the reservation is represented in both roles or otherwise clearly indicates both roles.
 - Expired/cancelled reservations are excluded.
 - Clinic sees only own reservations; lab sees all.
 - Capacity values include active reservation capacity.
@@ -152,9 +166,11 @@ Capacity used/limit indicators for lab users must include active reservations fr
 ### Frontend/manual tests
 
 - Create reservation with impression Wednesday and delivery Friday.
-- Calendar shows small indicator on Wednesday and reservation chip on Friday.
-- Clicking either opens reservation edit/detail.
+- Calendar shows small indicator on Wednesday and semi-transparent reservation chip on Friday.
+- Clicking either opens reservation detail/edit.
 - Day popup distinguishes order vs reservation and impression vs delivery.
+- Verify a date that has both an order and reservation renders both.
+- Verify a reservation whose impression and delivery are both in the visible month appears in both roles.
 - Clinic cannot see another clinic reservation on calendar.
 
 ## Validation Plan
