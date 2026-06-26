@@ -240,6 +240,46 @@ public class DeadlineRecommendationServiceTest
     }
 
     [Test]
+    public async Task RecommendCapacityAwareDateAsync_GivenActiveReservationConsumesCapacity_ReturnsNextSelectableDate()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 3, 10, 30);
+        var reservations = new[]
+        {
+            BuildReservation(1, new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 5))
+        };
+        var service = CreateService(
+            reservations: reservations,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)],
+            clock: new FixedClock(SofiaLocal(2026, 6, 3, 9, 0)));
+
+        var statuses = await service.GetCapacityAwareDateStatusesAsync(Input(Material.Pmma, createdAtUtc), new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 8));
+        var friday = statuses.Statuses.Single(s => s.Date == new DateOnly(2026, 6, 5));
+
+        Assert.That(friday.IsSelectable, Is.False);
+        Assert.That(friday.IsDailyCapacityExceeded, Is.True);
+    }
+
+    [Test]
+    public async Task ValidateRequestedDateAsync_GivenExcludedReservation_DoesNotBlockItself()
+    {
+        var createdAtUtc = SofiaLocal(2026, 6, 3, 10, 30);
+        var reservations = new[]
+        {
+            BuildReservation(7, new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 5))
+        };
+        var service = CreateService(
+            reservations: reservations,
+            capacityConfigs: [new SchedulingCapacityConfig(1, new DateOnly(2026, 1, 1), 1m, 10m)],
+            clock: new FixedClock(SofiaLocal(2026, 6, 3, 9, 0)));
+
+        var result = await service.ValidateRequestedDateAsync(
+            new OrderSchedulingInput(Material.Pmma, [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))], createdAtUtc, ExcludedOrderId: null, ExcludedReservationId: 7),
+            new DateOnly(2026, 6, 5));
+
+        Assert.That(result.Status.IsSelectable, Is.True);
+    }
+
+    [Test]
     public async Task ValidateRequestedDateAsync_AllowsLargeOrderOverDailyCapacity_WhenDayHasNoOtherOrders()
     {
         var createdAtUtc = SofiaLocal(2026, 6, 8, 10, 30);
@@ -478,14 +518,18 @@ public class DeadlineRecommendationServiceTest
         IEnumerable<DateOnly>? extraClosedDates = null,
         IReadOnlyList<MaterialSchedulingConfig>? configs = null,
         IReadOnlyList<SchedulingCapacityConfig>? capacityConfigs = null,
-        IReadOnlyList<OrderRecord>? orders = null)
+        IReadOnlyList<OrderRecord>? orders = null,
+        IReadOnlyList<ReservationRecord>? reservations = null,
+        Utilities.IClock? clock = null)
     {
         var availability = new DateAvailabilityService(new TestNonWorkingDayProvider(extraClosedDates ?? []));
         return new DeadlineRecommendationService(
             availability,
             new TestMaterialSchedulingConfigProvider(configs),
             new TestSchedulingCapacityConfigProvider(capacityConfigs),
-            new InMemoryOrderRepository(orders));
+            new InMemoryOrderRepository(orders),
+            new InMemoryReservationRepository(reservations),
+            clock);
     }
 
     private static OrderSchedulingInput Input(Material material, DateTimeOffset createdAtUtc, long? excludedOrderId = null) =>
@@ -507,6 +551,30 @@ public class DeadlineRecommendationServiceTest
             workItems ?? [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))],
             requestedDeliveryDate,
             OrderStatus.Created,
+            Shade.Unspecified,
+            null,
+            DateTimeOffset.Parse("2026-06-02T07:30:00Z"),
+            DateTimeOffset.Parse("2026-06-02T07:30:00Z"),
+            "127.0.0.1",
+            "test",
+            null,
+            1m);
+
+    private static ReservationRecord BuildReservation(long id, DateOnly impressionDate, DateOnly requestedDeliveryDate, ReservationStatus status = ReservationStatus.Active) =>
+        new(
+            id,
+            "DEMO",
+            "Demo Clinic",
+            "seed",
+            "Seed",
+            "fingerprint",
+            $"Reservation {id}",
+            impressionDate,
+            ProductCategory.Permanent,
+            Material.Pmma,
+            [new OrderWorkItem(ConstructionType.Crown, new ToothRange(11, 11))],
+            requestedDeliveryDate,
+            status,
             Shade.Unspecified,
             null,
             DateTimeOffset.Parse("2026-06-02T07:30:00Z"),
@@ -558,6 +626,26 @@ public class DeadlineRecommendationServiceTest
                 .Where(o => o.Status != OrderStatus.Cancelled && o.RequestedDeliveryDate >= start && o.RequestedDeliveryDate <= end)
                 .OrderBy(o => o.RequestedDeliveryDate)
                 .ThenBy(o => o.Id)
+                .ToList());
+    }
+
+    private sealed class InMemoryReservationRepository : IReservationRepository
+    {
+        private readonly IReadOnlyList<ReservationRecord> _reservations;
+
+        public InMemoryReservationRepository(IReadOnlyList<ReservationRecord>? reservations = null) => _reservations = reservations ?? [];
+
+        public Task<ReservationRecord> CreateReservationAsync(ReservationRecord reservation, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<ReservationRecord?> GetReservationByIdAsync(long id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<ReservationRecord> UpdateReservationAsync(ReservationRecord reservation, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<ReservationRecord>> ListActiveReservationsForActorAsync(string? clinicCode, int limit, DateTimeOffset nowUtc, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<ReservationRecord>> ListActiveReservationsForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, DateTimeOffset nowUtc, CancellationToken ct = default) => throw new NotImplementedException();
+
+        public Task<IReadOnlyList<ReservationRecord>> ListActiveReservationsByDeadlineRangeAsync(DateOnly start, DateOnly end, DateTimeOffset nowUtc, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ReservationRecord>>(_reservations
+                .Where(r => ReservationActiveRules.IsActiveForScheduling(r, nowUtc) && r.RequestedDeliveryDate >= start && r.RequestedDeliveryDate <= end)
+                .OrderBy(r => r.RequestedDeliveryDate)
+                .ThenBy(r => r.Id)
                 .ToList());
     }
 }

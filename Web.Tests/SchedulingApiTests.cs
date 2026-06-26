@@ -1136,6 +1136,34 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task ReservationCreate_InvalidDeliveryRejectsLabOverrideForSlice1()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var response = await labClient.PostAsync("/api/scheduling/reservations", Json("""
+        {
+          "clinicCode":"DEMO",
+          "caseName":"Reservation Override Attempt",
+          "impressionDate":"2026-06-03",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "shade":"A1",
+          "requestedDeliveryDate":"2026-06-06",
+          "confirmDeadlineOverride":true,
+          "deadlineOverrideReason":"test override should be rejected"
+        }
+        """));
+        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(json.GetProperty("overrideAllowed").GetBoolean(), Is.False);
+        Assert.That(json.GetProperty("error").GetString(), Does.Contain("Reservation deadline overrides are not available yet"));
+    }
+
+    [Test]
     public async Task SchedulingFlow_UpdateAndCancelOrder_EnforcesPermissions()
     {
         using var fixture = NewSchedulingFixture();

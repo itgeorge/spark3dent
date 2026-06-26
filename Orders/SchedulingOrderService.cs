@@ -114,9 +114,9 @@ public sealed class SchedulingOrderService
 
         var targetClinic = await ResolveTargetClinicAsync(actor, targetClinicCode, ct);
         var createTimestamp = _clock.UtcNow;
-        var createResult = await _writeTransaction.ExecuteAsync(async txOrders =>
+        var createResult = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
         {
-            var decision = await DecideDeadlineCommitAsync(actor, draft, createTimestamp, excludedOrderId: null, txOrders, deadlineOverride, ct);
+            var decision = await DecideDeadlineCommitAsync(actor, draft, createTimestamp, excludedOrderId: null, txOrders, txReservations, deadlineOverride, ct);
             var orderWithoutCode = BuildOrder(actor, targetClinic, draft, ip, userAgent, decision.ValidationWithAudit.Validation.OrderCapacityUnits, createTimestamp);
             var createdOrder = await CreateWithUniqueCodeAsync(orderWithoutCode, draft, txOrders, ct);
             return (Order: createdOrder, decision.ValidationWithAudit.Audit, Decision: decision);
@@ -155,13 +155,13 @@ public sealed class SchedulingOrderService
     public async Task<OrderRecord> UpdateOrderAsync(AuthenticatedActor actor, string orderCode, OrderDraft draft, string? ip, string? userAgent, DeadlineOverrideRequest? deadlineOverride, CancellationToken ct = default)
     {
         ValidateDraft(draft);
-        var result = await _writeTransaction.ExecuteAsync(async txOrders =>
+        var result = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
         {
             var existing = await GetAuthorizedOrderAsync(actor, orderCode, txOrders, ct);
             if (existing.Status == OrderStatus.Cancelled)
                 throw new InvalidOperationException("Cancelled orders cannot be modified.");
 
-            var decision = await DecideDeadlineCommitAsync(actor, draft, existing.CreatedAt, existing.Id, txOrders, deadlineOverride, ct);
+            var decision = await DecideDeadlineCommitAsync(actor, draft, existing.CreatedAt, existing.Id, txOrders, txReservations, deadlineOverride, ct);
 
             var updated = existing with
             {
@@ -429,12 +429,24 @@ public sealed class SchedulingOrderService
         long? excludedOrderId,
         IOrderRepository? orderRepositoryOverride,
         DeadlineOverrideRequest? deadlineOverride,
+        CancellationToken ct) =>
+        await DecideDeadlineCommitAsync(actor, draft, impressionTimestampUtc, excludedOrderId, orderRepositoryOverride, reservationRepositoryOverride: null, deadlineOverride, ct);
+
+    private async Task<DeadlineCommitDecision> DecideDeadlineCommitAsync(
+        AuthenticatedActor actor,
+        OrderDraft draft,
+        DateTimeOffset impressionTimestampUtc,
+        long? excludedOrderId,
+        IOrderRepository? orderRepositoryOverride,
+        IReservationRepository? reservationRepositoryOverride,
+        DeadlineOverrideRequest? deadlineOverride,
         CancellationToken ct)
     {
         var result = await _deadlineRecommendations.ValidateRequestedDateWithAuditAsync(
             new OrderSchedulingInput(draft.Material, draft.WorkItems, impressionTimestampUtc, excludedOrderId),
             draft.RequestedDeliveryDate,
             orderRepositoryOverride,
+            reservationRepositoryOverride,
             ct);
         var validation = result.Validation;
         if (validation.Status.IsSelectable)
