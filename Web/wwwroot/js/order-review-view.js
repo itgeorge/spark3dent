@@ -13,6 +13,7 @@
     const openUiModal = options.openUiModal || ((name, overlay, focusTarget) => { S3DDom.setHidden(overlay, false); if(focusTarget)S3DDom.deferFocus(focusTarget); });
     const closeUiModal = options.closeUiModal || ((name, overlay) => S3DDom.setHidden(overlay, true));
     const replace = options.replace || (() => {});
+    const navigate = options.navigate || replace;
     const onBack = options.onBack || (() => {});
     const onEdit = options.onEdit || (() => {});
     const onRouteError = options.onRouteError || (() => {});
@@ -21,7 +22,7 @@
 
     const app = $('app'), list = $('list'), reviewCard = $('reviewCard');
     const reviewMsg = $('reviewMsg'), reviewCode = $('reviewCode'), reviewSub = $('reviewSub'), reviewOverviewText = $('reviewOverviewText'), reviewOverviewShade = $('reviewOverviewShade'), reviewColorNote = $('reviewColorNote'), reviewOverviewDate = $('reviewOverviewDate');
-    const reviewCaseName = $('reviewCaseName'), reviewExtraNote = $('reviewExtraNote'), reviewTeeth = $('reviewTeeth'), reviewBackTopBtn = $('reviewBackTopBtn'), reviewCloseTopBtn = $('reviewCloseTopBtn'), reviewEditBtn = $('reviewEditBtn'), reviewCancelBtn = $('reviewCancelBtn');
+    const reviewCaseName = $('reviewCaseName'), reviewExtraNote = $('reviewExtraNote'), reviewTeeth = $('reviewTeeth'), reviewBackTopBtn = $('reviewBackTopBtn'), reviewCloseTopBtn = $('reviewCloseTopBtn'), reviewEditBtn = $('reviewEditBtn'), reviewCancelBtn = $('reviewCancelBtn'), reviewPromoteBtn = $('reviewPromoteBtn');
     const cancelOrderConfirmPopup = $('cancelOrderConfirmPopup'), cancelOrderConfirmText = $('cancelOrderConfirmText'), cancelOrderConfirmBackBtn = $('cancelOrderConfirmBackBtn'), cancelOrderConfirmYesBtn = $('cancelOrderConfirmYesBtn');
 
     let reviewOrder = null, reviewKind = 'order';
@@ -33,6 +34,7 @@
     function syncOverviewBodyLayout(bodyEl,range){if(!bodyEl)return;const count=range?.length||0;bodyEl.classList.toggle('overview-body-compact',count>0&&count<=2)}
     function reviewDateCompactMode(){return window.matchMedia('(max-width:900px)').matches&&!!reviewTeeth?.closest('.overview-body')?.classList.contains('overview-body-compact')}
     function formatReviewDeliveryDate(iso){if(!iso)return '';return reviewDateCompactMode()?Format.formatDateBulgarian(iso):Format.formatDateBulgarianWithWeekday(iso)}
+    function reservationStatusLabel(status){return status==='cancelled'?'Cancelled reservation':status==='promoted'?'Promoted reservation':'Active reservation'}
     function renderSelectedTeethPreview(container,range,items){S3DOrders.SelectedTeethPreview.render(container,{teeth:range||[],items:items||[],labelPrefix:'Selected teeth',getItemLabel:Format.orderWorkItemLabel})}
     async function loadOrderByCode(code){const result=await ordersApi.getOrder(code);const j=result.data;if(!result.ok)throw new Error(j.error||'Could not load order.');return j.order}
     async function loadReservationById(id){const result=await ordersApi.getReservation(id);const j=result.data;if(!result.ok)throw new Error(j.error||'Could not load reservation.');return j.reservation}
@@ -82,7 +84,7 @@
     function render(o){
       const isReservation=reviewKind==='reservation'||o.type==='reservation';
       reviewCode.textContent=isReservation?'Reservation':(o.shortenedOrderCode||o.orderCode||'—');
-      reviewSub.textContent=isReservation?`Active reservation • Impression ${o.impressionDate||'—'}${actor()?.isLab?'':` • ${o.clinicDisplayName||o.clinicCode||''}`}`:`${Format.statusText(o.status)}${actor()?.isLab?'':` • ${o.clinicDisplayName||o.clinicCode||''}`}`;
+      reviewSub.textContent=isReservation?`${reservationStatusLabel(o.status)} • Impression ${o.impressionDate||'—'}${actor()?.isLab?'':` • ${o.clinicDisplayName||o.clinicCode||''}`}`:`${Format.statusText(o.status)}${actor()?.isLab?'':` • ${o.clinicDisplayName||o.clinicCode||''}`}`;
       const reviewClinicMetaEl=$('reviewClinicMeta');
       if(reviewClinicMetaEl){
         if(actor()?.isLab){reviewClinicMetaEl.classList.remove('hidden');reviewClinicMetaEl.innerHTML=Format.clinicSwatchHtml(o)}
@@ -95,8 +97,10 @@
       reviewExtraNote.textContent=o.notes?`Note: ${o.notes}`:'';
       reviewExtraNote.classList.toggle('hidden',!o.notes);
       const cancelled=o.status==='cancelled';
-      reviewEditBtn.disabled=cancelled;
-      reviewCancelBtn.disabled=cancelled;
+      const activeReservation=isReservation&&o.status==='active';
+      reviewEditBtn.disabled=cancelled||isReservation&&!activeReservation;
+      reviewCancelBtn.disabled=cancelled||isReservation&&!activeReservation;
+      if(reviewPromoteBtn){reviewPromoteBtn.classList.toggle('hidden',!activeReservation);reviewPromoteBtn.disabled=!activeReservation;}
       reviewCancelBtn.textContent=isReservation?'Cancel reservation':'Cancel order';
       reviewEditBtn.textContent=isReservation?'Edit reservation':'Edit order';
       const range=Format.orderTeethRange(o),previewItems=Format.orderWorkItems(o);
@@ -105,9 +109,29 @@
       renderSelectedTeethPreview(reviewTeeth,range,previewItems);
     }
 
-    function edit(){if(!reviewOrder||reviewOrder.status==='cancelled')return;if(options.clearFindHighlight)options.clearFindHighlight();if(reviewKind==='reservation')return options.onEditReservation?options.onEditReservation(reviewOrder.id,1):undefined;onEdit(reviewOrder.orderCode,1)}
-    function openCancel(){if(!reviewOrder||reviewOrder.status==='cancelled')return;const isReservation=reviewKind==='reservation';const code=isReservation?'reservation':(reviewOrder.shortenedOrderCode||reviewOrder.orderCode||'—');cancelOrderConfirmText.innerHTML=`Are you sure you want to cancel ${isReservation?'reservation':'order'} <span class="cancel-order-confirm-code">${esc(code)}</span>?`;cancelOrderConfirmYesBtn.textContent=isReservation?'Yes, cancel reservation':'Yes, cancel order';openUiModal('cancelOrder',cancelOrderConfirmPopup,cancelOrderConfirmBackBtn)}
+    function edit(){if(!reviewOrder||reviewOrder.status==='cancelled'||reviewKind==='reservation'&&reviewOrder.status!=='active')return;if(options.clearFindHighlight)options.clearFindHighlight();if(reviewKind==='reservation')return options.onEditReservation?options.onEditReservation(reviewOrder.id,1):undefined;onEdit(reviewOrder.orderCode,1)}
+    function openCancel(){if(!reviewOrder||reviewOrder.status==='cancelled'||reviewKind==='reservation'&&reviewOrder.status!=='active')return;const isReservation=reviewKind==='reservation';const code=isReservation?'reservation':(reviewOrder.shortenedOrderCode||reviewOrder.orderCode||'—');cancelOrderConfirmText.innerHTML=`Are you sure you want to cancel ${isReservation?'reservation':'order'} <span class="cancel-order-confirm-code">${esc(code)}</span>?`;cancelOrderConfirmYesBtn.textContent=isReservation?'Yes, cancel reservation':'Yes, cancel order';openUiModal('cancelOrder',cancelOrderConfirmPopup,cancelOrderConfirmBackBtn)}
     function closeCancel(){closeUiModal('cancelOrder',cancelOrderConfirmPopup);cancelOrderConfirmYesBtn.disabled=false;cancelOrderConfirmYesBtn.textContent='Yes, cancel order'}
+    async function promoteReservation(){
+      if(!reviewOrder||reviewKind!=='reservation'||reviewOrder.status!=='active'||!reviewPromoteBtn)return;
+      reviewPromoteBtn.disabled=true;
+      reviewPromoteBtn.textContent='Promoting…';
+      reviewEditBtn.disabled=true;
+      reviewCancelBtn.disabled=true;
+      reviewMsg.classList.add('hidden');
+      try{
+        const result=await ordersApi.promoteReservation(reviewOrder.id);
+        const j=result.data;
+        if(!result.ok){reviewMsg.textContent=j.error||'Could not promote reservation.';reviewMsg.classList.remove('hidden');return}
+        const code=j.order&&j.order.orderCode;
+        if(options.clearFindHighlight)options.clearFindHighlight();
+        await navigate(code?`created/${encodeURIComponent(code)}`:'',{skipDirtyGuard:true});
+      }finally{
+        if(reviewPromoteBtn){reviewPromoteBtn.textContent='Promote to order';}
+        if(reviewOrder&&reviewKind==='reservation'&&reviewOrder.status==='active')render(reviewOrder);
+      }
+    }
+
     async function confirmCancel(){
       if(!reviewOrder||reviewOrder.status==='cancelled')return;
       cancelOrderConfirmYesBtn.disabled=true;
@@ -128,6 +152,7 @@
       if(reviewCloseTopBtn)reviewCloseTopBtn.onclick=()=>onBack();
       if(reviewEditBtn)reviewEditBtn.onclick=edit;
       if(reviewCancelBtn)reviewCancelBtn.onclick=openCancel;
+      if(reviewPromoteBtn)reviewPromoteBtn.onclick=promoteReservation;
       if(cancelOrderConfirmBackBtn)cancelOrderConfirmBackBtn.onclick=closeCancel;
       if(cancelOrderConfirmYesBtn)cancelOrderConfirmYesBtn.onclick=confirmCancel;
       if(cancelOrderConfirmPopup)cancelOrderConfirmPopup.onclick=e=>{if(e.target===cancelOrderConfirmPopup)closeCancel()};

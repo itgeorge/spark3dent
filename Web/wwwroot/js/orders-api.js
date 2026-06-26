@@ -49,6 +49,7 @@
       createReservation: function(payload){ return jsonRequest('/api/scheduling/reservations', { method:'POST', body: JSON.stringify(payload || {}) }, { error:'Could not save reservation.' }); },
       updateReservation: function(id, payload){ return jsonRequest('/api/scheduling/reservations/' + encodeURIComponent(id), { method:'PUT', body: JSON.stringify(payload || {}) }, { error:'Could not save reservation.' }); },
       deleteReservation: function(id){ return jsonRequest('/api/scheduling/reservations/' + encodeURIComponent(id), { method:'DELETE' }, { error:'Could not cancel reservation.' }); },
+      promoteReservation: function(id){ return jsonRequest('/api/scheduling/reservations/' + encodeURIComponent(id) + '/promote', { method:'POST', body:'{}' }, { error:'Could not promote reservation.' }); },
       reservationDateAvailability: function(payload){ return jsonRequest('/api/scheduling/reservations/dates', { method:'POST', body: JSON.stringify(payload || {}) }); },
       clinics: function(){ return jsonRequest('/api/scheduling/clinics', undefined, { items: [] }); },
       materialOptions: function(){ return jsonRequest('/api/scheduling/material-options', undefined, { items: [] }); },

@@ -3,6 +3,8 @@ using Utilities;
 
 namespace Orders;
 
+public sealed record ReservationPromotionResult(ReservationRecord Reservation, OrderRecord Order);
+
 public sealed class SchedulingReservationService
 {
     private readonly ISchedulingIdentityRepository _identities;
@@ -12,6 +14,9 @@ public sealed class SchedulingReservationService
     private readonly ISchedulingWriteTransaction _writeTransaction;
     private readonly IClock _clock;
     private readonly IAuditLog _auditLog;
+    private readonly IOrderCodeGenerator _codeGenerator;
+    private readonly IDeadlineRecommendationLogRepository _deadlineRecommendationLogs;
+    private readonly int _maxOrderCodeAttempts;
     private const int DefaultListLimit = 100;
 
     public SchedulingReservationService(
@@ -21,7 +26,10 @@ public sealed class SchedulingReservationService
         DeadlineRecommendationService deadlineRecommendations,
         ISchedulingWriteTransaction writeTransaction,
         IClock clock,
-        IAuditLog? auditLog = null)
+        IAuditLog? auditLog = null,
+        IOrderCodeGenerator? codeGenerator = null,
+        IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null,
+        int maxOrderCodeAttempts = 20)
     {
         _identities = identities;
         _reservations = reservations;
@@ -30,6 +38,9 @@ public sealed class SchedulingReservationService
         _writeTransaction = writeTransaction;
         _clock = clock;
         _auditLog = auditLog ?? NoOpAuditLog.Instance;
+        _codeGenerator = codeGenerator ?? new DescriptiveOrderCodeGenerator();
+        _deadlineRecommendationLogs = deadlineRecommendationLogs ?? NoOpDeadlineRecommendationLogRepository.Instance;
+        _maxOrderCodeAttempts = maxOrderCodeAttempts;
     }
 
     public async Task<DeadlineDateStatusesResult> GetDateStatusesResultAsync(ReservationDraft draft, DateOnly start, DateOnly end, long? excludedReservationId = null, CancellationToken ct = default)
@@ -110,6 +121,67 @@ public sealed class SchedulingReservationService
         return cancelled;
     }
 
+    public async Task<ReservationPromotionResult> PromoteReservationAsync(AuthenticatedActor actor, long id, string ip, string userAgent, CancellationToken ct = default)
+    {
+        var result = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
+        {
+            var reservation = await GetAuthorizedReservationAsync(actor, id, txReservations, ct);
+            EnsureActive(reservation);
+            var promotedAt = _clock.UtcNow;
+
+            var reservationDraft = ToDraft(reservation);
+            var orderDraft = ToOrderDraft(reservation);
+            var decision = await DecideDeadlineCommitAsync(actor, reservationDraft, reservation.Id, txOrders, txReservations, deadlineOverride: null, ct);
+            var orderWithoutCode = BuildPromotedOrder(actor, reservation, ip, userAgent, decision.ValidationWithAudit.Validation.OrderCapacityUnits, promotedAt);
+            var createdOrder = await CreateWithUniqueCodeAsync(orderWithoutCode, orderDraft, txOrders, ct);
+            var promotedReservation = await txReservations.UpdateReservationAsync(reservation with
+            {
+                Status = ReservationStatus.Promoted,
+                PromotedOrderId = createdOrder.Id,
+                PromotedOrderCode = createdOrder.OrderCode,
+                PromotedAt = promotedAt,
+                UpdatedAt = promotedAt
+            }, ct);
+
+            return new PromotionTransactionResult(promotedReservation, createdOrder, reservation, decision.ValidationWithAudit.Audit);
+        }, ct);
+
+        await AppendOrderAuditAsync(
+            actor,
+            "OrderCreated",
+            result.Order,
+            ip,
+            userAgent,
+            new
+            {
+                orderCode = result.Order.OrderCode,
+                promotedFromReservationId = result.OriginalReservation.Id,
+                targetClinicCode = result.Order.ClinicCode,
+                targetClinicDisplayName = result.Order.ClinicDisplayName,
+                caseName = result.Order.CaseName,
+                colorNote = result.Order.ColorNote,
+                requestedDeliveryDate = result.Order.RequestedDeliveryDate,
+                status = result.Order.Status.ToString(),
+                reservationCreatedByClinicCode = result.OriginalReservation.ClinicCode,
+                reservationCreatedByMemberId = result.OriginalReservation.MemberId,
+                reservationCreatedByMemberLabel = result.OriginalReservation.MemberLabel,
+                reservationCreatedByMemberPinHashFingerprint = result.OriginalReservation.MemberPinHashFingerprint,
+                totalToothCount = OrderWorkItem.AllTeeth(result.Order.WorkItems).Length
+            },
+            ct);
+        await AppendReservationAuditAsync(actor, "ReservationPromoted", result.Reservation, ip, userAgent, new
+        {
+            result.Reservation.Id,
+            result.Reservation.PromotedOrderId,
+            result.Reservation.PromotedOrderCode,
+            result.Reservation.PromotedAt,
+            previousStatus = result.OriginalReservation.Status.ToString(),
+            newStatus = result.Reservation.Status.ToString()
+        }, ct);
+        await PersistDeadlineRecommendationLogAsync(actor, result.Order, result.Audit, ct);
+        return new ReservationPromotionResult(result.Reservation, result.Order);
+    }
+
     public async Task<ReservationRecord> GetReservationForActorAsync(AuthenticatedActor actor, long id, CancellationToken ct = default) =>
         await GetAuthorizedReservationAsync(actor, id, ct);
 
@@ -158,6 +230,28 @@ public sealed class SchedulingReservationService
 
     private static OrderSchedulingInput ToSchedulingInput(ReservationDraft draft, long? excludedReservationId = null) =>
         new(draft.Material, draft.WorkItems, ReservationActiveRules.ToAfterCutoffImpressionTimestampUtc(draft.ImpressionDate), null, excludedReservationId);
+
+    private static ReservationDraft ToDraft(ReservationRecord reservation) => new(
+        reservation.CaseName,
+        reservation.ImpressionDate,
+        reservation.ProductCategory,
+        reservation.Material,
+        reservation.WorkItems,
+        reservation.RequestedDeliveryDate,
+        reservation.Shade,
+        reservation.Notes,
+        reservation.ColorNote);
+
+    private static OrderDraft ToOrderDraft(ReservationRecord reservation) => new(
+        reservation.CaseName,
+        reservation.ImpressionDate,
+        reservation.ProductCategory,
+        reservation.Material,
+        reservation.WorkItems,
+        reservation.RequestedDeliveryDate,
+        reservation.Shade,
+        reservation.Notes,
+        reservation.ColorNote);
 
     private static void ValidateDraft(ReservationDraft draft)
     {
@@ -239,6 +333,106 @@ public sealed class SchedulingReservationService
             string.IsNullOrWhiteSpace(draft.ColorNote) ? null : draft.ColorNote.Trim(),
             calculatedCapacityUnits);
 
+    private static OrderRecord BuildPromotedOrder(AuthenticatedActor actor, ReservationRecord reservation, string ip, string userAgent, decimal calculatedCapacityUnits, DateTimeOffset now) =>
+        new(
+            0,
+            "",
+            reservation.ClinicCode,
+            reservation.ClinicDisplayName,
+            actor.MemberId,
+            actor.MemberLabel,
+            actor.MemberPinHashFingerprint,
+            reservation.CaseName,
+            reservation.ImpressionDate,
+            reservation.ProductCategory,
+            reservation.Material,
+            reservation.WorkItems,
+            reservation.RequestedDeliveryDate,
+            OrderStatus.Created,
+            reservation.Shade,
+            reservation.Notes,
+            now,
+            now,
+            ip,
+            userAgent,
+            reservation.ColorNote,
+            calculatedCapacityUnits,
+            reservation.Id);
+
+    private async Task<OrderRecord> CreateWithUniqueCodeAsync(OrderRecord orderWithoutCode, OrderDraft draft, IOrderRepository orders, CancellationToken ct)
+    {
+        for (var attempt = 1; attempt <= _maxOrderCodeAttempts; attempt++)
+        {
+            var code = _codeGenerator.Generate(draft);
+            try
+            {
+                return await orders.CreateOrderAsync(orderWithoutCode with { OrderCode = code }, ct);
+            }
+            catch (DuplicateOrderCodeException) when (attempt < _maxOrderCodeAttempts)
+            {
+                // Another request won this generated code. Generate a new one and retry.
+            }
+        }
+
+        throw new InvalidOperationException("Could not allocate a unique order code.");
+    }
+
+    private Task AppendOrderAuditAsync(AuthenticatedActor actor, string operation, OrderRecord order, string? ip, string? userAgent, object metadata, CancellationToken ct)
+    {
+        var auditEvent = new AuditEvent(
+            0,
+            "Scheduling",
+            operation,
+            "SchedulingOrder",
+            order.OrderCode,
+            order.CaseName,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
+            actor.SessionId,
+            _clock.UtcNow,
+            string.IsNullOrWhiteSpace(ip) ? null : ip,
+            string.IsNullOrWhiteSpace(userAgent) ? null : userAgent,
+            JsonSerializer.Serialize(metadata));
+        return _auditLog.AppendAsync(auditEvent, ct);
+    }
+
+    private Task<DeadlineRecommendationLog> PersistDeadlineRecommendationLogAsync(AuthenticatedActor actor, OrderRecord order, DeadlineRecommendationAudit audit, CancellationToken ct)
+    {
+        var log = new DeadlineRecommendationLog(
+            0,
+            order.Id,
+            order.OrderCode,
+            _clock.UtcNow,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
+            audit.ImpressionTimestampUtc,
+            audit.EffectiveIntakeBusinessDate,
+            audit.CutoffTimeUsed,
+            audit.Material,
+            audit.ToothCount,
+            audit.LeadTimeBusinessDaysUsed,
+            audit.FixedLeadTimeBusinessDaysUsed,
+            audit.ExtraLeadTimeBusinessDaysUsed,
+            audit.TeethPerExtraLeadDayUsed,
+            audit.CapacityUnitsPerToothUsed,
+            audit.CalculatedOrderCapacityUnits,
+            audit.MinimumDeadlineDateFromLeadTime,
+            audit.FinalRecommendedDeadlineDate,
+            audit.SelectedDeadlineDate,
+            audit.SearchStartedAtDate,
+            audit.SearchEndedAtDate,
+            audit.SearchLimitDate,
+            audit.ResultStatus,
+            audit.FailureReason,
+            audit.CandidateChecksJson,
+            audit.ConfigSnapshotJson);
+        return _deadlineRecommendationLogs.AddAsync(log, ct);
+    }
+
     private Task AppendReservationAuditAsync(AuthenticatedActor actor, string operation, ReservationRecord reservation, string? ip, string? userAgent, object metadata, CancellationToken ct)
     {
         var auditEvent = new AuditEvent(
@@ -265,4 +459,10 @@ public sealed class SchedulingReservationService
         bool IsOverride,
         IReadOnlyList<DeadlineValidationRule> RulesBypassed,
         string? OverrideReason);
+
+    private sealed record PromotionTransactionResult(
+        ReservationRecord Reservation,
+        OrderRecord Order,
+        ReservationRecord OriginalReservation,
+        DeadlineRecommendationAudit Audit);
 }

@@ -22,4 +22,5 @@ public sealed record OrderRecord(
     string CreatedIp,
     string CreatedUserAgent,
     string? ColorNote = null,
-    decimal? CalculatedCapacityUnits = null);
+    decimal? CalculatedCapacityUnits = null,
+    long? PromotedFromReservationId = null);

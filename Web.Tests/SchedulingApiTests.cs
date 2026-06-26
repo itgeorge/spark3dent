@@ -22,6 +22,13 @@ public class SchedulingApiTests
         public DateOnly Today => DateOnly.FromDateTime(UtcNow.Date);
     }
 
+    private sealed class MutableSchedulingClock : IClock
+    {
+        public MutableSchedulingClock(DateTimeOffset utcNow) => UtcNow = utcNow;
+        public DateTimeOffset UtcNow { get; set; }
+        public DateOnly Today => DateOnly.FromDateTime(UtcNow.Date);
+    }
+
     [Test]
     public async Task SchedulingFlow_LoginCreateListLogout_Works()
     {
@@ -1185,6 +1192,126 @@ public class SchedulingApiTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(json.GetProperty("overrideAllowed").GetBoolean(), Is.False);
         Assert.That(json.GetProperty("error").GetString(), Does.Contain("Reservation deadline overrides are not available yet"));
+    }
+
+    [Test]
+    public async Task PromoteReservation_ClinicCreatesOrderMarksReservationAndCapacityCountsOnce()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+        var reservationId = await CreateReservationAsync(clinicClient, "Promote Clinic", "2026-06-03", "2026-06-10");
+
+        var promote = await clinicClient.PostAsync($"/api/scheduling/reservations/{reservationId}/promote", Json("{}"));
+        var promotedJson = JsonDocument.Parse(await promote.Content.ReadAsStringAsync()).RootElement;
+
+        Assert.That(promote.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var reservation = promotedJson.GetProperty("reservation");
+        var order = promotedJson.GetProperty("order");
+        var orderCode = order.GetProperty("orderCode").GetString()!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(reservation.GetProperty("status").GetString(), Is.EqualTo("promoted"));
+            Assert.That(reservation.GetProperty("promotedOrderId").GetInt64(), Is.EqualTo(order.GetProperty("id").GetInt64()));
+            Assert.That(reservation.GetProperty("promotedOrderCode").GetString(), Is.EqualTo(orderCode));
+            Assert.That(reservation.GetProperty("promotedAt").GetString(), Is.Not.Null.And.Not.Empty);
+            Assert.That(order.GetProperty("promotedFromReservationId").GetInt64(), Is.EqualTo(reservationId));
+            Assert.That(order.GetProperty("caseName").GetString(), Is.EqualTo("Promote Clinic"));
+        });
+
+        var getOrder = await clinicClient.GetAsync($"/api/scheduling/orders/{orderCode}");
+        Assert.That(getOrder.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var loadedOrder = JsonDocument.Parse(await getOrder.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(loadedOrder.GetProperty("promotedFromReservationId").GetInt64(), Is.EqualTo(reservationId));
+
+        var activeReservations = await clinicClient.GetAsync("/api/scheduling/reservations");
+        Assert.That(activeReservations.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var activeReservationIds = JsonDocument.Parse(await activeReservations.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("items")
+            .EnumerateArray()
+            .Select(x => x.GetProperty("id").GetInt64())
+            .ToArray();
+        Assert.That(activeReservationIds, Does.Not.Contain(reservationId));
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var calendar = await labClient.GetAsync("/api/scheduling/orders/calendar?start=2026-06-03&end=2026-06-10");
+        Assert.That(calendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var days = JsonDocument.Parse(await calendar.Content.ReadAsStringAsync()).RootElement.GetProperty("days").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        var deliveryDay = days["2026-06-10"];
+        var calendarOrderCodes = deliveryDay.GetProperty("orders").EnumerateArray().Select(e => e.GetProperty("orderCode").GetString()).ToArray();
+        var deliveryReservationIds = deliveryDay.GetProperty("reservations").EnumerateArray().Select(e => e.GetProperty("id").GetInt64()).ToArray();
+        var impressionReservationIds = days.TryGetValue("2026-06-03", out var impressionDay)
+            ? impressionDay.GetProperty("impressionReservations").EnumerateArray().Select(e => e.GetProperty("id").GetInt64()).ToArray()
+            : [];
+        Assert.Multiple(() =>
+        {
+            Assert.That(calendarOrderCodes, Does.Contain(orderCode));
+            Assert.That(deliveryReservationIds, Does.Not.Contain(reservationId));
+            Assert.That(impressionReservationIds, Does.Not.Contain(reservationId));
+            Assert.That(deliveryDay.GetProperty("capacity").GetProperty("used").GetDecimal(), Is.EqualTo(1m));
+        });
+    }
+
+    [Test]
+    public async Task PromoteReservation_LabCanPromoteAnyActiveReservation()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var reservationId = await CreateReservationAsync(labClient, "Lab Promote", "2026-06-03", "2026-06-10", clinicCode: "OTHER");
+
+        var promote = await labClient.PostAsync($"/api/scheduling/reservations/{reservationId}/promote", Json("{}"));
+        var promotedJson = JsonDocument.Parse(await promote.Content.ReadAsStringAsync()).RootElement;
+
+        Assert.That(promote.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(promotedJson.GetProperty("reservation").GetProperty("status").GetString(), Is.EqualTo("promoted"));
+            Assert.That(promotedJson.GetProperty("order").GetProperty("clinicCode").GetString(), Is.EqualTo("OTHER"));
+            Assert.That(promotedJson.GetProperty("order").GetProperty("promotedFromReservationId").GetInt64(), Is.EqualTo(reservationId));
+        });
+    }
+
+    [Test]
+    public async Task PromoteReservation_ClinicCannotPromoteAnotherClinicReservation()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var reservationId = await CreateReservationAsync(labClient, "Other Clinic Reservation", "2026-06-03", "2026-06-10", clinicCode: "OTHER");
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var promote = await clinicClient.PostAsync($"/api/scheduling/reservations/{reservationId}/promote", Json("{}"));
+
+        Assert.That(promote.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task PromoteReservation_RejectsCancelledAlreadyPromotedAndExpiredReservations()
+    {
+        var clock = new MutableSchedulingClock(new DateTimeOffset(2026, 6, 2, 7, 30, 0, TimeSpan.Zero));
+        using var fixture = new ApiTestFixture(clockOverride: clock);
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var cancelledId = await CreateReservationAsync(client, "Cancelled Reservation", "2026-06-03", "2026-06-10");
+        var cancel = await client.DeleteAsync($"/api/scheduling/reservations/{cancelledId}");
+        Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var promoteCancelled = await client.PostAsync($"/api/scheduling/reservations/{cancelledId}/promote", Json("{}"));
+        Assert.That(promoteCancelled.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var promotedId = await CreateReservationAsync(client, "Promoted Reservation", "2026-06-03", "2026-06-10");
+        var firstPromote = await client.PostAsync($"/api/scheduling/reservations/{promotedId}/promote", Json("{}"));
+        Assert.That(firstPromote.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var secondPromote = await client.PostAsync($"/api/scheduling/reservations/{promotedId}/promote", Json("{}"));
+        Assert.That(secondPromote.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var expiredId = await CreateReservationAsync(client, "Expired Reservation", "2026-06-03", "2026-06-10");
+        clock.UtcNow = new DateTimeOffset(2026, 6, 6, 7, 30, 0, TimeSpan.Zero);
+        var promoteExpired = await client.PostAsync($"/api/scheduling/reservations/{expiredId}/promote", Json("{}"));
+        Assert.That(promoteExpired.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
