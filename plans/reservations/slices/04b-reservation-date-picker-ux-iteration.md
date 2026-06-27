@@ -31,14 +31,14 @@ Current code to revisit:
 
 ### Add previous/next date arrows
 
-Add left/right nudge controls for both selected dates:
+Add left/right nudge controls for both selected dates. The intended placement is directly on the selected calendar cells, so the controls are spatially tied to the date being nudged:
 
 ```text
-Impression: [←] 12 Jun 2026 [→]
-Delivery:   [←] 18 Jun 2026 [→]
+[selected impression cell]  [←] 12 Jun 2026 [→]
+[selected delivery cell]    [←] 18 Jun 2026 [→]
 ```
 
-The controls can be rendered near the current selected-date summary or in a compact row above the calendar.
+The top date cards/summary should remain focused on mode switching and displaying the selected impression/delivery values; the nudge arrows should live on the selected calendar date cells.
 
 Behavior:
 
@@ -105,6 +105,8 @@ When a user explicitly switches to delivery mode:
 
 ### Nudge controls
 
+Render nudge controls on the selected impression and delivery calendar cells. If both dates are the same cell, show both controls in that cell in a compact, distinguishable way.
+
 Use the currently loaded status arrays/maps as the source of selectable dates:
 
 - impression: `reservationImpressionStatusesByDate`, status `isSelectable === true`;
@@ -123,9 +125,10 @@ Preferred: support loaded calendar bounds first, and clearly disable when not kn
    - remove `reservationDateSelectionMode = 'delivery'` from impression selection paths;
    - keep auto delivery recalculation via existing date availability reload.
 2. Track the latest loaded delivery statuses in a map/list, not only inside `loadDates`, so nudge controls can inspect selectable delivery dates.
-3. Add UI controls for impression/delivery nudges:
-   - markup can be static in `orders.html`, hidden outside reservation mode;
-   - or rendered dynamically by `order-flow-view.js` near the selected-date display.
+3. Add UI controls for impression/delivery nudges on the selected calendar cells:
+   - render dynamically from `orders-delivery-date-picker.js` or equivalent cell-rendering code;
+   - only show the impression nudge on the selected impression cell and the delivery nudge on the selected delivery cell;
+   - keep the top date cards as mode selectors/value summaries, not arrow controls.
 4. Implement helper functions:
    - `selectableImpressionDates()`;
    - `selectableDeliveryDates()`;
