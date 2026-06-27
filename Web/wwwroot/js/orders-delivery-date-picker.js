@@ -19,15 +19,14 @@
     btn.type = 'button';
     btn.className = 'reservation-cell-nudge-btn reservation-cell-nudge-' + key;
     btn.textContent = text;
-    var canSearch = !!nudge[key + 'Searchable'];
-    btn.disabled = !nudge[key] && !canSearch;
+    btn.disabled = !nudge[key];
     btn.setAttribute('aria-label', (key === 'previous' ? 'Previous selectable ' : 'Next selectable ') + kind + ' date');
     btn.setAttribute('title', btn.getAttribute('aria-label'));
     btn.addEventListener('click', function(e){
       e.preventDefault();
       e.stopPropagation();
-      if(btn.disabled || typeof nudge.onSelect !== 'function') return;
-      nudge.onSelect(nudge[key] || '', key);
+      if(btn.disabled || !nudge[key] || typeof nudge.onSelect !== 'function') return;
+      nudge.onSelect(nudge[key]);
     });
     row.appendChild(btn);
   }
