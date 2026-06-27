@@ -1167,6 +1167,37 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task ReservationDateAvailability_ExtendsDeliveryStatusesToRecommendedDate_WhenRecommendedDateIsAfterRequestedRange()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 29, 7, 30, 0, TimeSpan.Zero));
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var response = await client.PostAsync("/api/scheduling/reservations/dates", Json("""
+        {
+          "impressionDate":"2026-06-30",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-30",
+          "start":"2026-06-01",
+          "end":"2026-06-30"
+        }
+        """));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var recommendedDate = doc.GetProperty("recommendedDate").GetString();
+        var deliveryDates = doc.GetProperty("dates").EnumerateArray().ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(recommendedDate, Is.EqualTo("2026-07-03"));
+            Assert.That(deliveryDates.Select(e => e.GetProperty("date").GetString()), Does.Contain(recommendedDate));
+            Assert.That(deliveryDates.Single(e => e.GetProperty("date").GetString() == recommendedDate).GetProperty("isSelectable").GetBoolean(), Is.True);
+        });
+    }
+
+    [Test]
     public async Task ReservationDateAvailability_IncludesImpressionDatesWithRuleDifferences()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 1, 7, 30, 0, TimeSpan.Zero));
