@@ -14,38 +14,39 @@
       '</div>';
   }
 
-  function appendNudgeGroup(overlay, label, nudge){
-    if(!nudge) return;
-    var group = document.createElement('div');
-    group.className = 'reservation-cell-nudge-group';
-    var badge = document.createElement('span');
-    badge.className = 'reservation-cell-nudge-badge';
-    badge.textContent = label;
-    group.appendChild(badge);
-    [['previous', '←', 'Previous selectable '], ['next', '→', 'Next selectable ']].forEach(function(item){
-      var key = item[0], text = item[1], ariaPrefix = item[2];
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'reservation-cell-nudge-btn';
-      btn.textContent = text;
-      btn.disabled = !nudge[key];
-      btn.setAttribute('aria-label', ariaPrefix + (label === 'I' ? 'impression' : 'delivery') + ' date');
-      btn.addEventListener('click', function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        if(btn.disabled || !nudge[key] || typeof nudge.onSelect !== 'function') return;
-        nudge.onSelect(nudge[key]);
-      });
-      group.appendChild(btn);
+  function appendNudgeButton(row, kind, key, text, nudge){
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'reservation-cell-nudge-btn reservation-cell-nudge-' + key;
+    btn.textContent = text;
+    var canSearch = !!nudge[key + 'Searchable'];
+    btn.disabled = !nudge[key] && !canSearch;
+    btn.setAttribute('aria-label', (key === 'previous' ? 'Previous selectable ' : 'Next selectable ') + kind + ' date');
+    btn.setAttribute('title', btn.getAttribute('aria-label'));
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(btn.disabled || typeof nudge.onSelect !== 'function') return;
+      nudge.onSelect(nudge[key] || '', key);
     });
-    overlay.appendChild(group);
+    row.appendChild(btn);
+  }
+
+  function appendNudgeRow(overlay, kind, nudge){
+    if(!nudge) return;
+    var row = document.createElement('div');
+    row.className = 'reservation-cell-nudge-row reservation-cell-nudge-row-' + kind;
+    appendNudgeButton(row, kind, 'previous', '←', nudge);
+    appendNudgeButton(row, kind, 'next', '→', nudge);
+    overlay.appendChild(row);
   }
 
   function appendNudgeOverlay(cell, options){
     var overlay = document.createElement('div');
-    overlay.className = 'reservation-cell-nudges';
-    appendNudgeGroup(overlay, 'I', options.impressionNudge);
-    appendNudgeGroup(overlay, 'D', options.deliveryNudge);
+    var count = (options.impressionNudge ? 1 : 0) + (options.deliveryNudge ? 1 : 0);
+    overlay.className = 'reservation-cell-nudges reservation-cell-nudges-' + count;
+    appendNudgeRow(overlay, 'impression', options.impressionNudge);
+    appendNudgeRow(overlay, 'delivery', options.deliveryNudge);
     if(overlay.childNodes.length) cell.appendChild(overlay);
   }
 
