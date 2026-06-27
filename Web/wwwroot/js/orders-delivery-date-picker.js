@@ -14,6 +14,41 @@
       '</div>';
   }
 
+  function appendNudgeGroup(overlay, label, nudge){
+    if(!nudge) return;
+    var group = document.createElement('div');
+    group.className = 'reservation-cell-nudge-group';
+    var badge = document.createElement('span');
+    badge.className = 'reservation-cell-nudge-badge';
+    badge.textContent = label;
+    group.appendChild(badge);
+    [['previous', '←', 'Previous selectable '], ['next', '→', 'Next selectable ']].forEach(function(item){
+      var key = item[0], text = item[1], ariaPrefix = item[2];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'reservation-cell-nudge-btn';
+      btn.textContent = text;
+      btn.disabled = !nudge[key];
+      btn.setAttribute('aria-label', ariaPrefix + (label === 'I' ? 'impression' : 'delivery') + ' date');
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if(btn.disabled || !nudge[key] || typeof nudge.onSelect !== 'function') return;
+        nudge.onSelect(nudge[key]);
+      });
+      group.appendChild(btn);
+    });
+    overlay.appendChild(group);
+  }
+
+  function appendNudgeOverlay(cell, options){
+    var overlay = document.createElement('div');
+    overlay.className = 'reservation-cell-nudges';
+    appendNudgeGroup(overlay, 'I', options.impressionNudge);
+    appendNudgeGroup(overlay, 'D', options.deliveryNudge);
+    if(overlay.childNodes.length) cell.appendChild(overlay);
+  }
+
   function renderDateCell(ctx, options){
     options = options || {};
     var cell = ctx.cell, date = ctx.date, iso = ctx.iso;
@@ -96,8 +131,9 @@
 
     var foot = document.createElement('div');
     foot.className = 'delivery-calendar-selected-foot';
-    if(dualReservation) foot.innerHTML = reservationDualFootHtml(isImpression, isDelivery);
-    else foot.insertAdjacentHTML('beforeend', selectedMarkHtml());
+    if(dualReservation){
+      if(isImpression || isDelivery) foot.innerHTML = reservationDualFootHtml(isImpression, isDelivery);
+    }else foot.insertAdjacentHTML('beforeend', selectedMarkHtml());
 
     button.append(main, orders, foot);
     if(!dualReservation && iso === selectedIso) button.classList.add('sel');
@@ -124,6 +160,7 @@
       else if(!status.isSelectable) options.bindReason(cell, status, date);
     }
     cell.appendChild(button);
+    if(dualReservation) appendNudgeOverlay(cell, options);
   }
 
   S3DOrders.DeliveryDatePicker = {
