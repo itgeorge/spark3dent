@@ -98,6 +98,54 @@ public class DateAvailabilityServiceTest
     }
 
     [Test]
+    public async Task GetImpressionStatusAsync_GivenLabOffday_ReturnsClosedNotSelectable()
+    {
+        var service = new DateAvailabilityService(new FixedNonWorkingDayProvider(new DateOnly(2026, 6, 4)));
+
+        var status = await service.GetImpressionStatusAsync(new DateOnly(2026, 6, 4), new DateOnly(2026, 6, 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(status.IsClosed, Is.True);
+            Assert.That(status.IsSelectable, Is.False);
+            Assert.That(status.Reason, Is.EqualTo("Closed/non-working day"));
+        });
+    }
+
+    [Test]
+    public async Task GetImpressionStatusAsync_GivenTodayOrPast_ReturnsNotSelectable()
+    {
+        var service = new DateAvailabilityService(new WeekendOnlyNonWorkingDayProvider());
+
+        var status = await service.GetImpressionStatusAsync(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 1));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(status.IsPastOrToday, Is.True);
+            Assert.That(status.IsSelectable, Is.False);
+            Assert.That(status.Reason, Does.Contain("future date"));
+        });
+    }
+
+    [Test]
+    public async Task GetImpressionStatusAsync_GivenFirstBusinessDayAfterClosure_AllowsWhileDeliveryBlocks()
+    {
+        var service = new DateAvailabilityService(new FixedNonWorkingDayProvider(new DateOnly(2026, 6, 3)));
+        var firstBusinessDayAfterClosure = new DateOnly(2026, 6, 4);
+
+        var impression = await service.GetImpressionStatusAsync(firstBusinessDayAfterClosure, new DateOnly(2026, 6, 1));
+        var delivery = await service.GetStatusAsync(firstBusinessDayAfterClosure, firstBusinessDayAfterClosure);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(impression.IsSelectable, Is.True);
+            Assert.That(impression.IsClosed, Is.False);
+            Assert.That(delivery.IsFirstBusinessDayAfterClosure, Is.True);
+            Assert.That(delivery.IsSelectable, Is.False);
+        });
+    }
+
+    [Test]
     public async Task GetStatusesAsync_LoadsNonWorkingDaysOncePerYearForRange()
     {
         var provider = new CountingNonWorkingDayProvider();

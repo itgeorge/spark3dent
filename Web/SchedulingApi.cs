@@ -316,8 +316,16 @@ public static class SchedulingApi
             try
             {
                 var draft = ToReservationDraft(body, body.RequestedDeliveryDate == default ? body.Start : body.RequestedDeliveryDate);
-                var statuses = await reservations.GetDateStatusesResultAsync(draft, body.Start, body.End, body.ReservationId, ctx.RequestAborted);
-                return Results.Json(new { minimumDate = statuses.MinimumDate, recommendedDate = statuses.RecommendedDate, dates = statuses.Statuses.Select(s => ToDateStatusDto(s, actor.IsLab)) }, JsonOptions);
+                var impressionStatuses = await reservations.GetImpressionDateStatusesAsync(body.Start, body.End, ctx.RequestAborted);
+                try
+                {
+                    var statuses = await reservations.GetDateStatusesResultAsync(draft, body.Start, body.End, body.ReservationId, ctx.RequestAborted);
+                    return Results.Json(new { minimumDate = statuses.MinimumDate, recommendedDate = statuses.RecommendedDate, impressionDates = impressionStatuses.Select(ToImpressionDateStatusDto), dates = statuses.Statuses.Select(s => ToDateStatusDto(s, actor.IsLab)) }, JsonOptions);
+                }
+                catch (InvalidOperationException ex) when (ex.Message.StartsWith("Reservation impression date", StringComparison.Ordinal))
+                {
+                    return Results.Json(new { minimumDate = (DateOnly?)null, recommendedDate = (DateOnly?)null, impressionDates = impressionStatuses.Select(ToImpressionDateStatusDto), dates = Array.Empty<object>(), impressionError = ex.Message }, JsonOptions);
+                }
             }
             catch (InvalidOperationException ex)
             {
@@ -767,6 +775,15 @@ public static class SchedulingApi
             return new { start, end, days };
         return new { start, end, days, clinics };
     }
+
+    private static object ToImpressionDateStatusDto(ImpressionDateStatus status) => new
+    {
+        status.Date,
+        status.IsSelectable,
+        status.Reason,
+        status.IsClosed,
+        status.IsPastOrToday
+    };
 
     private static object ToDateStatusDto(DeliveryDateStatus status, bool includeExactCapacity)
     {

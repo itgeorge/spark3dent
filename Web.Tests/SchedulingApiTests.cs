@@ -1167,6 +1167,71 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task ReservationDateAvailability_IncludesImpressionDatesWithRuleDifferences()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 1, 7, 30, 0, TimeSpan.Zero));
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var createOffday = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-04\",\"endDate\":\"2026-06-04\"}"));
+        Assert.That(createOffday.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var response = await clinicClient.PostAsync("/api/scheduling/reservations/dates", Json("""
+        {
+          "impressionDate":"2026-06-03",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05",
+          "start":"2026-06-04",
+          "end":"2026-06-05"
+        }
+        """));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var impressionDates = doc.GetProperty("impressionDates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+        var deliveryDates = doc.GetProperty("dates").EnumerateArray().ToDictionary(e => e.GetProperty("date").GetString()!);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(impressionDates["2026-06-04"].GetProperty("isClosed").GetBoolean(), Is.True);
+            Assert.That(impressionDates["2026-06-04"].GetProperty("isSelectable").GetBoolean(), Is.False);
+            Assert.That(impressionDates["2026-06-05"].GetProperty("isSelectable").GetBoolean(), Is.True);
+            Assert.That(deliveryDates["2026-06-05"].GetProperty("isFirstBusinessDayAfterClosure").GetBoolean(), Is.True);
+            Assert.That(deliveryDates["2026-06-05"].GetProperty("isSelectable").GetBoolean(), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task ReservationCreate_InvalidImpressionLabOffdayRejectsSave()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 1, 7, 30, 0, TimeSpan.Zero));
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var createOffday = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-04\",\"endDate\":\"2026-06-04\"}"));
+        Assert.That(createOffday.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var response = await clinicClient.PostAsync("/api/scheduling/reservations", Json("""
+        {
+          "caseName":"Blocked Impression",
+          "impressionDate":"2026-06-04",
+          "productCategory":"temporary",
+          "material":"pmma",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "shade":"A1",
+          "requestedDeliveryDate":"2026-06-10"
+        }
+        """));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("Reservation impression date 2026-06-04 is not available"));
+    }
+
+    [Test]
     public async Task ReservationCreate_InvalidDeliveryRejectsLabOverrideForSlice1()
     {
         using var fixture = NewSchedulingFixture();

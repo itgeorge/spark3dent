@@ -27,6 +27,13 @@ public sealed record DeliveryDateStatus(
     }
 }
 
+public sealed record ImpressionDateStatus(
+    DateOnly Date,
+    bool IsSelectable,
+    string? Reason,
+    bool IsClosed,
+    bool IsPastOrToday);
+
 public sealed class DateAvailabilityService
 {
     private readonly INonWorkingDayProvider _nonWorkingDayProvider;
@@ -71,6 +78,23 @@ public sealed class DateAvailabilityService
             && !await IsFirstBusinessDayAfterClosureAsync(date, calendar, ct);
     }
 
+    public async Task<ImpressionDateStatus> GetImpressionStatusAsync(DateOnly date, DateOnly localToday, CancellationToken ct = default)
+    {
+        var calendar = new NonWorkingDayCalendar(_nonWorkingDayProvider);
+        return await GetImpressionStatusAsync(date, localToday, calendar, ct);
+    }
+
+    public async Task<IReadOnlyList<ImpressionDateStatus>> GetImpressionStatusesAsync(DateOnly start, DateOnly end, DateOnly localToday, CancellationToken ct = default)
+    {
+        if (end < start) throw new InvalidOperationException("End date must be on or after start date.");
+
+        var calendar = new NonWorkingDayCalendar(_nonWorkingDayProvider);
+        var result = new List<ImpressionDateStatus>();
+        for (var d = start; d <= end; d = d.AddDays(1))
+            result.Add(await GetImpressionStatusAsync(d, localToday, calendar, ct));
+        return result;
+    }
+
     public async Task<DeliveryDateStatus> GetStatusAsync(DateOnly date, DateOnly minimumDate, CancellationToken ct = default)
     {
         var calendar = new NonWorkingDayCalendar(_nonWorkingDayProvider);
@@ -106,6 +130,14 @@ public sealed class DateAvailabilityService
         return new DeliveryDateStatus(date, isClosed, isFirst, isBeforeMinimum, reason == null, reason);
     }
 
+    private static async Task<ImpressionDateStatus> GetImpressionStatusAsync(DateOnly date, DateOnly localToday, NonWorkingDayCalendar calendar, CancellationToken ct)
+    {
+        var isPastOrToday = date <= localToday;
+        var isClosed = await calendar.IsClosedAsync(date, ct);
+        var reason = GetImpressionUnavailableReason(date, isPastOrToday, isClosed);
+        return new ImpressionDateStatus(date, reason == null, reason, isClosed, isPastOrToday);
+    }
+
     private static async Task<bool> IsFirstBusinessDayAfterClosureAsync(DateOnly date, NonWorkingDayCalendar calendar, CancellationToken ct)
     {
         if (await calendar.IsClosedAsync(date, ct)) return false;
@@ -117,6 +149,13 @@ public sealed class DateAvailabilityService
         if (isBeforeMinimum) return "Before minimum lead time";
         if (isClosed) return IsWeekend(date) ? "Weekend" : "Closed/non-working day";
         if (isFirst) return "First business day after weekend/closure";
+        return null;
+    }
+
+    private static string? GetImpressionUnavailableReason(DateOnly date, bool isPastOrToday, bool isClosed)
+    {
+        if (isPastOrToday) return "Reservation impression date must be a future date";
+        if (isClosed) return IsWeekend(date) ? "Weekend" : "Closed/non-working day";
         return null;
     }
 

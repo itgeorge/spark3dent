@@ -56,6 +56,9 @@ public sealed class SchedulingReservationService
             ct);
     }
 
+    public Task<IReadOnlyList<ImpressionDateStatus>> GetImpressionDateStatusesAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
+        _availability.GetImpressionStatusesAsync(start, end, LocalToday(), ct);
+
     public async Task<ReservationRecord> CreateReservationAsync(AuthenticatedActor actor, ReservationDraft draft, string ip, string userAgent, string? targetClinicCode, DeadlineOverrideRequest? deadlineOverride, CancellationToken ct = default)
     {
         ValidateDraft(draft);
@@ -197,12 +200,14 @@ public sealed class SchedulingReservationService
 
     private async Task ValidateImpressionDateAsync(DateOnly impressionDate, CancellationToken ct)
     {
-        var localToday = DateOnly.FromDateTime(LabTimeZone.ToLabLocal(_clock.UtcNow).DateTime.Date);
-        if (impressionDate <= localToday)
+        var status = await _availability.GetImpressionStatusAsync(impressionDate, LocalToday(), ct);
+        if (status.IsPastOrToday)
             throw new InvalidOperationException("Reservation impression date must be a future date.");
-        if (await _availability.IsClosedAsync(impressionDate, ct))
+        if (status.IsClosed)
             throw new InvalidOperationException($"Reservation impression date {impressionDate:yyyy-MM-dd} is not available: non-working day.");
     }
+
+    private DateOnly LocalToday() => DateOnly.FromDateTime(LabTimeZone.ToLabLocal(_clock.UtcNow).DateTime.Date);
 
     private async Task<DeadlineCommitDecision> DecideDeadlineCommitAsync(
         AuthenticatedActor actor,
