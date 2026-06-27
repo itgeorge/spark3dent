@@ -47,13 +47,25 @@ public sealed class SchedulingReservationService
     {
         ValidateReservationWorkItems(draft);
         await ValidateImpressionDateAsync(draft.ImpressionDate, ct);
-        return await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
-            ToSchedulingInput(draft, excludedReservationId),
+        var input = ToSchedulingInput(draft, excludedReservationId);
+        var result = await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
+            input,
             start,
             end,
             orderRepositoryOverride: null,
             reservationRepositoryOverride: null,
             ct);
+        if (result.RecommendedDate is { } recommendedDate && recommendedDate > end)
+        {
+            result = await _deadlineRecommendations.GetCapacityAwareDateStatusesAsync(
+                input,
+                start,
+                recommendedDate,
+                orderRepositoryOverride: null,
+                reservationRepositoryOverride: null,
+                ct);
+        }
+        return result;
     }
 
     public Task<IReadOnlyList<ImpressionDateStatus>> GetImpressionDateStatusesAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
