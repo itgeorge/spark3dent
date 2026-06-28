@@ -138,7 +138,7 @@
     function bindDateReasonPop(cell,status){bindDateCellPop(cell,dateUnavailableReason(status))}
     function firstSelectableDate(dates){return dates.find(d=>d.isSelectable)?.date||''}
     function isIsoAfter(a,b){return !!a&&!!b&&a>b}
-    function isLabDeadlineOverride(status){return !reservationMode&&!!actor()?.isLab&&!!status&&!status.isSelectable}
+    function isLabDeadlineOverride(status){return (!reservationMode||reservationDateSelectionMode==='delivery')&&!!actor()?.isLab&&!!status&&!status.isSelectable}
     function resetDeadlineOverride(){deadlineOverrideConfirmed=false;deadlineOverrideReason=''}
     function overrideRulesText(status){const rules=[];if(status?.isBeforeMinimum)rules.push('minimum lead time');if(status?.isClosed||status?.isFirstBusinessDayAfterClosure)rules.push('calendar availability');if(status?.isDailyCapacityExceeded)rules.push('daily capacity');if(status?.isWeeklyCapacityExceeded)rules.push('weekly capacity');return rules.length?rules.join(', '):(status?.reason||'scheduling rules')}
     function updateReservationDateModeControls(){const wrap=$('reservationDateModeControls');if(!wrap)return;wrap.classList.toggle('hidden',!reservationMode);wrap.querySelectorAll('[data-reservation-date-mode]').forEach(b=>{const active=b.dataset.reservationDateMode===reservationDateSelectionMode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false')});syncReservationDateNudgeControls()}

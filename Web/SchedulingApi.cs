@@ -372,6 +372,40 @@ public static class SchedulingApi
             }
         });
 
+        app.MapGet("/api/scheduling/reservations/{id:long}/deadline-recommendation-logs", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations, IDeadlineRecommendationLogRepository logs) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            try
+            {
+                _ = await reservations.GetReservationForActorAsync(actor, id, ctx.RequestAborted);
+                var items = await logs.ListForReservationAsync(id, ctx.RequestAborted);
+                return Results.Json(new { items = items.Select(ToDeadlineRecommendationLogDto) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+        });
+
+        app.MapGet("/api/scheduling/reservations/{id:long}/deadline-override-logs", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations, IDeadlineOverrideLogRepository logs) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            try
+            {
+                _ = await reservations.GetReservationForActorAsync(actor, id, ctx.RequestAborted);
+                var items = await logs.ListForReservationAsync(id, ctx.RequestAborted);
+                return Results.Json(new { items = items.Select(ToDeadlineOverrideLogDto) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
+        });
+
         app.MapPut("/api/scheduling/reservations/{id:long}", async (long id, HttpContext ctx, SchedulingAuthService auth, SchedulingReservationService reservations) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -403,7 +437,10 @@ public static class SchedulingApi
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             try
             {
-                var promoted = await reservations.PromoteReservationAsync(actor, id, RemoteIp(ctx), UserAgent(ctx), ctx.RequestAborted);
+                var body = ctx.Request.ContentLength.GetValueOrDefault() > 0
+                    ? await ReadJson<PromoteReservationRequest>(ctx)
+                    : null;
+                var promoted = await reservations.PromoteReservationAsync(actor, id, RemoteIp(ctx), UserAgent(ctx), ToDeadlineOverrideRequest(body), ctx.RequestAborted);
                 return Results.Json(new { reservation = ToDto(promoted.Reservation), order = ToDto(promoted.Order) }, JsonOptions);
             }
             catch (KeyNotFoundException ex)
@@ -697,6 +734,11 @@ public static class SchedulingApi
         body.ConfirmDeadlineOverride || !string.IsNullOrWhiteSpace(body.DeadlineOverrideReason)
             ? new DeadlineOverrideRequest(body.ConfirmDeadlineOverride, body.DeadlineOverrideReason)
             : null;
+
+    private static DeadlineOverrideRequest? ToDeadlineOverrideRequest(PromoteReservationRequest? body) =>
+        body == null || (!body.ConfirmDeadlineOverride && string.IsNullOrWhiteSpace(body.DeadlineOverrideReason))
+            ? null
+            : new DeadlineOverrideRequest(body.ConfirmDeadlineOverride, body.DeadlineOverrideReason);
 
     private static object ToDeadlineOverrideErrorDto(DeadlineOverrideRequiredException ex) => new
     {
@@ -1102,8 +1144,10 @@ public static class SchedulingApi
     private static object ToDeadlineRecommendationLogDto(DeadlineRecommendationLog log) => new
     {
         log.Id,
+        log.EntityType,
         log.OrderId,
         log.OrderCode,
+        log.ReservationId,
         log.CreatedAtUtc,
         log.CreatedByOrganizationType,
         log.CreatedByOrganizationCode,
@@ -1135,8 +1179,10 @@ public static class SchedulingApi
     private static object ToDeadlineOverrideLogDto(DeadlineOverrideLog log) => new
     {
         log.Id,
+        log.EntityType,
         log.OrderId,
         log.OrderCode,
+        log.ReservationId,
         log.CreatedAtUtc,
         log.CreatedByOrganizationType,
         log.CreatedByOrganizationCode,
@@ -1214,6 +1260,12 @@ public static class SchedulingApi
     public sealed record UpdateReservationRequest : OrderShape
     {
         public DateOnly RequestedDeliveryDate { get; init; }
+    }
+
+    public sealed record PromoteReservationRequest
+    {
+        public bool ConfirmDeadlineOverride { get; init; }
+        public string? DeadlineOverrideReason { get; init; }
     }
 
     public sealed record MaterialSchedulingConfigCreateRequest(

@@ -1202,7 +1202,7 @@ public class SchedulingApiTests
     }
 
     [Test]
-    public async Task ReservationCreate_InvalidDeliveryRejectsLabOverrideForSlice1()
+    public async Task ReservationCreate_InvalidDeliveryAllowsLabOverrideAndLogs()
     {
         using var fixture = NewSchedulingFixture();
         using var labClient = fixture.Client;
@@ -1219,14 +1219,56 @@ public class SchedulingApiTests
           "shade":"A1",
           "requestedDeliveryDate":"2026-06-06",
           "confirmDeadlineOverride":true,
-          "deadlineOverrideReason":"test override should be rejected"
+          "deadlineOverrideReason":"test reservation override"
         }
         """));
         var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(json.GetProperty("overrideAllowed").GetBoolean(), Is.False);
-        Assert.That(json.GetProperty("error").GetString(), Does.Contain("Reservation deadline overrides are not available yet"));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var reservation = json.GetProperty("reservation");
+        var reservationId = reservation.GetProperty("id").GetInt64();
+        Assert.That(reservation.GetProperty("requestedDeliveryDate").GetString(), Is.EqualTo("2026-06-06"));
+
+        var recommendationLogs = await labClient.GetAsync($"/api/scheduling/reservations/{reservationId}/deadline-recommendation-logs");
+        Assert.That(recommendationLogs.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var recommendationLog = JsonDocument.Parse(await recommendationLogs.Content.ReadAsStringAsync()).RootElement.GetProperty("items")[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(recommendationLog.GetProperty("entityType").GetString(), Is.EqualTo("reservation"));
+            Assert.That(recommendationLog.GetProperty("reservationId").GetInt64(), Is.EqualTo(reservationId));
+            Assert.That(recommendationLog.GetProperty("orderId").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        });
+
+        var overrideLogs = await labClient.GetAsync($"/api/scheduling/reservations/{reservationId}/deadline-override-logs");
+        Assert.That(overrideLogs.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var overrideLog = JsonDocument.Parse(await overrideLogs.Content.ReadAsStringAsync()).RootElement.GetProperty("items")[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(overrideLog.GetProperty("entityType").GetString(), Is.EqualTo("reservation"));
+            Assert.That(overrideLog.GetProperty("reservationId").GetInt64(), Is.EqualTo(reservationId));
+            Assert.That(overrideLog.GetProperty("overrideReason").GetString(), Is.EqualTo("test reservation override"));
+            Assert.That(overrideLog.GetProperty("rulesBypassedJson").GetString(), Does.Contain("MinimumLeadTime"));
+            Assert.That(overrideLog.GetProperty("recommendationLogId").GetInt64(), Is.GreaterThan(0));
+        });
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        Assert.That((await clinicClient.GetAsync($"/api/scheduling/reservations/{reservationId}/deadline-override-logs")).StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        var clinicOverride = await clinicClient.PostAsync("/api/scheduling/reservations", Json("""
+        {
+          "caseName":"Clinic Reservation Override Attempt",
+          "impressionDate":"2026-06-03",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":12,"toothEnd":12}],
+          "shade":"A1",
+          "requestedDeliveryDate":"2026-06-06",
+          "confirmDeadlineOverride":true,
+          "deadlineOverrideReason":"clinic cannot override"
+        }
+        """));
+        Assert.That(clinicOverride.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(JsonDocument.Parse(await clinicOverride.Content.ReadAsStringAsync()).RootElement.GetProperty("overrideAllowed").GetBoolean(), Is.False);
     }
 
     [Test]

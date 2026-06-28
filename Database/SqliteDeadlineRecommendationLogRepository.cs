@@ -34,11 +34,25 @@ public sealed class SqliteDeadlineRecommendationLogRepository : IDeadlineRecomme
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<DeadlineRecommendationLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var rows = await ctx.SchedulingDeadlineRecommendationLogs
+            .AsNoTracking()
+            .Where(l => l.ReservationId == reservationId)
+            .OrderByDescending(l => l.CreatedAtUnixTimeMilliseconds)
+            .ThenByDescending(l => l.Id)
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
     private static SchedulingDeadlineRecommendationLogEntity ToEntity(DeadlineRecommendationLog log) => new()
     {
         Id = log.Id,
         OrderId = log.OrderId,
         OrderCode = log.OrderCode,
+        ReservationId = log.ReservationId,
+        EntityType = log.EntityType,
         CreatedAtUtc = log.CreatedAtUtc,
         CreatedAtUnixTimeMilliseconds = log.CreatedAtUtc.ToUnixTimeMilliseconds(),
         CreatedByOrganizationType = log.CreatedByOrganizationType,
@@ -97,5 +111,7 @@ public sealed class SqliteDeadlineRecommendationLogRepository : IDeadlineRecomme
         e.ResultStatus,
         e.FailureReason,
         e.CandidateChecksJson,
-        e.ConfigSnapshotJson);
+        e.ConfigSnapshotJson,
+        string.IsNullOrWhiteSpace(e.EntityType) ? "order" : e.EntityType,
+        e.ReservationId);
 }
