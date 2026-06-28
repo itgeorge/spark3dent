@@ -24,6 +24,7 @@
     const reviewMsg = $('reviewMsg'), reviewCode = $('reviewCode'), reviewSub = $('reviewSub'), reviewOverviewText = $('reviewOverviewText'), reviewOverviewShade = $('reviewOverviewShade'), reviewColorNote = $('reviewColorNote'), reviewOverviewDate = $('reviewOverviewDate');
     const reviewCaseName = $('reviewCaseName'), reviewExtraNote = $('reviewExtraNote'), reviewTeeth = $('reviewTeeth'), reviewBackTopBtn = $('reviewBackTopBtn'), reviewCloseTopBtn = $('reviewCloseTopBtn'), reviewEditBtn = $('reviewEditBtn'), reviewCancelBtn = $('reviewCancelBtn'), reviewPromoteBtn = $('reviewPromoteBtn');
     const cancelOrderConfirmPopup = $('cancelOrderConfirmPopup'), cancelOrderConfirmText = $('cancelOrderConfirmText'), cancelOrderConfirmBackBtn = $('cancelOrderConfirmBackBtn'), cancelOrderConfirmYesBtn = $('cancelOrderConfirmYesBtn');
+    const beforeMinimumConfirmPopup = $('beforeMinimumConfirmPopup'), beforeMinimumConfirmText = $('beforeMinimumConfirmText'), beforeMinimumConfirmBackBtn = $('beforeMinimumConfirmBackBtn'), beforeMinimumConfirmYesBtn = $('beforeMinimumConfirmYesBtn'), deadlineOverrideReasonInput = $('deadlineOverrideReasonInput'), deadlineOverrideReasonMsg = $('deadlineOverrideReasonMsg');
 
     let reviewOrder = null, reviewKind = 'order';
 
@@ -112,6 +113,22 @@
     function edit(){if(!reviewOrder||reviewOrder.status==='cancelled'||reviewKind==='reservation'&&reviewOrder.status!=='active')return;if(options.clearFindHighlight)options.clearFindHighlight();if(reviewKind==='reservation')return options.onEditReservation?options.onEditReservation(reviewOrder.id,1):undefined;onEdit(reviewOrder.orderCode,1)}
     function openCancel(){if(!reviewOrder||reviewOrder.status==='cancelled'||reviewKind==='reservation'&&reviewOrder.status!=='active')return;const isReservation=reviewKind==='reservation';const code=isReservation?'reservation':(reviewOrder.shortenedOrderCode||reviewOrder.orderCode||'—');cancelOrderConfirmText.innerHTML=`Are you sure you want to cancel ${isReservation?'reservation':'order'} <span class="cancel-order-confirm-code">${esc(code)}</span>?`;cancelOrderConfirmYesBtn.textContent=isReservation?'Yes, cancel reservation':'Yes, cancel order';openUiModal('cancelOrder',cancelOrderConfirmPopup,cancelOrderConfirmBackBtn)}
     function closeCancel(){closeUiModal('cancelOrder',cancelOrderConfirmPopup);cancelOrderConfirmYesBtn.disabled=false;cancelOrderConfirmYesBtn.textContent='Yes, cancel order'}
+    function promptPromotionOverride(error){
+      if(!beforeMinimumConfirmPopup||!beforeMinimumConfirmText||!beforeMinimumConfirmBackBtn||!beforeMinimumConfirmYesBtn||!deadlineOverrideReasonInput)return Promise.resolve((global.prompt&&global.prompt(`${error||'Reservation delivery date is no longer valid.'}\nEnter override reason:`))||null);
+      return new Promise(resolve=>{
+        const oldBack=beforeMinimumConfirmBackBtn.onclick,oldYes=beforeMinimumConfirmYesBtn.onclick,oldPopup=beforeMinimumConfirmPopup.onclick;
+        let done=false;
+        const restore=()=>{beforeMinimumConfirmBackBtn.onclick=oldBack;beforeMinimumConfirmYesBtn.onclick=oldYes;beforeMinimumConfirmPopup.onclick=oldPopup};
+        const finish=reason=>{if(done)return;done=true;closeUiModal('beforeMinimum',beforeMinimumConfirmPopup);restore();resolve(reason)};
+        beforeMinimumConfirmText.textContent=`${error||'Reservation delivery date is no longer valid.'} Lab override requires confirmation and a reason.`;
+        deadlineOverrideReasonInput.value='';
+        if(deadlineOverrideReasonMsg){deadlineOverrideReasonMsg.textContent='';deadlineOverrideReasonMsg.classList.add('hidden')}
+        beforeMinimumConfirmBackBtn.onclick=()=>finish(null);
+        beforeMinimumConfirmYesBtn.onclick=()=>{const reason=(deadlineOverrideReasonInput.value||'').trim();if(!reason){if(deadlineOverrideReasonMsg){deadlineOverrideReasonMsg.textContent='Enter an override reason.';deadlineOverrideReasonMsg.classList.remove('hidden')}return}finish(reason)};
+        beforeMinimumConfirmPopup.onclick=e=>{if(e.target===beforeMinimumConfirmPopup)finish(null)};
+        openUiModal('beforeMinimum',beforeMinimumConfirmPopup,deadlineOverrideReasonInput);
+      });
+    }
     async function promoteReservation(){
       if(!reviewOrder||reviewKind!=='reservation'||reviewOrder.status!=='active'||!reviewPromoteBtn)return;
       reviewPromoteBtn.disabled=true;
@@ -120,8 +137,15 @@
       reviewCancelBtn.disabled=true;
       reviewMsg.classList.add('hidden');
       try{
-        const result=await ordersApi.promoteReservation(reviewOrder.id);
-        const j=result.data;
+        let result=await ordersApi.promoteReservation(reviewOrder.id);
+        let j=result.data;
+        if(!result.ok&&actor()?.isLab&&j.overrideAllowed){
+          const reason=await promptPromotionOverride(j.error||'Could not promote reservation.');
+          if(!reason)return;
+          reviewPromoteBtn.textContent='Promoting…';
+          result=await ordersApi.promoteReservation(reviewOrder.id,{confirmDeadlineOverride:true,deadlineOverrideReason:reason});
+          j=result.data;
+        }
         if(!result.ok){reviewMsg.textContent=j.error||'Could not promote reservation.';reviewMsg.classList.remove('hidden');return}
         const code=j.order&&j.order.orderCode;
         if(options.clearFindHighlight)options.clearFindHighlight();

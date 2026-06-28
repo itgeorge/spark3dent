@@ -167,8 +167,9 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.OrderId);
             e.HasIndex(x => x.OrderCode);
+            e.HasIndex(x => x.ReservationId);
             e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
-            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.EntityType).IsRequired();
             e.Property(x => x.CreatedByOrganizationType).IsRequired();
             e.Property(x => x.CreatedByOrganizationCode).IsRequired();
             e.Property(x => x.CreatedByMemberId).IsRequired();
@@ -186,8 +187,9 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.OrderId);
             e.HasIndex(x => x.OrderCode);
+            e.HasIndex(x => x.ReservationId);
             e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
-            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.EntityType).IsRequired();
             e.Property(x => x.CreatedByOrganizationType).IsRequired();
             e.Property(x => x.CreatedByOrganizationCode).IsRequired();
             e.Property(x => x.CreatedByMemberId).IsRequired();

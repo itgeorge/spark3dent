@@ -16,6 +16,7 @@ public sealed class SchedulingReservationService
     private readonly IAuditLog _auditLog;
     private readonly IOrderCodeGenerator _codeGenerator;
     private readonly IDeadlineRecommendationLogRepository _deadlineRecommendationLogs;
+    private readonly IDeadlineOverrideLogRepository _deadlineOverrideLogs;
     private readonly int _maxOrderCodeAttempts;
     private const int DefaultListLimit = 100;
 
@@ -29,6 +30,7 @@ public sealed class SchedulingReservationService
         IAuditLog? auditLog = null,
         IOrderCodeGenerator? codeGenerator = null,
         IDeadlineRecommendationLogRepository? deadlineRecommendationLogs = null,
+        IDeadlineOverrideLogRepository? deadlineOverrideLogs = null,
         int maxOrderCodeAttempts = 20)
     {
         _identities = identities;
@@ -40,6 +42,7 @@ public sealed class SchedulingReservationService
         _auditLog = auditLog ?? NoOpAuditLog.Instance;
         _codeGenerator = codeGenerator ?? new DescriptiveOrderCodeGenerator();
         _deadlineRecommendationLogs = deadlineRecommendationLogs ?? NoOpDeadlineRecommendationLogRepository.Instance;
+        _deadlineOverrideLogs = deadlineOverrideLogs ?? NoOpDeadlineOverrideLogRepository.Instance;
         _maxOrderCodeAttempts = maxOrderCodeAttempts;
     }
 
@@ -77,13 +80,15 @@ public sealed class SchedulingReservationService
         await ValidateImpressionDateAsync(draft.ImpressionDate, ct);
         var targetClinic = await ResolveTargetClinicAsync(actor, targetClinicCode, ct);
         var now = _clock.UtcNow;
-        var created = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
+        var createResult = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
         {
             await ValidateImpressionDateAsync(draft.ImpressionDate, ct);
             var decision = await DecideDeadlineCommitAsync(actor, draft, excludedReservationId: null, txOrders, txReservations, deadlineOverride, ct);
             var reservation = BuildReservation(actor, targetClinic, draft, ip, userAgent, decision.ValidationWithAudit.Validation.OrderCapacityUnits, now);
-            return await txReservations.CreateReservationAsync(reservation, ct);
+            var createdReservation = await txReservations.CreateReservationAsync(reservation, ct);
+            return (Reservation: createdReservation, decision.ValidationWithAudit.Audit, Decision: decision);
         }, ct);
+        var created = createResult.Reservation;
         await AppendReservationAuditAsync(actor, "ReservationCreated", created, ip, userAgent, new
         {
             targetClinicCode = created.ClinicCode,
@@ -94,6 +99,8 @@ public sealed class SchedulingReservationService
             status = created.Status.ToString(),
             totalToothCount = OrderWorkItem.AllTeeth(created.WorkItems).Length
         }, ct);
+        var recommendationLog = await PersistReservationDeadlineRecommendationLogAsync(actor, created, createResult.Audit, ct);
+        await PersistReservationDeadlineOverrideLogIfNeededAsync(actor, created, createResult.Decision, recommendationLog.Id, ct);
         return created;
     }
 
@@ -101,7 +108,7 @@ public sealed class SchedulingReservationService
     {
         ValidateDraft(draft);
         await ValidateImpressionDateAsync(draft.ImpressionDate, ct);
-        var saved = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
+        var result = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
         {
             var existing = await GetAuthorizedReservationAsync(actor, id, txReservations, ct);
             EnsureActive(existing);
@@ -121,9 +128,13 @@ public sealed class SchedulingReservationService
                 CalculatedCapacityUnits = decision.ValidationWithAudit.Validation.OrderCapacityUnits,
                 UpdatedAt = _clock.UtcNow
             };
-            return await txReservations.UpdateReservationAsync(updated, ct);
+            var savedReservation = await txReservations.UpdateReservationAsync(updated, ct);
+            return (Reservation: savedReservation, decision.ValidationWithAudit.Audit, Decision: decision);
         }, ct);
+        var saved = result.Reservation;
         await AppendReservationAuditAsync(actor, "ReservationUpdated", saved, ip, userAgent, new { saved.Id, saved.ImpressionDate, saved.RequestedDeliveryDate, saved.CaseName }, ct);
+        var recommendationLog = await PersistReservationDeadlineRecommendationLogAsync(actor, saved, result.Audit, ct);
+        await PersistReservationDeadlineOverrideLogIfNeededAsync(actor, saved, result.Decision, recommendationLog.Id, ct);
         return saved;
     }
 
@@ -136,7 +147,10 @@ public sealed class SchedulingReservationService
         return cancelled;
     }
 
-    public async Task<ReservationPromotionResult> PromoteReservationAsync(AuthenticatedActor actor, long id, string ip, string userAgent, CancellationToken ct = default)
+    public Task<ReservationPromotionResult> PromoteReservationAsync(AuthenticatedActor actor, long id, string ip, string userAgent, CancellationToken ct = default) =>
+        PromoteReservationAsync(actor, id, ip, userAgent, deadlineOverride: null, ct);
+
+    public async Task<ReservationPromotionResult> PromoteReservationAsync(AuthenticatedActor actor, long id, string ip, string userAgent, DeadlineOverrideRequest? deadlineOverride, CancellationToken ct = default)
     {
         var result = await _writeTransaction.ExecuteAsync(async (txOrders, txReservations) =>
         {
@@ -146,7 +160,7 @@ public sealed class SchedulingReservationService
 
             var reservationDraft = ToDraft(reservation);
             var orderDraft = ToOrderDraft(reservation);
-            var decision = await DecideDeadlineCommitAsync(actor, reservationDraft, reservation.Id, txOrders, txReservations, deadlineOverride: null, ct);
+            var decision = await DecideDeadlineCommitAsync(actor, reservationDraft, reservation.Id, txOrders, txReservations, deadlineOverride, ct);
             var orderWithoutCode = BuildPromotedOrder(actor, reservation, ip, userAgent, decision.ValidationWithAudit.Validation.OrderCapacityUnits, promotedAt);
             var createdOrder = await CreateWithUniqueCodeAsync(orderWithoutCode, orderDraft, txOrders, ct);
             var promotedReservation = await txReservations.UpdateReservationAsync(reservation with
@@ -158,7 +172,7 @@ public sealed class SchedulingReservationService
                 UpdatedAt = promotedAt
             }, ct);
 
-            return new PromotionTransactionResult(promotedReservation, createdOrder, reservation, decision.ValidationWithAudit.Audit);
+            return new PromotionTransactionResult(promotedReservation, createdOrder, reservation, decision.ValidationWithAudit.Audit, decision);
         }, ct);
 
         await AppendOrderAuditAsync(
@@ -194,6 +208,8 @@ public sealed class SchedulingReservationService
             newStatus = result.Reservation.Status.ToString()
         }, ct);
         await PersistDeadlineRecommendationLogAsync(actor, result.Order, result.Audit, ct);
+        var reservationRecommendationLog = await PersistReservationDeadlineRecommendationLogAsync(actor, result.OriginalReservation, result.Audit, ct);
+        await PersistReservationDeadlineOverrideLogIfNeededAsync(actor, result.OriginalReservation, result.Decision, reservationRecommendationLog.Id, ct);
         return new ReservationPromotionResult(result.Reservation, result.Order);
     }
 
@@ -241,8 +257,17 @@ public sealed class SchedulingReservationService
             return new DeadlineCommitDecision(result, false, [], null);
 
         var rulesBypassed = validation.FailedRules;
-        var message = $"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {validation.Status.Reason}. Reservation deadline overrides are not available yet.";
-        throw new DeadlineOverrideRequiredException(message, overrideAllowed: false, rulesBypassed, validation.RecommendedDate);
+        var message = $"Delivery date {draft.RequestedDeliveryDate:yyyy-MM-dd} is not available: {validation.Status.Reason}.";
+        if (!actor.IsLab)
+            throw new DeadlineOverrideRequiredException(message, overrideAllowed: false, rulesBypassed, validation.RecommendedDate);
+
+        if (deadlineOverride?.ConfirmDeadlineOverride != true)
+            throw new DeadlineOverrideRequiredException($"{message} Lab deadline override confirmation is required.", overrideAllowed: true, rulesBypassed, validation.RecommendedDate);
+
+        if (string.IsNullOrWhiteSpace(deadlineOverride.DeadlineOverrideReason))
+            throw new DeadlineOverrideRequiredException($"{message} Deadline override reason is required.", overrideAllowed: true, rulesBypassed, validation.RecommendedDate);
+
+        return new DeadlineCommitDecision(result, true, rulesBypassed, deadlineOverride.DeadlineOverrideReason.Trim());
     }
 
     private static OrderSchedulingInput ToSchedulingInput(ReservationDraft draft, long? excludedReservationId = null) =>
@@ -450,6 +475,78 @@ public sealed class SchedulingReservationService
         return _deadlineRecommendationLogs.AddAsync(log, ct);
     }
 
+    private Task<DeadlineRecommendationLog> PersistReservationDeadlineRecommendationLogAsync(AuthenticatedActor actor, ReservationRecord reservation, DeadlineRecommendationAudit audit, CancellationToken ct)
+    {
+        var log = new DeadlineRecommendationLog(
+            0,
+            null,
+            null,
+            _clock.UtcNow,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
+            audit.ImpressionTimestampUtc,
+            audit.EffectiveIntakeBusinessDate,
+            audit.CutoffTimeUsed,
+            audit.Material,
+            audit.ToothCount,
+            audit.LeadTimeBusinessDaysUsed,
+            audit.FixedLeadTimeBusinessDaysUsed,
+            audit.ExtraLeadTimeBusinessDaysUsed,
+            audit.TeethPerExtraLeadDayUsed,
+            audit.CapacityUnitsPerToothUsed,
+            audit.CalculatedOrderCapacityUnits,
+            audit.MinimumDeadlineDateFromLeadTime,
+            audit.FinalRecommendedDeadlineDate,
+            audit.SelectedDeadlineDate,
+            audit.SearchStartedAtDate,
+            audit.SearchEndedAtDate,
+            audit.SearchLimitDate,
+            audit.ResultStatus,
+            audit.FailureReason,
+            audit.CandidateChecksJson,
+            audit.ConfigSnapshotJson,
+            "reservation",
+            reservation.Id);
+        return _deadlineRecommendationLogs.AddAsync(log, ct);
+    }
+
+    private Task PersistReservationDeadlineOverrideLogIfNeededAsync(AuthenticatedActor actor, ReservationRecord reservation, DeadlineCommitDecision decision, long? recommendationLogId, CancellationToken ct)
+    {
+        if (!decision.IsOverride || string.IsNullOrWhiteSpace(decision.OverrideReason))
+            return Task.CompletedTask;
+
+        var validation = decision.ValidationWithAudit.Validation;
+        var status = validation.Status;
+        var log = new DeadlineOverrideLog(
+            0,
+            null,
+            null,
+            _clock.UtcNow,
+            actor.OrganizationType.ToString(),
+            actor.OrganizationCode,
+            actor.MemberId,
+            actor.MemberLabel,
+            reservation.RequestedDeliveryDate,
+            validation.RecommendedDate,
+            validation.MinimumDate,
+            validation.OrderCapacityUnits,
+            JsonSerializer.Serialize(decision.RulesBypassed.Select(r => r.ToString()).ToArray()),
+            decision.OverrideReason.Trim(),
+            recommendationLogId is > 0 ? recommendationLogId : null,
+            status.ExistingDailyCapacityUsed,
+            status.ExistingWeeklyCapacityUsed,
+            status.DailyCapacityLimit,
+            status.WeeklyCapacityLimit,
+            status.ExistingDailyCapacityUsed.HasValue ? status.ExistingDailyCapacityUsed.Value + validation.OrderCapacityUnits : null,
+            status.ExistingWeeklyCapacityUsed.HasValue ? status.ExistingWeeklyCapacityUsed.Value + validation.OrderCapacityUnits : null,
+            status.IsClosed || status.IsFirstBusinessDayAfterClosure || status.IsBeforeMinimum ? status.Reason : null,
+            "reservation",
+            reservation.Id);
+        return _deadlineOverrideLogs.AddAsync(log, ct);
+    }
+
     private Task AppendReservationAuditAsync(AuthenticatedActor actor, string operation, ReservationRecord reservation, string? ip, string? userAgent, object metadata, CancellationToken ct)
     {
         var auditEvent = new AuditEvent(
@@ -481,5 +578,6 @@ public sealed class SchedulingReservationService
         ReservationRecord Reservation,
         OrderRecord Order,
         ReservationRecord OriginalReservation,
-        DeadlineRecommendationAudit Audit);
+        DeadlineRecommendationAudit Audit,
+        DeadlineCommitDecision Decision);
 }
