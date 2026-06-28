@@ -5,8 +5,10 @@ namespace Database.Entities;
 public class SchedulingDeadlineRecommendationLogEntity
 {
     public long Id { get; set; }
-    public long OrderId { get; set; }
-    public string OrderCode { get; set; } = string.Empty;
+    public long? OrderId { get; set; }
+    public string? OrderCode { get; set; }
+    public long? ReservationId { get; set; }
+    public string EntityType { get; set; } = "order";
     public DateTimeOffset CreatedAtUtc { get; set; }
     public long CreatedAtUnixTimeMilliseconds { get; set; }
     public string CreatedByOrganizationType { get; set; } = string.Empty;

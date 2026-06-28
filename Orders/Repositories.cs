@@ -49,6 +49,16 @@ public interface IOrderRepository
     Task<IReadOnlyList<OrderRecord>> ListActiveOrdersByDeadlineRangeAsync(DateOnly start, DateOnly end, CancellationToken ct = default);
 }
 
+public interface IReservationRepository
+{
+    Task<ReservationRecord> CreateReservationAsync(ReservationRecord reservation, CancellationToken ct = default);
+    Task<ReservationRecord?> GetReservationByIdAsync(long id, CancellationToken ct = default);
+    Task<ReservationRecord> UpdateReservationAsync(ReservationRecord reservation, CancellationToken ct = default);
+    Task<IReadOnlyList<ReservationRecord>> ListActiveReservationsForActorAsync(string? clinicCode, int limit, DateTimeOffset nowUtc, CancellationToken ct = default);
+    Task<IReadOnlyList<ReservationRecord>> ListActiveReservationsForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, DateTimeOffset nowUtc, CancellationToken ct = default);
+    Task<IReadOnlyList<ReservationRecord>> ListActiveReservationsByDeadlineRangeAsync(DateOnly start, DateOnly end, DateTimeOffset nowUtc, CancellationToken ct = default);
+}
+
 public sealed class DuplicateOrderCodeException : InvalidOperationException
 {
     public DuplicateOrderCodeException(string orderCode, Exception? innerException = null)

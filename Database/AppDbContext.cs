@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<Entities.SchedulingMemberEntity> SchedulingMembers { get; set; }
     public DbSet<Entities.SchedulingAuthSessionEntity> SchedulingAuthSessions { get; set; }
     public DbSet<Entities.SchedulingOrderEntity> SchedulingOrders { get; set; }
+    public DbSet<Entities.SchedulingReservationEntity> SchedulingReservations { get; set; }
     public DbSet<Entities.SchedulingMaterialConfigEntity> SchedulingMaterialConfigs { get; set; }
     public DbSet<Entities.SchedulingCapacityConfigEntity> SchedulingCapacityConfigs { get; set; }
     public DbSet<Entities.SchedulingLabOffdayEntity> SchedulingLabOffdays { get; set; }
@@ -116,7 +117,25 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.RequestedDeliveryDate);
             e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
             e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.PromotedFromReservationId);
             e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.ClinicCode).IsRequired();
+            e.Property(x => x.MemberId).HasColumnName("CredentialId").IsRequired();
+            e.Property(x => x.MemberLabel).HasColumnName("CredentialLabel").IsRequired();
+            e.Property(x => x.MemberPinHashFingerprint).HasColumnName("CredentialPinHashFingerprint").IsRequired();
+            e.Property(x => x.WorkItemsJson).IsRequired();
+            e.Property(x => x.Shade).HasConversion<int>();
+            e.Property(x => x.CalculatedCapacityUnits).HasColumnType("TEXT");
+        });
+
+        modelBuilder.Entity<Entities.SchedulingReservationEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ClinicCode);
+            e.HasIndex(x => x.RequestedDeliveryDate);
+            e.HasIndex(x => x.ImpressionDate);
+            e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
+            e.HasIndex(x => x.Status);
             e.Property(x => x.ClinicCode).IsRequired();
             e.Property(x => x.MemberId).HasColumnName("CredentialId").IsRequired();
             e.Property(x => x.MemberLabel).HasColumnName("CredentialLabel").IsRequired();
@@ -148,8 +167,9 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.OrderId);
             e.HasIndex(x => x.OrderCode);
+            e.HasIndex(x => x.ReservationId);
             e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
-            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.EntityType).IsRequired();
             e.Property(x => x.CreatedByOrganizationType).IsRequired();
             e.Property(x => x.CreatedByOrganizationCode).IsRequired();
             e.Property(x => x.CreatedByMemberId).IsRequired();
@@ -167,8 +187,9 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.OrderId);
             e.HasIndex(x => x.OrderCode);
+            e.HasIndex(x => x.ReservationId);
             e.HasIndex(x => x.CreatedAtUnixTimeMilliseconds);
-            e.Property(x => x.OrderCode).IsRequired();
+            e.Property(x => x.EntityType).IsRequired();
             e.Property(x => x.CreatedByOrganizationType).IsRequired();
             e.Property(x => x.CreatedByOrganizationCode).IsRequired();
             e.Property(x => x.CreatedByMemberId).IsRequired();

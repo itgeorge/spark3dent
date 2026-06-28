@@ -949,6 +949,12 @@ public class SchedulingOrderServiceTest
                 return Task.FromResult<IReadOnlyList<DeadlineRecommendationLog>>(_logs.Where(l => l.OrderId == orderId).OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id).ToList());
         }
 
+        public Task<IReadOnlyList<DeadlineRecommendationLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default)
+        {
+            lock (_gate)
+                return Task.FromResult<IReadOnlyList<DeadlineRecommendationLog>>(_logs.Where(l => l.ReservationId == reservationId).OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id).ToList());
+        }
+
         public void Clear()
         {
             lock (_gate)
@@ -985,6 +991,12 @@ public class SchedulingOrderServiceTest
         {
             lock (_gate)
                 return Task.FromResult<IReadOnlyList<DeadlineOverrideLog>>(_logs.Where(l => l.OrderId == orderId).OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id).ToList());
+        }
+
+        public Task<IReadOnlyList<DeadlineOverrideLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default)
+        {
+            lock (_gate)
+                return Task.FromResult<IReadOnlyList<DeadlineOverrideLog>>(_logs.Where(l => l.ReservationId == reservationId).OrderByDescending(l => l.CreatedAtUtc).ThenByDescending(l => l.Id).ToList());
         }
 
         public void Clear()

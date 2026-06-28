@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Utilities;
 
 namespace Orders;
 
@@ -7,7 +8,8 @@ public sealed record OrderSchedulingInput(
     Material Material,
     IReadOnlyList<OrderWorkItem> WorkItems,
     DateTimeOffset ImpressionTimestampUtc,
-    long? ExcludedOrderId = null);
+    long? ExcludedOrderId = null,
+    long? ExcludedReservationId = null);
 
 public sealed record DeadlineRecommendationResult(
     DateOnly EffectiveIntakeBusinessDate,
@@ -35,17 +37,23 @@ public sealed class DeadlineRecommendationService
     private readonly IMaterialSchedulingConfigProvider _materialConfigs;
     private readonly ISchedulingCapacityConfigProvider _capacityConfigs;
     private readonly IOrderRepository _orders;
+    private readonly IReservationRepository? _reservations;
+    private readonly IClock _clock;
 
     public DeadlineRecommendationService(
         DateAvailabilityService availability,
         IMaterialSchedulingConfigProvider materialConfigs,
         ISchedulingCapacityConfigProvider capacityConfigs,
-        IOrderRepository orders)
+        IOrderRepository orders,
+        IReservationRepository? reservations = null,
+        IClock? clock = null)
     {
         _availability = availability;
         _materialConfigs = materialConfigs;
         _capacityConfigs = capacityConfigs;
         _orders = orders;
+        _reservations = reservations;
+        _clock = clock ?? new SystemClock();
     }
 
     public async Task<DeadlineRecommendationResult> RecommendAsync(OrderSchedulingInput input, CancellationToken ct = default)
@@ -63,7 +71,7 @@ public sealed class DeadlineRecommendationService
 
     public async Task<DateOnly> RecommendCapacityAwareDateAsync(OrderSchedulingInput input, IOrderRepository? orderRepositoryOverride, CancellationToken ct = default)
     {
-        return (await FindRecommendedDateWithDateEffectiveMaterialTrailAsync(input, orderRepositoryOverride, ct)).RecommendedDate
+        return (await FindRecommendedDateWithDateEffectiveMaterialTrailAsync(input, orderRepositoryOverride, reservationRepositoryOverride: null, ct)).RecommendedDate
             ?? throw new InvalidOperationException("No capacity-available deadline found within 60 calendar days; manual scheduling is required.");
     }
 
@@ -79,6 +87,15 @@ public sealed class DeadlineRecommendationService
         DateOnly start,
         DateOnly end,
         IOrderRepository? orderRepositoryOverride,
+        CancellationToken ct = default) =>
+        await GetCapacityAwareDateStatusesAsync(input, start, end, orderRepositoryOverride, reservationRepositoryOverride: null, ct);
+
+    public async Task<DeadlineDateStatusesResult> GetCapacityAwareDateStatusesAsync(
+        OrderSchedulingInput input,
+        DateOnly start,
+        DateOnly end,
+        IOrderRepository? orderRepositoryOverride,
+        IReservationRepository? reservationRepositoryOverride,
         CancellationToken ct = default)
     {
         if (end < start)
@@ -89,13 +106,13 @@ public sealed class DeadlineRecommendationService
         for (var date = start; date <= end; date = date.AddDays(1))
         {
             var basics = await CalculateRecommendationBasicsAsync(input, date, ct);
-            statuses.Add(await EvaluateDateAsync(date, basics.MinimumDeadlineDateFromLeadTime, basics.CalculatedOrderCapacityUnits, input.ExcludedOrderId, orderRepositoryOverride, ct));
+            statuses.Add(await EvaluateDateAsync(date, basics.MinimumDeadlineDateFromLeadTime, basics.CalculatedOrderCapacityUnits, input.ExcludedOrderId, input.ExcludedReservationId, orderRepositoryOverride, reservationRepositoryOverride, ct));
         }
 
         DateOnly? recommendedDate = null;
         try
         {
-            recommendedDate = (await FindRecommendedDateWithDateEffectiveMaterialTrailAsync(input, orderRepositoryOverride, ct)).RecommendedDate;
+            recommendedDate = (await FindRecommendedDateWithDateEffectiveMaterialTrailAsync(input, orderRepositoryOverride, reservationRepositoryOverride, ct)).RecommendedDate;
         }
         catch (InvalidOperationException)
         {
@@ -122,10 +139,18 @@ public sealed class DeadlineRecommendationService
         OrderSchedulingInput input,
         DateOnly requestedDate,
         IOrderRepository? orderRepositoryOverride,
+        CancellationToken ct = default) =>
+        await ValidateRequestedDateWithAuditAsync(input, requestedDate, orderRepositoryOverride, reservationRepositoryOverride: null, ct);
+
+    public async Task<DeadlineValidationWithAuditResult> ValidateRequestedDateWithAuditAsync(
+        OrderSchedulingInput input,
+        DateOnly requestedDate,
+        IOrderRepository? orderRepositoryOverride,
+        IReservationRepository? reservationRepositoryOverride,
         CancellationToken ct = default)
     {
         var basics = await CalculateRecommendationBasicsAsync(input, requestedDate, ct);
-        var status = await EvaluateDateAsync(requestedDate, basics.MinimumDeadlineDateFromLeadTime, basics.CalculatedOrderCapacityUnits, input.ExcludedOrderId, orderRepositoryOverride, ct);
+        var status = await EvaluateDateAsync(requestedDate, basics.MinimumDeadlineDateFromLeadTime, basics.CalculatedOrderCapacityUnits, input.ExcludedOrderId, input.ExcludedReservationId, orderRepositoryOverride, reservationRepositoryOverride, ct);
 
         DateOnly? recommendedDate = null;
         string? searchFailureReason = null;
@@ -133,7 +158,7 @@ public sealed class DeadlineRecommendationService
         var failedRules = status.GetFailedRules().ToList();
         try
         {
-            search = await FindRecommendedDateWithDateEffectiveMaterialTrailAsync(input, orderRepositoryOverride, ct);
+            search = await FindRecommendedDateWithDateEffectiveMaterialTrailAsync(input, orderRepositoryOverride, reservationRepositoryOverride, ct);
             recommendedDate = search.RecommendedDate;
         }
         catch (InvalidOperationException ex)
@@ -185,12 +210,18 @@ public sealed class DeadlineRecommendationService
             throw new InvalidOperationException("End date must be on or after start date.");
 
         var orders = await _orders.ListActiveOrdersByDeadlineRangeAsync(start, end, ct);
+        var reservations = _reservations == null ? [] : await _reservations.ListActiveReservationsByDeadlineRangeAsync(start, end, _clock.UtcNow, ct);
         var materialCache = new Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig>();
         var usedByDate = new Dictionary<DateOnly, decimal>();
         foreach (var order in orders)
         {
             var orderCapacityUnits = await ResolveOrderCapacityUnitsAsync(order, materialCache, ct);
             usedByDate[order.RequestedDeliveryDate] = usedByDate.GetValueOrDefault(order.RequestedDeliveryDate) + orderCapacityUnits;
+        }
+        foreach (var reservation in reservations)
+        {
+            var reservationCapacityUnits = await ResolveReservationCapacityUnitsAsync(reservation, materialCache, ct);
+            usedByDate[reservation.RequestedDeliveryDate] = usedByDate.GetValueOrDefault(reservation.RequestedDeliveryDate) + reservationCapacityUnits;
         }
 
         var result = new Dictionary<DateOnly, DailyCapacityUsage>();
@@ -212,6 +243,7 @@ public sealed class DeadlineRecommendationService
         var (expandedStart, _) = SchedulingWeek.GetRange(start);
         var (_, expandedEnd) = SchedulingWeek.GetRange(end);
         var orders = await _orders.ListActiveOrdersByDeadlineRangeAsync(expandedStart, expandedEnd, ct);
+        var reservations = _reservations == null ? [] : await _reservations.ListActiveReservationsByDeadlineRangeAsync(expandedStart, expandedEnd, _clock.UtcNow, ct);
         var materialCache = new Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig>();
         var usedByWeekEnd = new Dictionary<DateOnly, decimal>();
         foreach (var order in orders)
@@ -219,6 +251,12 @@ public sealed class DeadlineRecommendationService
             var (_, weekEnd) = SchedulingWeek.GetRange(order.RequestedDeliveryDate);
             var orderCapacityUnits = await ResolveOrderCapacityUnitsAsync(order, materialCache, ct);
             usedByWeekEnd[weekEnd] = usedByWeekEnd.GetValueOrDefault(weekEnd) + orderCapacityUnits;
+        }
+        foreach (var reservation in reservations)
+        {
+            var (_, weekEnd) = SchedulingWeek.GetRange(reservation.RequestedDeliveryDate);
+            var reservationCapacityUnits = await ResolveReservationCapacityUnitsAsync(reservation, materialCache, ct);
+            usedByWeekEnd[weekEnd] = usedByWeekEnd.GetValueOrDefault(weekEnd) + reservationCapacityUnits;
         }
 
         var result = new Dictionary<DateOnly, WeeklyCapacityUsage>();
@@ -305,7 +343,9 @@ public sealed class DeadlineRecommendationService
         DateOnly minimumDate,
         decimal orderCapacityUnits,
         long? excludedOrderId,
+        long? excludedReservationId,
         IOrderRepository? orderRepositoryOverride,
+        IReservationRepository? reservationRepositoryOverride,
         CancellationToken ct)
     {
         var baseStatus = await _availability.GetStatusAsync(date, minimumDate, ct);
@@ -314,7 +354,7 @@ public sealed class DeadlineRecommendationService
 
         var capacityConfig = await _capacityConfigs.GetForDateAsync(date, ct);
         ValidateCapacityConfig(capacityConfig);
-        var usage = await GetCapacityUsageAsync(date, excludedOrderId, orderRepositoryOverride, ct);
+        var usage = await GetCapacityUsageAsync(date, excludedOrderId, excludedReservationId, orderRepositoryOverride, reservationRepositoryOverride, ct);
         var weeklyCapacityLimit = await GetEffectiveWeeklyCapacityUnitsAsync(capacityConfig, date, ct);
         var isDailyCapacityExceeded = usage.DailyUsed > 0m && usage.DailyUsed + orderCapacityUnits > capacityConfig.DailyCapacityUnits;
         var isWeeklyCapacityExceeded = usage.WeeklyUsed + orderCapacityUnits > weeklyCapacityLimit;
@@ -351,11 +391,19 @@ public sealed class DeadlineRecommendationService
         return capacityConfig.WeeklyCapacityUnits * openWeekdays / 5m;
     }
 
-    private async Task<CapacityUsage> GetCapacityUsageAsync(DateOnly date, long? excludedOrderId, IOrderRepository? orderRepositoryOverride, CancellationToken ct)
+    private async Task<CapacityUsage> GetCapacityUsageAsync(
+        DateOnly date,
+        long? excludedOrderId,
+        long? excludedReservationId,
+        IOrderRepository? orderRepositoryOverride,
+        IReservationRepository? reservationRepositoryOverride,
+        CancellationToken ct)
     {
         var (weekStart, weekEnd) = SchedulingWeek.GetRange(date);
         var orderRepository = orderRepositoryOverride ?? _orders;
+        var reservationRepository = reservationRepositoryOverride ?? _reservations;
         var orders = await orderRepository.ListActiveOrdersByDeadlineRangeAsync(weekStart, weekEnd, ct);
+        var reservations = reservationRepository == null ? [] : await reservationRepository.ListActiveReservationsByDeadlineRangeAsync(weekStart, weekEnd, _clock.UtcNow, ct);
         var materialCache = new Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig>();
         decimal dailyUsed = 0;
         decimal weeklyUsed = 0;
@@ -369,6 +417,16 @@ public sealed class DeadlineRecommendationService
             if (order.RequestedDeliveryDate == date)
                 dailyUsed += orderCapacityUnits;
         }
+        foreach (var reservation in reservations)
+        {
+            if (excludedReservationId.HasValue && reservation.Id == excludedReservationId.Value)
+                continue;
+
+            var reservationCapacityUnits = await ResolveReservationCapacityUnitsAsync(reservation, materialCache, ct);
+            weeklyUsed += reservationCapacityUnits;
+            if (reservation.RequestedDeliveryDate == date)
+                dailyUsed += reservationCapacityUnits;
+        }
 
         return new CapacityUsage(dailyUsed, weeklyUsed);
     }
@@ -381,15 +439,36 @@ public sealed class DeadlineRecommendationService
         if (order.CalculatedCapacityUnits.HasValue)
             return order.CalculatedCapacityUnits.Value;
 
-        var cacheKey = (order.Material, order.RequestedDeliveryDate);
+        return await CalculateCapacityUnitsWithCacheAsync(order.Material, order.WorkItems, order.RequestedDeliveryDate, materialCache, ct);
+    }
+
+    private async Task<decimal> ResolveReservationCapacityUnitsAsync(
+        ReservationRecord reservation,
+        Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig> materialCache,
+        CancellationToken ct)
+    {
+        if (reservation.CalculatedCapacityUnits.HasValue)
+            return reservation.CalculatedCapacityUnits.Value;
+
+        return await CalculateCapacityUnitsWithCacheAsync(reservation.Material, reservation.WorkItems, reservation.RequestedDeliveryDate, materialCache, ct);
+    }
+
+    private async Task<decimal> CalculateCapacityUnitsWithCacheAsync(
+        Material material,
+        IReadOnlyList<OrderWorkItem> workItems,
+        DateOnly deadlineDate,
+        Dictionary<(Material Material, DateOnly DeadlineDate), MaterialSchedulingConfig> materialCache,
+        CancellationToken ct)
+    {
+        var cacheKey = (material, deadlineDate);
         if (!materialCache.TryGetValue(cacheKey, out var config))
         {
-            config = await _materialConfigs.GetForDateAsync(order.Material, order.RequestedDeliveryDate, ct);
+            config = await _materialConfigs.GetForDateAsync(material, deadlineDate, ct);
             ValidateMaterialConfig(config);
             materialCache[cacheKey] = config;
         }
 
-        return OrderWorkItem.AllTeeth(order.WorkItems).Length * config.CapacityUnitsPerTooth;
+        return OrderWorkItem.AllTeeth(workItems).Length * config.CapacityUnitsPerTooth;
     }
 
     private async Task<DateOnly> FindRecommendedDateAsync(DateOnly minimumDate, decimal orderCapacityUnits, long? excludedOrderId, IOrderRepository? orderRepositoryOverride, CancellationToken ct) =>
@@ -407,7 +486,7 @@ public sealed class DeadlineRecommendationService
         var searchLimit = minimumDate.AddDays(SelectableDeadlineSearchLimitDays);
         for (var current = minimumDate; current <= searchLimit; current = current.AddDays(1))
         {
-            var status = await EvaluateDateAsync(current, minimumDate, orderCapacityUnits, excludedOrderId, orderRepositoryOverride, ct);
+            var status = await EvaluateDateAsync(current, minimumDate, orderCapacityUnits, excludedOrderId, null, orderRepositoryOverride, null, ct);
             var accepted = status.IsSelectable;
             checks.Add(ToCandidateCheck(status, accepted));
             if (accepted)
@@ -420,6 +499,7 @@ public sealed class DeadlineRecommendationService
     private async Task<RecommendationSearchResult> FindRecommendedDateWithDateEffectiveMaterialTrailAsync(
         OrderSchedulingInput input,
         IOrderRepository? orderRepositoryOverride,
+        IReservationRepository? reservationRepositoryOverride,
         CancellationToken ct)
     {
         var effectiveIntakeDate = await ResolveEffectiveIntakeBusinessDateAsync(input.ImpressionTimestampUtc, ct);
@@ -428,7 +508,7 @@ public sealed class DeadlineRecommendationService
         for (var current = effectiveIntakeDate; current <= searchLimit; current = current.AddDays(1))
         {
             var basics = await CalculateRecommendationBasicsAsync(input, current, ct);
-            var status = await EvaluateDateAsync(current, basics.MinimumDeadlineDateFromLeadTime, basics.CalculatedOrderCapacityUnits, input.ExcludedOrderId, orderRepositoryOverride, ct);
+            var status = await EvaluateDateAsync(current, basics.MinimumDeadlineDateFromLeadTime, basics.CalculatedOrderCapacityUnits, input.ExcludedOrderId, input.ExcludedReservationId, orderRepositoryOverride, reservationRepositoryOverride, ct);
             var accepted = status.IsSelectable;
             checks.Add(ToCandidateCheck(status, accepted));
             if (accepted)

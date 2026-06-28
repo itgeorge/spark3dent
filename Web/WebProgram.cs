@@ -74,6 +74,7 @@ builder.Services.AddSingleton<IOrderCodeGenerator, DescriptiveOrderCodeGenerator
 builder.Services.AddScoped<IAuthSessionRepository, SqliteAuthSessionRepo>();
 builder.Services.AddScoped<ISchedulingIdentityRepository, SqliteSchedulingIdentityRepo>();
 builder.Services.AddScoped<IOrderRepository, SqliteOrderRepo>();
+builder.Services.AddScoped<IReservationRepository, SqliteReservationRepo>();
 builder.Services.AddScoped<IDeadlineRecommendationLogRepository, SqliteDeadlineRecommendationLogRepository>();
 builder.Services.AddScoped<IDeadlineOverrideLogRepository, SqliteDeadlineOverrideLogRepository>();
 builder.Services.AddScoped<ISchedulingWriteTransaction, SqliteSchedulingWriteTransaction>();
@@ -81,6 +82,7 @@ builder.Services.AddScoped<DeadlineRecommendationService>();
 builder.Services.AddScoped<IAuditLog, SqliteAuditLog>();
 builder.Services.AddScoped<SchedulingAuthService>();
 builder.Services.AddScoped<SchedulingOrderService>();
+builder.Services.AddScoped<SchedulingReservationService>();
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
