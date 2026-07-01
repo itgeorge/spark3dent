@@ -250,6 +250,67 @@ public class SchedulingApiTests
         Assert.That(operations, Does.Contain("SchedulingMaterialConfigUpdated"));
     }
 
+
+    [Test]
+    public async Task SchedulingConfigAdmin_DuplicateCapacityForTodayOrFuture_OverwritesExistingRow()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 30, 21, 30, 0, TimeSpan.Zero));
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var createToday = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-07-01\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":150}"));
+        Assert.That(createToday.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var updateToday = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-07-01\",\"dailyCapacityUnits\":35,\"weeklyCapacityUnits\":175}"));
+        Assert.That(updateToday.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var createFuture = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-07-02\",\"dailyCapacityUnits\":40,\"weeklyCapacityUnits\":200}"));
+        Assert.That(createFuture.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var updateFuture = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-07-02\",\"dailyCapacityUnits\":45,\"weeklyCapacityUnits\":225}"));
+        Assert.That(updateFuture.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var get = await labClient.GetAsync("/api/scheduling/config");
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var capacityRows = JsonDocument.Parse(await get.Content.ReadAsStringAsync()).RootElement.GetProperty("capacityConfigs").EnumerateArray().ToArray();
+        var todayRows = capacityRows.Where(c => c.GetProperty("activeFromDate").GetString() == "2026-07-01").ToArray();
+        var futureRows = capacityRows.Where(c => c.GetProperty("activeFromDate").GetString() == "2026-07-02").ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(todayRows, Has.Length.EqualTo(1));
+            Assert.That(todayRows[0].GetProperty("dailyCapacityUnits").GetDecimal(), Is.EqualTo(35m));
+            Assert.That(todayRows[0].GetProperty("weeklyCapacityUnits").GetDecimal(), Is.EqualTo(175m));
+            Assert.That(futureRows, Has.Length.EqualTo(1));
+            Assert.That(futureRows[0].GetProperty("dailyCapacityUnits").GetDecimal(), Is.EqualTo(45m));
+            Assert.That(futureRows[0].GetProperty("weeklyCapacityUnits").GetDecimal(), Is.EqualTo(225m));
+        });
+
+        await using var ctx = OpenDb(fixture.DbPath);
+        var operations = await ctx.AuditEvents.AsNoTracking().Select(e => e.Operation).ToArrayAsync();
+        Assert.That(operations.Count(o => o == "SchedulingCapacityConfigCreated"), Is.GreaterThanOrEqualTo(2));
+        Assert.That(operations.Count(o => o == "SchedulingCapacityConfigUpdated"), Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public async Task SchedulingConfigAdmin_PastCapacityInsertAllowedButPastOverrideRejected()
+    {
+        using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 30, 21, 30, 0, TimeSpan.Zero));
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var createPast = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-06-30\",\"dailyCapacityUnits\":30,\"weeklyCapacityUnits\":150}"));
+        Assert.That(createPast.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var overridePast = await labClient.PostAsync("/api/scheduling/config/capacity", Json("{\"activeFromDate\":\"2026-06-30\",\"dailyCapacityUnits\":35,\"weeklyCapacityUnits\":175}"));
+        Assert.That(overridePast.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+
+        var get = await labClient.GetAsync("/api/scheduling/config");
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var row = JsonDocument.Parse(await get.Content.ReadAsStringAsync()).RootElement.GetProperty("capacityConfigs").EnumerateArray().Single(c => c.GetProperty("activeFromDate").GetString() == "2026-06-30");
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.GetProperty("dailyCapacityUnits").GetDecimal(), Is.EqualTo(30m));
+            Assert.That(row.GetProperty("weeklyCapacityUnits").GetDecimal(), Is.EqualTo(150m));
+        });
+    }
+
     [Test]
     public async Task SchedulingConfigAdmin_RejectsInvalidValues()
     {
@@ -1212,6 +1273,11 @@ public class SchedulingApiTests
 
         var overlap = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-18\",\"endDate\":\"2026-06-19\"}"));
         Assert.That(overlap.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+
+        var invalidCreate = await labClient.PostAsync("/api/scheduling/config/lab-offdays", Json("{\"startDate\":\"2026-06-20\",\"endDate\":\"2026-06-19\"}"));
+        Assert.That(invalidCreate.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var invalidUpdate = await labClient.PutAsync($"/api/scheduling/config/lab-offdays/{id}", Json("{\"startDate\":\"2026-06-20\",\"endDate\":\"2026-06-19\"}"));
+        Assert.That(invalidUpdate.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 
         var update = await labClient.PutAsync($"/api/scheduling/config/lab-offdays/{id}", Json("{\"startDate\":\"2026-06-19\",\"endDate\":\"2026-06-19\"}"));
         Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.OK));

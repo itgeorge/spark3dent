@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Database.Entities;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
+using Orders;
 
 namespace Database.Tests;
 
@@ -85,4 +86,107 @@ public class SqliteSchedulingCapacityConfigProviderTest
         Assert.That(ex!.Message, Does.Contain("missing").IgnoreCase);
         Assert.That(ex.Message, Does.Contain("2025-12-31"));
     }
+
+    [Test]
+    public async Task CreateAsync_GivenDuplicateForLabLocalToday_UpdatesExistingRow()
+    {
+        var originalCreatedAt = DateTimeOffset.Parse("2026-06-29T10:00:00Z");
+        var now = DateTimeOffset.Parse("2026-06-30T21:30:00Z"); // 2026-07-01 in Bulgaria/Sofia.
+        await SeedCapacityConfigAsync(new DateOnly(2026, 7, 1), 10m, 50m, originalCreatedAt);
+        var provider = new SqliteSchedulingCapacityConfigProvider(_contextFactory);
+
+        var saved = await provider.CreateAsync(new SchedulingCapacityConfigCreate(new DateOnly(2026, 7, 1), 12m, 60m), now);
+
+        await using var ctx = _contextFactory();
+        var rows = await ctx.SchedulingCapacityConfigs.AsNoTracking().Where(c => c.ActiveFromDate == new DateOnly(2026, 7, 1)).ToArrayAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows, Has.Length.EqualTo(1));
+            Assert.That(saved.Id, Is.EqualTo(rows[0].Id));
+            Assert.That(rows[0].DailyCapacityUnits, Is.EqualTo(12m));
+            Assert.That(rows[0].WeeklyCapacityUnits, Is.EqualTo(60m));
+            Assert.That(rows[0].CreatedAt, Is.EqualTo(originalCreatedAt));
+            Assert.That(rows[0].UpdatedAt, Is.EqualTo(now));
+        });
+    }
+
+    [Test]
+    public async Task CreateAsync_GivenDuplicateForFutureDate_UpdatesExistingRow()
+    {
+        var originalCreatedAt = DateTimeOffset.Parse("2026-06-29T10:00:00Z");
+        var now = DateTimeOffset.Parse("2026-06-30T21:30:00Z");
+        await SeedCapacityConfigAsync(new DateOnly(2026, 7, 2), 10m, 50m, originalCreatedAt);
+        var provider = new SqliteSchedulingCapacityConfigProvider(_contextFactory);
+
+        var saved = await provider.CreateAsync(new SchedulingCapacityConfigCreate(new DateOnly(2026, 7, 2), 14m, 70m), now);
+
+        await using var ctx = _contextFactory();
+        var rows = await ctx.SchedulingCapacityConfigs.AsNoTracking().Where(c => c.ActiveFromDate == new DateOnly(2026, 7, 2)).ToArrayAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows, Has.Length.EqualTo(1));
+            Assert.That(saved.Id, Is.EqualTo(rows[0].Id));
+            Assert.That(rows[0].DailyCapacityUnits, Is.EqualTo(14m));
+            Assert.That(rows[0].WeeklyCapacityUnits, Is.EqualTo(70m));
+            Assert.That(rows[0].CreatedAt, Is.EqualTo(originalCreatedAt));
+            Assert.That(rows[0].UpdatedAt, Is.EqualTo(now));
+        });
+    }
+
+    [Test]
+    public async Task CreateAsync_GivenDuplicateForPastDate_RejectsAndLeavesExistingRowUnchanged()
+    {
+        var originalCreatedAt = DateTimeOffset.Parse("2026-06-29T10:00:00Z");
+        var now = DateTimeOffset.Parse("2026-06-30T21:30:00Z");
+        await SeedCapacityConfigAsync(new DateOnly(2026, 6, 30), 10m, 50m, originalCreatedAt);
+        var provider = new SqliteSchedulingCapacityConfigProvider(_contextFactory);
+
+        Assert.ThrowsAsync<DuplicateSchedulingCapacityConfigDateException>(async () =>
+            await provider.CreateAsync(new SchedulingCapacityConfigCreate(new DateOnly(2026, 6, 30), 14m, 70m), now));
+
+        await using var ctx = _contextFactory();
+        var row = await ctx.SchedulingCapacityConfigs.AsNoTracking().SingleAsync(c => c.ActiveFromDate == new DateOnly(2026, 6, 30));
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.DailyCapacityUnits, Is.EqualTo(10m));
+            Assert.That(row.WeeklyCapacityUnits, Is.EqualTo(50m));
+            Assert.That(row.CreatedAt, Is.EqualTo(originalCreatedAt));
+            Assert.That(row.UpdatedAt, Is.EqualTo(originalCreatedAt));
+        });
+    }
+
+    [Test]
+    public async Task CreateAsync_GivenPastDateWithoutExistingRow_CreatesRow()
+    {
+        var now = DateTimeOffset.Parse("2026-06-30T21:30:00Z");
+        var provider = new SqliteSchedulingCapacityConfigProvider(_contextFactory);
+
+        var saved = await provider.CreateAsync(new SchedulingCapacityConfigCreate(new DateOnly(2026, 6, 30), 14m, 70m), now);
+
+        await using var ctx = _contextFactory();
+        var row = await ctx.SchedulingCapacityConfigs.AsNoTracking().SingleAsync(c => c.ActiveFromDate == new DateOnly(2026, 6, 30));
+        Assert.Multiple(() =>
+        {
+            Assert.That(saved.Id, Is.EqualTo(row.Id));
+            Assert.That(row.DailyCapacityUnits, Is.EqualTo(14m));
+            Assert.That(row.WeeklyCapacityUnits, Is.EqualTo(70m));
+            Assert.That(row.CreatedAt, Is.EqualTo(now));
+            Assert.That(row.UpdatedAt, Is.EqualTo(now));
+        });
+    }
+
+    private async Task SeedCapacityConfigAsync(DateOnly activeFromDate, decimal dailyCapacityUnits, decimal weeklyCapacityUnits, DateTimeOffset timestamp)
+    {
+        await using var ctx = _contextFactory();
+        ctx.SchedulingCapacityConfigs.Add(new SchedulingCapacityConfigEntity
+        {
+            ActiveFromDate = activeFromDate,
+            DailyCapacityUnits = dailyCapacityUnits,
+            WeeklyCapacityUnits = weeklyCapacityUnits,
+            CreatedAt = timestamp,
+            UpdatedAt = timestamp
+        });
+        await ctx.SaveChangesAsync();
+    }
+
 }

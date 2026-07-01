@@ -71,7 +71,7 @@ public static class SchedulingApi
             var materialSchedulingConfigs = materialConfigRows.Select(ToMaterialSchedulingConfigDto);
             var missingMaterials = materialOptions.Where(x => !x.HasAnyConfig).ToArray();
             var capacityConfigRows = await capacityConfigs.ListAdminAsync(ctx.RequestAborted);
-            var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime.Date);
+            var today = ToLabLocalDate(clock.UtcNow);
             var currentCapacityConfigId = capacityConfigRows
                 .Where(c => c.ActiveFromDate <= today)
                 .OrderByDescending(c => c.ActiveFromDate)
@@ -91,9 +91,20 @@ public static class SchedulingApi
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var created = await capacityConfigs.CreateAsync(body, clock.UtcNow, ctx.RequestAborted);
-                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, "SchedulingCapacityConfigCreated", "SchedulingCapacityConfig", created.Id.ToString(), created.ActiveFromDate.ToString("yyyy-MM-dd"), new { @new = created });
-                return Results.Json(new { capacityConfig = ToCapacityConfigDto(created, DateOnly.FromDateTime(clock.UtcNow.UtcDateTime.Date), created.ActiveFromDate <= DateOnly.FromDateTime(clock.UtcNow.UtcDateTime.Date) ? created.Id : (long?)null) }, statusCode: 201, options: JsonOptions);
+                var today = ToLabLocalDate(clock.UtcNow);
+                var old = (await capacityConfigs.ListAdminAsync(ctx.RequestAborted)).FirstOrDefault(c => c.ActiveFromDate == body.ActiveFromDate);
+                var saved = await capacityConfigs.CreateAsync(body, clock.UtcNow, ctx.RequestAborted);
+                var wasUpdated = old != null;
+                var operation = wasUpdated ? "SchedulingCapacityConfigUpdated" : "SchedulingCapacityConfigCreated";
+                await AppendSchedulingConfigAuditAsync(auditLog, clock, ctx, operation, "SchedulingCapacityConfig", saved.Id.ToString(), saved.ActiveFromDate.ToString("yyyy-MM-dd"), new { old, @new = saved });
+                var rows = await capacityConfigs.ListAdminAsync(ctx.RequestAborted);
+                var currentCapacityConfigId = rows
+                    .Where(c => c.ActiveFromDate <= today)
+                    .OrderByDescending(c => c.ActiveFromDate)
+                    .ThenByDescending(c => c.Id)
+                    .Select(c => (long?)c.Id)
+                    .FirstOrDefault();
+                return Results.Json(new { capacityConfig = ToCapacityConfigDto(saved, today, currentCapacityConfigId) }, statusCode: wasUpdated ? 200 : 201, options: JsonOptions);
             }
             catch (DuplicateSchedulingCapacityConfigDateException ex)
             {
@@ -841,6 +852,9 @@ public static class SchedulingApi
         c.StartDate == c.EndDate
             ? c.StartDate.ToString("yyyy-MM-dd")
             : $"{c.StartDate:yyyy-MM-dd} - {c.EndDate:yyyy-MM-dd}";
+
+    private static DateOnly ToLabLocalDate(DateTimeOffset timestamp) =>
+        DateOnly.FromDateTime(LabTimeZone.ToLabLocal(timestamp).DateTime);
 
     private static IReadOnlyList<DateOnly> ExpandLabOffdayDates(IEnumerable<LabOffdayRecord> rows, DateOnly start, DateOnly end)
     {

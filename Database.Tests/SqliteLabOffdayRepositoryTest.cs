@@ -109,6 +109,19 @@ public class SqliteLabOffdayRepositoryTest
     }
 
     [Test]
+    public async Task UpdateAsync_RejectsInvalidRange()
+    {
+        var repo = new SqliteLabOffdayRepository(_contextFactory);
+        var created = await repo.CreateAsync(new LabOffdayCreate(new DateOnly(2026, 7, 10), new DateOnly(2026, 7, 10)), _now);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await repo.UpdateAsync(created.Id, new LabOffdayUpdate(new DateOnly(2026, 7, 12), new DateOnly(2026, 7, 10)), _now.AddHours(1)));
+
+        Assert.That(ex!.Message, Does.Contain("end date"));
+    }
+
+
+    [Test]
     public async Task CreateAndUpdateAsync_RejectOverlappingRanges()
     {
         var repo = new SqliteLabOffdayRepository(_contextFactory);

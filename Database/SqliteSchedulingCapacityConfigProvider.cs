@@ -50,8 +50,19 @@ public sealed class SqliteSchedulingCapacityConfigProvider : ISchedulingCapacity
     {
         SchedulingConfigValidation.Validate(create);
         await using var ctx = _contextFactory();
-        if (await ctx.SchedulingCapacityConfigs.AnyAsync(c => c.ActiveFromDate == create.ActiveFromDate, ct))
-            throw new DuplicateSchedulingCapacityConfigDateException(create.ActiveFromDate);
+        var existing = await ctx.SchedulingCapacityConfigs.FirstOrDefaultAsync(c => c.ActiveFromDate == create.ActiveFromDate, ct);
+        if (existing != null)
+        {
+            var today = ToLabLocalDate(now);
+            if (create.ActiveFromDate < today)
+                throw new DuplicateSchedulingCapacityConfigDateException(create.ActiveFromDate);
+
+            existing.DailyCapacityUnits = create.DailyCapacityUnits;
+            existing.WeeklyCapacityUnits = create.WeeklyCapacityUnits;
+            existing.UpdatedAt = now;
+            await ctx.SaveChangesAsync(ct);
+            return ToAdminRecord(existing);
+        }
 
         var entity = new SchedulingCapacityConfigEntity
         {
@@ -75,6 +86,9 @@ public sealed class SqliteSchedulingCapacityConfigProvider : ISchedulingCapacity
 
     private static SchedulingCapacityConfig ToDomain(SchedulingCapacityConfigEntity entity) =>
         new(entity.Id, entity.ActiveFromDate, entity.DailyCapacityUnits, entity.WeeklyCapacityUnits);
+
+    private static DateOnly ToLabLocalDate(DateTimeOffset timestamp) =>
+        DateOnly.FromDateTime(LabTimeZone.ToLabLocal(timestamp).DateTime);
 
     private static SchedulingCapacityConfigAdminRecord ToAdminRecord(SchedulingCapacityConfigEntity entity) =>
         new(entity.Id, entity.ActiveFromDate, entity.DailyCapacityUnits, entity.WeeklyCapacityUnits, entity.CreatedAt, entity.UpdatedAt);
