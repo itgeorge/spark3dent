@@ -120,7 +120,10 @@ app.Use(async (context, next) =>
 
 app.UseStaticFiles();
 
-app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+app.MapMethods("/healthz", [HttpMethods.Get, HttpMethods.Head], (HttpContext ctx) =>
+    HttpMethods.IsHead(ctx.Request.Method)
+        ? Results.Ok()
+        : Results.Ok(new { status = "ok" }));
 
 var webAssembly = Assembly.GetExecutingAssembly();
 app.MapGet("/", async (HttpContext ctx, Config cfg, SchedulingAuthService auth) =>
