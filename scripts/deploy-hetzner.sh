@@ -1,23 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-hetzner-agent() {
-  # If we already have a working agent, don't start a new one
-  if [ -n "${SSH_AUTH_SOCK:-}" ] && ssh-add -l >/dev/null 2>&1; then
-    # Add the key only if it's not already loaded
-    ssh-add -l 2>/dev/null | grep -q "id_ed25519_hetzner" || ssh-add ~/.ssh/id_ed25519_hetzner
-    echo "ssh-agent already running; hetzner key ensured."
-    return 0
-  fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/ssh-hetzner-agent.sh"
 
-  # Otherwise start a new agent and add the key
-  eval "$(ssh-agent -s)" >/dev/null
-  ssh-add ~/.ssh/id_ed25519_hetzner
-  echo "Started ssh-agent and loaded hetzner key."
-}
-
-# Start ssh-agent and load hetzner key if not already running
-hetzner-agent
+ensure_hetzner_ssh_agent
 
 SSH_HOST="${SSH_HOST:-spark3dent-hetzner}"
 IMAGE_NAME="${IMAGE_NAME:-spark3dent-web}"
