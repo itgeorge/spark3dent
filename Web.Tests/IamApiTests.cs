@@ -96,6 +96,27 @@ public class IamApiTests
     }
 
     [Test]
+    public async Task IamApi_CreateClinicWithDuplicateCode_ReturnsBadRequest()
+    {
+        using var fixture = new ApiTestFixture();
+        using var lab = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(lab);
+        await CreateClinicAsync(lab, "DUPLICATE", "Duplicate Original", null, "assistant-1", "Assistant", "123456");
+
+        var duplicate = await lab.PostAsync("/api/iam/organizations", Json("""
+        {
+          "code":"duplicate",
+          "displayName":"Duplicate Again",
+          "displayColor":"#123abc",
+          "initialMember":{"id":"front-desk","label":"Front Desk","secret":"custom secret 2026!"}
+        }
+        """));
+
+        Assert.That(duplicate.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await duplicate.Content.ReadAsStringAsync(), Does.Contain("Organization code already exists."));
+    }
+
+    [Test]
     public async Task IamApi_CanEditDeactivateReactivateClinic_AndRevokeClinicSessions()
     {
         using var fixture = new ApiTestFixture();
