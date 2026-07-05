@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/ssh-hetzner-agent.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/ensure-docker-engine.sh"
 
 ensure_hetzner_ssh_agent
 
@@ -106,6 +108,8 @@ if [[ "${SKIP_BUILD}" == "true" ]]; then
   fi
   echo "Skip-build mode enabled. Reusing image archive: ${IMAGE_TAR}"
 else
+  ensure_docker_engine
+
   echo "Building image ${IMAGE_REF}..."
   docker build -f "${REPO_ROOT}/Web/Dockerfile" -t "${IMAGE_REF}" "${REPO_ROOT}"
 
