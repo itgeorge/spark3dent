@@ -15,9 +15,9 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
 
     public async Task<SchedulingOrganization?> FindOrganizationByCodeAsync(string organizationCode, bool includeInactive = false, CancellationToken ct = default)
     {
-        var normalized = organizationCode.Trim();
+        var normalized = OrganizationCodes.Normalize(organizationCode);
         var lab = await GetLabAsync(includeInactive, ct);
-        if (lab != null && string.Equals(lab.Code, normalized, StringComparison.OrdinalIgnoreCase))
+        if (lab != null && lab.Code == normalized)
             return ToOrganization(lab);
 
         var clinic = await GetClinicAsync(normalized, includeInactive, ct);
@@ -26,12 +26,13 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
 
     public async Task<SchedulingOrganization?> GetOrganizationAsync(OrganizationType organizationType, string organizationCode, bool includeInactive = false, CancellationToken ct = default)
     {
+        var normalized = OrganizationCodes.Normalize(organizationCode);
         return organizationType switch
         {
-            OrganizationType.Lab => (await GetLabAsync(includeInactive, ct)) is { } lab && string.Equals(lab.Code, organizationCode, StringComparison.OrdinalIgnoreCase)
+            OrganizationType.Lab => (await GetLabAsync(includeInactive, ct)) is { } lab && lab.Code == normalized
                 ? ToOrganization(lab)
                 : null,
-            OrganizationType.Clinic => (await GetClinicAsync(organizationCode, includeInactive, ct)) is { } clinic
+            OrganizationType.Clinic => (await GetClinicAsync(normalized, includeInactive, ct)) is { } clinic
                 ? ToOrganization(clinic)
                 : null,
             _ => null
@@ -51,8 +52,8 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
     public async Task<SchedulingClinic?> GetClinicAsync(string clinicCode, bool includeInactive = false, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
-        var normalized = clinicCode.Trim().ToUpperInvariant();
-        var query = ctx.SchedulingClinics.AsNoTracking().Where(x => x.Code.ToUpper() == normalized);
+        var normalized = OrganizationCodes.Normalize(clinicCode);
+        var query = ctx.SchedulingClinics.AsNoTracking().Where(x => x.Code == normalized);
         if (!includeInactive)
             query = query.Where(x => x.IsActive);
         var entity = await query.FirstOrDefaultAsync(ct);
@@ -75,10 +76,10 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
     public async Task<SchedulingMember?> GetMemberAsync(OrganizationType organizationType, string organizationCode, string memberId, bool includeInactive = false, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
-        var orgCode = organizationCode.Trim().ToUpperInvariant();
+        var orgCode = OrganizationCodes.Normalize(organizationCode);
         var id = memberId.Trim().ToUpperInvariant();
         var query = ctx.SchedulingMembers.AsNoTracking()
-            .Where(x => x.OrganizationType == organizationType && x.OrganizationCode.ToUpper() == orgCode && x.Id.ToUpper() == id);
+            .Where(x => x.OrganizationType == organizationType && x.OrganizationCode == orgCode && x.Id.ToUpper() == id);
         if (!includeInactive)
             query = query.Where(x => x.IsActive);
         var entity = await query.FirstOrDefaultAsync(ct);
@@ -88,9 +89,9 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
     public async Task<IReadOnlyList<SchedulingMember>> ListMembersAsync(OrganizationType organizationType, string organizationCode, bool includeInactive = false, CancellationToken ct = default)
     {
         await using var ctx = _contextFactory();
-        var orgCode = organizationCode.Trim().ToUpperInvariant();
+        var orgCode = OrganizationCodes.Normalize(organizationCode);
         var query = ctx.SchedulingMembers.AsNoTracking()
-            .Where(x => x.OrganizationType == organizationType && x.OrganizationCode.ToUpper() == orgCode);
+            .Where(x => x.OrganizationType == organizationType && x.OrganizationCode == orgCode);
         if (!includeInactive)
             query = query.Where(x => x.IsActive);
         var entities = await query
@@ -109,8 +110,8 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
         if (existing != null && !reset)
             throw new InvalidOperationException("A lab already exists. Re-run with --reset to replace bootstrap identity.");
 
-        var requestedLabCode = request.LabCode.Trim().ToUpperInvariant();
-        if (await ctx.SchedulingClinics.AnyAsync(c => c.Code.ToUpper() == requestedLabCode, ct))
+        var labCode = OrganizationCodes.Normalize(request.LabCode);
+        if (await ctx.SchedulingClinics.AnyAsync(c => c.Code == labCode, ct))
             throw new InvalidOperationException("Lab code conflicts with an existing clinic code.");
 
         var oldLabCode = existing?.Code;
@@ -124,49 +125,49 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
             ctx.SchedulingLabs.Add(existing);
         }
 
-        existing.Code = request.LabCode;
+        existing.Code = labCode;
         existing.DisplayName = request.LabDisplayName;
         existing.IsActive = true;
         existing.UpdatedAt = request.Now;
         if (existing.CreatedAt == default)
             existing.CreatedAt = request.Now;
 
-        if (!string.IsNullOrWhiteSpace(oldLabCode) && !string.Equals(oldLabCode, request.LabCode, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(oldLabCode) && !string.Equals(oldLabCode, labCode, StringComparison.OrdinalIgnoreCase))
         {
             await ctx.SchedulingMembers
                 .Where(m => m.OrganizationType == OrganizationType.Lab && m.OrganizationCode == oldLabCode)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.OrganizationCode, request.LabCode), ct);
+                .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.OrganizationCode, labCode), ct);
             await ctx.SchedulingAuthSessions
                 .Where(s => s.OrganizationType == OrganizationType.Lab && s.OrganizationCode == oldLabCode)
                 .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(s => s.OrganizationCode, request.LabCode)
+                    .SetProperty(s => s.OrganizationCode, labCode)
                     .SetProperty(s => s.RevokedAt, request.Now), ct);
         }
         else if (reset)
         {
             await ctx.SchedulingAuthSessions
-                .Where(s => s.OrganizationType == OrganizationType.Lab && s.OrganizationCode == request.LabCode && s.RevokedAt == null)
+                .Where(s => s.OrganizationType == OrganizationType.Lab && s.OrganizationCode == labCode && s.RevokedAt == null)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.RevokedAt, request.Now), ct);
         }
 
         if (reset)
         {
             await ctx.SchedulingMembers
-                .Where(m => m.OrganizationType == OrganizationType.Lab && m.OrganizationCode == request.LabCode)
+                .Where(m => m.OrganizationType == OrganizationType.Lab && m.OrganizationCode == labCode)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(m => m.IsActive, false)
                     .SetProperty(m => m.UpdatedAt, request.Now), ct);
         }
 
         var member = await ctx.SchedulingMembers.FirstOrDefaultAsync(
-            m => m.OrganizationType == OrganizationType.Lab && m.OrganizationCode == request.LabCode && m.Id == request.MemberId,
+            m => m.OrganizationType == OrganizationType.Lab && m.OrganizationCode == labCode && m.Id == request.MemberId,
             ct);
         if (member == null)
         {
             member = new SchedulingMemberEntity
             {
                 OrganizationType = OrganizationType.Lab,
-                OrganizationCode = request.LabCode,
+                OrganizationCode = labCode,
                 Id = request.MemberId,
                 CreatedAt = request.Now
             };
@@ -188,14 +189,14 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
     {
         await using var ctx = _contextFactory();
         await using var tx = await ctx.Database.BeginTransactionAsync(ct);
-        var normalized = request.Code.ToUpperInvariant();
-        if (await ctx.SchedulingLabs.AnyAsync(l => l.Code.ToUpper() == normalized, ct)
-            || await ctx.SchedulingClinics.AnyAsync(c => c.Code.ToUpper() == normalized, ct))
+        var code = OrganizationCodes.Normalize(request.Code);
+        if (await ctx.SchedulingLabs.AnyAsync(l => l.Code == code, ct)
+            || await ctx.SchedulingClinics.AnyAsync(c => c.Code == code, ct))
             throw new InvalidOperationException("Organization code already exists.");
 
         var clinic = new SchedulingClinicEntity
         {
-            Code = request.Code,
+            Code = code,
             DisplayName = request.DisplayName,
             LinkedClientNickname = request.LinkedClientNickname,
             DisplayColor = request.DisplayColor,
@@ -207,7 +208,7 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
         ctx.SchedulingMembers.Add(new SchedulingMemberEntity
         {
             OrganizationType = OrganizationType.Clinic,
-            OrganizationCode = request.Code,
+            OrganizationCode = code,
             Id = initialMember.Id,
             Label = initialMember.Label,
             PinHash = initialMember.PinHash,
@@ -306,28 +307,28 @@ public sealed class SqliteSchedulingIdentityRepo : ISchedulingIdentityRepository
 
     private static async Task<SchedulingClinicEntity?> FindClinicEntityAsync(AppDbContext ctx, string clinicCode, CancellationToken ct)
     {
-        var normalized = clinicCode.Trim().ToUpperInvariant();
-        return await ctx.SchedulingClinics.FirstOrDefaultAsync(c => c.Code.ToUpper() == normalized, ct);
+        var normalized = OrganizationCodes.Normalize(clinicCode);
+        return await ctx.SchedulingClinics.FirstOrDefaultAsync(c => c.Code == normalized, ct);
     }
 
     private static async Task<(string Code, bool IsActive)?> FindOrganizationEntityAsync(AppDbContext ctx, OrganizationType organizationType, string organizationCode, CancellationToken ct)
     {
-        var normalized = organizationCode.Trim().ToUpperInvariant();
+        var normalized = OrganizationCodes.Normalize(organizationCode);
         if (organizationType == OrganizationType.Lab)
         {
-            var lab = await ctx.SchedulingLabs.FirstOrDefaultAsync(l => l.Code.ToUpper() == normalized, ct);
+            var lab = await ctx.SchedulingLabs.FirstOrDefaultAsync(l => l.Code == normalized, ct);
             return lab == null ? null : (lab.Code, lab.IsActive);
         }
-        var clinic = await ctx.SchedulingClinics.FirstOrDefaultAsync(c => c.Code.ToUpper() == normalized, ct);
+        var clinic = await ctx.SchedulingClinics.FirstOrDefaultAsync(c => c.Code == normalized, ct);
         return clinic == null ? null : (clinic.Code, clinic.IsActive);
     }
 
     private static async Task<SchedulingMemberEntity?> FindMemberEntityAsync(AppDbContext ctx, OrganizationType organizationType, string organizationCode, string memberId, CancellationToken ct)
     {
-        var normalizedOrg = organizationCode.Trim().ToUpperInvariant();
+        var normalizedOrg = OrganizationCodes.Normalize(organizationCode);
         var normalizedMember = memberId.Trim().ToUpperInvariant();
         return await ctx.SchedulingMembers.FirstOrDefaultAsync(m =>
-            m.OrganizationType == organizationType && m.OrganizationCode.ToUpper() == normalizedOrg && m.Id.ToUpper() == normalizedMember,
+            m.OrganizationType == organizationType && m.OrganizationCode == normalizedOrg && m.Id.ToUpper() == normalizedMember,
             ct);
     }
 

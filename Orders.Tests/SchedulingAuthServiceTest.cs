@@ -43,6 +43,24 @@ public class SchedulingAuthServiceTest
     }
 
     [Test]
+    public async Task LoginAsync_GivenLowercaseOrganizationCode_ReturnsActor()
+    {
+        var hasher = new PinHasher();
+        var members = new[]
+        {
+            new SchedulingMember(OrganizationType.Clinic, "DEMO", "cred-1", "Cred 1", hasher.Hash("123456", iterations: 10_000), true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        };
+        var identities = new InMemorySchedulingIdentityRepository(members: members);
+        var clock = new MutableClock(new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero));
+        var repo = new InMemoryAuthSessionRepository();
+        var service = new SchedulingAuthService(TestSchedulingConfigProvider.Create(), identities, repo, hasher, clock);
+
+        var result = await service.LoginAsync("demo", "123456", "127.0.0.1", "test");
+
+        Assert.That(result.Actor.OrganizationCode, Is.EqualTo("DEMO"));
+    }
+
+    [Test]
     public async Task LoginAsync_GivenClinicMember_ReturnsClinicActor()
     {
         var hasher = new PinHasher();

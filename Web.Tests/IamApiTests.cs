@@ -232,6 +232,39 @@ public class IamApiTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
     }
 
+    [Test]
+    public async Task Login_AcceptsCaseInsensitiveOrganizationCode()
+    {
+        using var fixture = new ApiTestFixture();
+
+        Assert.That((await TryLoginAsync(fixture, "demo", "123456")).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await TryLoginAsync(fixture, "lab", "654321")).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task IamApi_CreateOrganization_StoresUppercaseCode()
+    {
+        using var fixture = new ApiTestFixture();
+        using var lab = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(lab);
+        await CreateClientAsync(lab, "lowercase-client", "Lowercase Dental", "LOW123", "Sofia");
+
+        var create = await lab.PostAsync("/api/iam/organizations", Json("""
+        {
+          "code":"mixed-Clinic",
+          "displayName":"Mixed Case Clinic",
+          "linkedClientNickname":"lowercase-client",
+          "displayColor":"#123abc",
+          "initialMember":{"id":"front-desk","label":"Front Desk","secret":"custom secret 2026!"}
+        }
+        """));
+        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var createJson = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+        Assert.That(createJson.RootElement.GetProperty("organization").GetProperty("code").GetString(), Is.EqualTo("MIXED-CLINIC"));
+
+        Assert.That((await TryLoginAsync(fixture, "mixed-clinic", "custom secret 2026!")).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
     private static async Task<HttpResponseMessage> TryLoginAsync(ApiTestFixture fixture, string organizationCode, string secret)
     {
         var client = fixture.CreateClient();

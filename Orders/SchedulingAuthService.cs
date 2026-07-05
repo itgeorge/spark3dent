@@ -30,7 +30,7 @@ public sealed class SchedulingAuthService
 
     public async Task<LoginResult> LoginAsync(string organizationCode, string pin, string ip, string userAgent, CancellationToken ct = default)
     {
-        var normalizedCode = organizationCode.Trim();
+        var normalizedCode = OrganizationCodes.Normalize(organizationCode);
         var organization = await _identities.FindOrganizationByCodeAsync(normalizedCode, includeInactive: false, ct)
             ?? throw new InvalidOperationException("Invalid credentials.");
         var member = (await _identities.ListMembersAsync(organization.OrganizationType, organization.Code, includeInactive: false, ct))

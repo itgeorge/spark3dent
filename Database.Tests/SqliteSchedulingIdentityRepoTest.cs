@@ -33,6 +33,53 @@ public class SqliteSchedulingIdentityRepoTest
     }
 
     [Test]
+    public async Task BootstrapLabAsync_StoresLabCodeUppercase()
+    {
+        var repo = new SqliteSchedulingIdentityRepo(_contextFactory);
+        var now = DateTimeOffset.Parse("2026-06-08T10:00:00Z");
+
+        var lab = await repo.BootstrapLabAsync(new LabBootstrapRequest("lab", "Spark3Dent Lab", "lab-1", "Lab Admin", "hash-1", now), reset: false);
+
+        Assert.That(lab.Code, Is.EqualTo("LAB"));
+        await using var ctx = _contextFactory();
+        Assert.That((await ctx.SchedulingLabs.SingleAsync()).Code, Is.EqualTo("LAB"));
+        Assert.That((await ctx.SchedulingMembers.SingleAsync()).OrganizationCode, Is.EqualTo("LAB"));
+    }
+
+    [Test]
+    public async Task CreateClinicWithInitialMemberAsync_StoresClinicCodeUppercase()
+    {
+        var repo = new SqliteSchedulingIdentityRepo(_contextFactory);
+        var now = DateTimeOffset.Parse("2026-06-08T10:00:00Z");
+        await repo.BootstrapLabAsync(new LabBootstrapRequest("LAB", "Lab", "lab-1", "Lab", "hash-lab", now), reset: false);
+
+        var clinic = await repo.CreateClinicWithInitialMemberAsync(
+            new ClinicCreateRequest("alpha-clinic", "Alpha Clinic", null, "#7c3aed", now),
+            new MemberCreateRequest("assistant-1", "Assistant", "hash-1", now));
+
+        Assert.That(clinic.Code, Is.EqualTo("ALPHA-CLINIC"));
+        await using var ctx = _contextFactory();
+        Assert.That((await ctx.SchedulingClinics.SingleAsync()).Code, Is.EqualTo("ALPHA-CLINIC"));
+        Assert.That((await ctx.SchedulingMembers.SingleAsync(m => m.OrganizationType == OrganizationType.Clinic)).OrganizationCode, Is.EqualTo("ALPHA-CLINIC"));
+    }
+
+    [Test]
+    public async Task GetClinicAsync_UsesPrimaryKeyLookupWithNormalizedInput()
+    {
+        var repo = new SqliteSchedulingIdentityRepo(_contextFactory);
+        var now = DateTimeOffset.Parse("2026-06-08T10:00:00Z");
+        await repo.BootstrapLabAsync(new LabBootstrapRequest("LAB", "Lab", "lab-1", "Lab", "hash-lab", now), reset: false);
+        await repo.CreateClinicWithInitialMemberAsync(
+            new ClinicCreateRequest("DEMO", "Demo", null, "#7c3aed", now),
+            new MemberCreateRequest("assistant-1", "Assistant", "hash-1", now));
+
+        var clinic = await repo.GetClinicAsync("demo");
+
+        Assert.That(clinic, Is.Not.Null);
+        Assert.That(clinic!.Code, Is.EqualTo("DEMO"));
+    }
+
+    [Test]
     public async Task BootstrapLabAsync_CreatesLabAndMember_AndRefusesWithoutReset()
     {
         var repo = new SqliteSchedulingIdentityRepo(_contextFactory);
