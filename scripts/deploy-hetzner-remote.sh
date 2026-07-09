@@ -27,34 +27,7 @@ ENV_FILE="${ENV_FILE:-${REMOTE_DIR}/.env}"
 CHUNK_DIR="${CHUNK_DIR:-${REMOTE_DIR}/chunks}"
 COMPOSE_PATH="${REMOTE_DIR}/${COMPOSE_FILE}"
 
-OAUTH2_DIR="${REMOTE_DIR}/oauth2-proxy"
-OAUTH2_CONFIG_DIR="${OAUTH2_DIR}/config"
-OAUTH2_ENV_FILE="${OAUTH2_DIR}/.env"
-ALLOWED_EMAILS_FILE="${OAUTH2_CONFIG_DIR}/allowed_emails.txt"
-
-mkdir -p "${REMOTE_DIR}/data" "${REMOTE_DIR}/blobs" "${REMOTE_DIR}/logs" "${REMOTE_DIR}/backups" "${OAUTH2_CONFIG_DIR}"
-
-if [[ ! -f "${ALLOWED_EMAILS_FILE}" ]]; then
-  cat > "${ALLOWED_EMAILS_FILE}" <<'ALLOWED_EMAILS_EOF'
-# One Google account per line. Only listed emails can access the app.
-# owner@example.com
-ALLOWED_EMAILS_EOF
-fi
-
-if [[ ! -f "${OAUTH2_ENV_FILE}" ]]; then
-  cat > "${OAUTH2_ENV_FILE}" <<'OAUTH_ENV_EOF'
-# Google OAuth client credentials
-OAUTH2_PROXY_CLIENT_ID=
-OAUTH2_PROXY_CLIENT_SECRET=
-
-# Random 32-character ascii string (representing 32 random bytes)
-OAUTH2_PROXY_COOKIE_SECRET=
-
-# Must match your deployed domain callback path
-OAUTH2_PROXY_REDIRECT_URL=https://spark3dent.com/oauth2/callback
-OAUTH2_PROXY_ALLOWED_EMAILS_FILE=/config/allowed_emails.txt
-OAUTH_ENV_EOF
-fi
+mkdir -p "${REMOTE_DIR}/data" "${REMOTE_DIR}/blobs" "${REMOTE_DIR}/logs" "${REMOTE_DIR}/backups"
 
 # Backup dependencies (sqlite3 for .backup; tar/gzip assumed present)
 if ! command -v sqlite3 >/dev/null 2>&1; then
