@@ -6,8 +6,8 @@ public sealed record DeadlineOverrideRequest(
 
 public sealed record DeadlineOverrideLog(
     long Id,
-    long OrderId,
-    string OrderCode,
+    long? OrderId,
+    string? OrderCode,
     DateTimeOffset CreatedAtUtc,
     string CreatedByOrganizationType,
     string CreatedByOrganizationCode,
@@ -26,12 +26,15 @@ public sealed record DeadlineOverrideLog(
     decimal? WeeklyCapacityLimitUsed,
     decimal? DailyCapacityAfterOverride,
     decimal? WeeklyCapacityAfterOverride,
-    string? CalendarReason);
+    string? CalendarReason,
+    string EntityType = "order",
+    long? ReservationId = null);
 
 public interface IDeadlineOverrideLogRepository
 {
     Task<DeadlineOverrideLog> AddAsync(DeadlineOverrideLog log, CancellationToken ct = default);
     Task<IReadOnlyList<DeadlineOverrideLog>> ListForOrderAsync(long orderId, CancellationToken ct = default);
+    Task<IReadOnlyList<DeadlineOverrideLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default);
 }
 
 public sealed class NoOpDeadlineOverrideLogRepository : IDeadlineOverrideLogRepository
@@ -45,6 +48,9 @@ public sealed class NoOpDeadlineOverrideLogRepository : IDeadlineOverrideLogRepo
     public Task<DeadlineOverrideLog> AddAsync(DeadlineOverrideLog log, CancellationToken ct = default) => Task.FromResult(log);
 
     public Task<IReadOnlyList<DeadlineOverrideLog>> ListForOrderAsync(long orderId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<DeadlineOverrideLog>>([]);
+
+    public Task<IReadOnlyList<DeadlineOverrideLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<DeadlineOverrideLog>>([]);
 }
 

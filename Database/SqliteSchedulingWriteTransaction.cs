@@ -20,4 +20,15 @@ public sealed class SqliteSchedulingWriteTransaction : ISchedulingWriteTransacti
             return await operation(repository);
         }, ct);
     }
+
+    public async Task<T> ExecuteAsync<T>(Func<IOrderRepository, IReservationRepository, Task<T>> operation, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        return await SqliteImmediateTransaction.ExecuteAsync(ctx, async sharedContext =>
+        {
+            var orders = new SqliteOrderRepo(sharedContext);
+            var reservations = new SqliteReservationRepo(sharedContext);
+            return await operation(orders, reservations);
+        }, ct);
+    }
 }

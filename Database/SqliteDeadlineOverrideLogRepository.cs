@@ -34,11 +34,25 @@ public sealed class SqliteDeadlineOverrideLogRepository : IDeadlineOverrideLogRe
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<DeadlineOverrideLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default)
+    {
+        await using var ctx = _contextFactory();
+        var rows = await ctx.SchedulingDeadlineOverrideLogs
+            .AsNoTracking()
+            .Where(l => l.ReservationId == reservationId)
+            .OrderByDescending(l => l.CreatedAtUnixTimeMilliseconds)
+            .ThenByDescending(l => l.Id)
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
     private static SchedulingDeadlineOverrideLogEntity ToEntity(DeadlineOverrideLog log) => new()
     {
         Id = log.Id,
         OrderId = log.OrderId,
         OrderCode = log.OrderCode,
+        ReservationId = log.ReservationId,
+        EntityType = log.EntityType,
         CreatedAtUtc = log.CreatedAtUtc,
         CreatedAtUnixTimeMilliseconds = log.CreatedAtUtc.ToUnixTimeMilliseconds(),
         CreatedByOrganizationType = log.CreatedByOrganizationType,
@@ -83,5 +97,7 @@ public sealed class SqliteDeadlineOverrideLogRepository : IDeadlineOverrideLogRe
         e.WeeklyCapacityLimitUsed,
         e.DailyCapacityAfterOverride,
         e.WeeklyCapacityAfterOverride,
-        e.CalendarReason);
+        e.CalendarReason,
+        string.IsNullOrWhiteSpace(e.EntityType) ? "order" : e.EntityType,
+        e.ReservationId);
 }

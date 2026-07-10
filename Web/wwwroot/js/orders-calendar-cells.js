@@ -24,8 +24,17 @@
       : prefix + ' · ' + (o.caseName || '—');
   }
 
+  function reservationChipLabel(r){
+    return 'Res · ' + orderChipLabel(r);
+  }
+
   function dayToothTotalText(dayOrders){
     var total = dayOrders.reduce(function(sum, o){ return sum + orderToothCount(o); }, 0);
+    return total + ' total ' + (total === 1 ? 'tooth' : 'teeth');
+  }
+
+  function dayEntryTotalText(entries){
+    var total = entries.reduce(function(sum, o){ return sum + orderToothCount(o); }, 0);
     return total + ' total ' + (total === 1 ? 'tooth' : 'teeth');
   }
 
@@ -40,7 +49,7 @@
     var order = [];
     var counts = new Map();
     dayOrders.forEach(function(o, index){
-      var code = o && o.clinicCode || o && o.orderCode || '__' + index;
+      var code = o && o.clinicCode || o && o.orderCode || o && o.id || '__' + index;
       if(!counts.has(code)){
         order.push(code);
         counts.set(code, { count: 0, color: Format.clinicColorForOrder(o, orderClinics) });
@@ -88,7 +97,7 @@
   }
 
   function loadLevelMouthPath(level){
-    if(level === 'low') return 'M8 14.2c1.2 1.5 2.6 2.3 4 2.3s2.8-.8 4-2.3';
+    if(level === 'low') return 'M8 14.2c1.2 1.5 2.6 2.3s2.8-.8 4-2.3';
     if(level === 'medium') return 'M8.5 15h7';
     return 'M8 16.2c1.2-1.5 2.6-2.3 4-2.3s2.8.8 4 2.3';
   }
@@ -176,7 +185,7 @@
     if(indicator) parent.appendChild(indicator);
   }
 
-  function buildOrdersCalendarCountButton(dayOrders, onOpen, orderClinics, isLab){
+  function buildCalendarCountButton(countValue, entries, onOpen, orderClinics, isLab){
     var count = document.createElement('button');
     count.type = 'button';
     count.className = 'orders-calendar-count';
@@ -185,28 +194,161 @@
     inner.className = 'orders-calendar-count-inner';
     var label = document.createElement('span');
     label.className = 'orders-calendar-count-label';
-    label.textContent = '#' + dayOrders.length;
+    label.textContent = '#' + countValue;
     inner.appendChild(label);
-    appendClinicColorBar(inner, dayOrders, orderClinics, isLab);
+    appendClinicColorBar(inner, entries, orderClinics, isLab);
     count.appendChild(inner);
     return count;
   }
 
-  function buildOrdersCalendarMoreButton(dayOrders, onOpen, orderClinics, isLab){
+  function buildOrdersCalendarCountButton(dayOrders, onOpen, orderClinics, isLab){
+    return buildCalendarCountButton(dayOrders.length, dayOrders, onOpen, orderClinics, isLab);
+  }
+
+  function buildCalendarMoreButton(countValue, entries, onOpen, orderClinics, isLab, titleText){
     var more = document.createElement('button');
     more.type = 'button';
     more.className = 'orders-calendar-more';
     more.onclick = function(e){ e.stopPropagation(); onOpen(); };
-    more.title = 'View all ' + dayOrders.length + ' · ' + dayToothTotalText(dayOrders);
+    more.title = titleText || ('View all ' + countValue + ' entries');
     var inner = document.createElement('span');
     inner.className = 'orders-calendar-more-inner';
     var label = document.createElement('span');
     label.className = 'orders-calendar-more-label';
-    label.textContent = 'View all ' + dayOrders.length;
+    label.textContent = 'View all ' + countValue;
     inner.appendChild(label);
-    appendClinicColorBar(inner, dayOrders, orderClinics, isLab);
+    appendClinicColorBar(inner, entries, orderClinics, isLab);
     more.appendChild(inner);
     return more;
+  }
+
+  function buildOrdersCalendarMoreButton(dayOrders, onOpen, orderClinics, isLab){
+    return buildCalendarMoreButton(dayOrders.length, dayOrders, onOpen, orderClinics, isLab, 'View all ' + dayOrders.length + ' · ' + dayToothTotalText(dayOrders));
+  }
+
+  function normalizeDayEntryGroups(entries){
+    if(Array.isArray(entries)) return { orders: entries, deliveryReservations: [], impressionReservations: [] };
+    entries = entries || {};
+    return {
+      orders: entries.orders || [],
+      deliveryReservations: entries.deliveryReservations || entries.reservations || [],
+      impressionReservations: entries.impressionReservations || []
+    };
+  }
+
+  function buildReservationDeliveryChip(r, options, openDay){
+    var clicksEnabled = options.reservationClicksEnabled !== false && options.entryClicksEnabled !== false;
+    var chip = document.createElement(clicksEnabled ? 'button' : 'span');
+    if(clicksEnabled) chip.type = 'button';
+    chip.className = 'orders-calendar-chip orders-calendar-chip-reservation' + (clicksEnabled ? '' : ' orders-calendar-entry-static');
+    chip.textContent = reservationChipLabel(r);
+    var clinicName = Format.clinicDisplayNameForOrder(r, options.orderClinics || {});
+    chip.title = 'Reservation delivery · ' + (r.caseName || '') + ' ' + clinicName;
+    if(options.isLab) applyClinicAccent(chip, r, options.orderClinics || {});
+    if(clicksEnabled){
+      chip.onclick = function(e){
+        e.stopPropagation();
+        if(options.onOpenReservation) options.onOpenReservation(r.id);
+        else openDay();
+      };
+    }
+    return chip;
+  }
+
+  function buildOrderChip(o, options){
+    var orderClicksEnabled = options.orderClicksEnabled !== false && options.entryClicksEnabled !== false;
+    var chip = document.createElement(orderClicksEnabled ? 'button' : 'span');
+    if(orderClicksEnabled) chip.type = 'button';
+    chip.className = 'orders-calendar-chip' + (orderClicksEnabled ? '' : ' orders-calendar-entry-static');
+    chip.textContent = orderChipLabel(o);
+    var clinicName = Format.clinicDisplayNameForOrder(o, options.orderClinics || {});
+    chip.title = (o.caseName || '') + ' ' + clinicName;
+    if(options.isLab) applyClinicAccent(chip, o, options.orderClinics || {});
+    if(orderClicksEnabled){
+      chip.onclick = function(e){
+        e.stopPropagation();
+        if(options.onOpenOrder) options.onOpenOrder(o.orderCode);
+      };
+    }
+    return chip;
+  }
+
+  function buildImpressionIndicator(impressionReservations, options, openDay){
+    if(!impressionReservations.length) return null;
+    var clicksEnabled = options.reservationClicksEnabled !== false && options.entryClicksEnabled !== false;
+    var wrap = document.createElement('span');
+    wrap.className = 'orders-calendar-impression-strip';
+    var makeDot = function(r){
+      var dot = document.createElement(clicksEnabled ? 'button' : 'span');
+      if(clicksEnabled) dot.type = 'button';
+      dot.className = 'orders-calendar-impression-dot' + (clicksEnabled ? '' : ' orders-calendar-entry-static');
+      dot.title = 'Reservation impression · ' + (r.caseName || Format.orderMaterialShort(r));
+      dot.setAttribute('aria-label', dot.title);
+      if(options.isLab) applyClinicAccent(dot, r, options.orderClinics || {});
+      if(clicksEnabled){
+        dot.onclick = function(e){
+          e.stopPropagation();
+          if(options.onOpenReservation) options.onOpenReservation(r.id);
+          else openDay();
+        };
+      }
+      return dot;
+    };
+    if(impressionReservations.length === 1){
+      wrap.appendChild(makeDot(impressionReservations[0]));
+      return wrap;
+    }
+    var count = document.createElement('button');
+    count.type = 'button';
+    count.className = 'orders-calendar-impression-count';
+    count.title = impressionReservations.length + ' reservation impressions';
+    count.setAttribute('aria-label', count.title);
+    count.onclick = function(e){ e.stopPropagation(); openDay(); };
+    count.textContent = '• ' + impressionReservations.length;
+    if(options.isLab) appendClinicColorBar(count, impressionReservations, options.orderClinics || {}, true);
+    wrap.appendChild(count);
+    return wrap;
+  }
+
+  function renderDayCalendarEntries(content, entries, options){
+    options = options || {};
+    if(!content) return false;
+    var groups = normalizeDayEntryGroups(entries);
+    var dayOrders = groups.orders;
+    var deliveryReservations = groups.deliveryReservations;
+    var impressionReservations = groups.impressionReservations;
+    var totalEntries = dayOrders.length + deliveryReservations.length + impressionReservations.length;
+    if(!totalEntries) return false;
+
+    var orderClinics = options.orderClinics || {};
+    var isLab = !!options.isLab;
+    var onOpenDay = options.onOpenDay || function(){};
+    var maxChips = options.maxChips == null ? 3 : options.maxChips;
+    var allEntriesForColor = dayOrders.concat(deliveryReservations).concat(impressionReservations);
+    var openDay = function(){ onOpenDay(options.iso, groups); };
+
+    appendCapacityIndicator(content, options.capacity, isLab);
+    content.appendChild(buildCalendarCountButton(totalEntries, allEntriesForColor, openDay, orderClinics, isLab));
+
+    var chipsRendered = 0;
+    dayOrders.forEach(function(o){
+      if(chipsRendered >= maxChips) return;
+      content.appendChild(buildOrderChip(o, options));
+      chipsRendered++;
+    });
+    deliveryReservations.forEach(function(r){
+      if(chipsRendered >= maxChips) return;
+      content.appendChild(buildReservationDeliveryChip(r, options, openDay));
+      chipsRendered++;
+    });
+
+    var impression = buildImpressionIndicator(impressionReservations, options, openDay);
+    if(impression) content.appendChild(impression);
+
+    if(dayOrders.length + deliveryReservations.length > maxChips){
+      content.appendChild(buildCalendarMoreButton(totalEntries, allEntriesForColor, openDay, orderClinics, isLab, 'View all ' + totalEntries + ' · ' + dayEntryTotalText(dayOrders.concat(deliveryReservations))));
+    }
+    return true;
   }
 
   function renderDayOrders(content, dayOrders, options){
@@ -246,13 +388,15 @@
 
   S3DOrders.CalendarCells = {
     orderChipLabel: orderChipLabel,
+    reservationChipLabel: reservationChipLabel,
     orderTeethLabel: orderTeethLabel,
     orderToothCount: orderToothCount,
     dayToothTotalText: dayToothTotalText,
+    dayEntryTotalText: dayEntryTotalText,
     normalizeCapacity: normalizeCapacity,
     buildLoadIndicator: buildLoadIndicator,
     buildWeeklyCapacityIndicator: buildWeeklyCapacityIndicator,
-    renderDayOrders: renderDayOrders
+    renderDayOrders: renderDayOrders,
+    renderDayCalendarEntries: renderDayCalendarEntries
   };
 })(typeof window !== 'undefined' ? window : globalThis);
-

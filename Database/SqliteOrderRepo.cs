@@ -224,6 +224,7 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.CreatedAtUnixTimeMilliseconds = order.CreatedAt.ToUnixTimeMilliseconds();
         entity.UpdatedAt = order.UpdatedAt;
         entity.CalculatedCapacityUnits = order.CalculatedCapacityUnits;
+        entity.PromotedFromReservationId = order.PromotedFromReservationId;
         entity.CreatedIp = order.CreatedIp;
         entity.CreatedUserAgent = order.CreatedUserAgent;
     }
@@ -252,7 +253,8 @@ public sealed class SqliteOrderRepo : IOrderRepository
             e.CreatedIp,
             e.CreatedUserAgent,
             e.ColorNote,
-            e.CalculatedCapacityUnits);
+            e.CalculatedCapacityUnits,
+            e.PromotedFromReservationId);
     }
 
     private static string SerializeWorkItems(IReadOnlyList<OrderWorkItem> items) =>

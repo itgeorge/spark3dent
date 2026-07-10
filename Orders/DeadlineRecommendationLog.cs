@@ -55,8 +55,8 @@ public sealed record DeadlineValidationWithAuditResult(
 
 public sealed record DeadlineRecommendationLog(
     long Id,
-    long OrderId,
-    string OrderCode,
+    long? OrderId,
+    string? OrderCode,
     DateTimeOffset CreatedAtUtc,
     string CreatedByOrganizationType,
     string CreatedByOrganizationCode,
@@ -82,12 +82,15 @@ public sealed record DeadlineRecommendationLog(
     string ResultStatus,
     string? FailureReason,
     string CandidateChecksJson,
-    string ConfigSnapshotJson);
+    string ConfigSnapshotJson,
+    string EntityType = "order",
+    long? ReservationId = null);
 
 public interface IDeadlineRecommendationLogRepository
 {
     Task<DeadlineRecommendationLog> AddAsync(DeadlineRecommendationLog log, CancellationToken ct = default);
     Task<IReadOnlyList<DeadlineRecommendationLog>> ListForOrderAsync(long orderId, CancellationToken ct = default);
+    Task<IReadOnlyList<DeadlineRecommendationLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default);
 }
 
 public sealed class NoOpDeadlineRecommendationLogRepository : IDeadlineRecommendationLogRepository
@@ -101,5 +104,8 @@ public sealed class NoOpDeadlineRecommendationLogRepository : IDeadlineRecommend
     public Task<DeadlineRecommendationLog> AddAsync(DeadlineRecommendationLog log, CancellationToken ct = default) => Task.FromResult(log);
 
     public Task<IReadOnlyList<DeadlineRecommendationLog>> ListForOrderAsync(long orderId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<DeadlineRecommendationLog>>([]);
+
+    public Task<IReadOnlyList<DeadlineRecommendationLog>> ListForReservationAsync(long reservationId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<DeadlineRecommendationLog>>([]);
 }

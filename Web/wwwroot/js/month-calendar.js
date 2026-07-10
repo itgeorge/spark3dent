@@ -62,9 +62,9 @@
     }
 
     setOptions(options = {}) {
-      if (options.className && options.className !== this.options.className) {
+      if (Object.prototype.hasOwnProperty.call(options, 'className') && options.className !== this.options.className) {
         if (this.options.className) this.root.classList.remove(this.options.className);
-        this.root.classList.add(options.className);
+        if (options.className) this.root.classList.add(options.className);
       }
       this.options = { ...this.options, ...options };
       if (options.month) this.month = startOfMonth(options.month);

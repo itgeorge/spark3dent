@@ -135,7 +135,7 @@
         const to=createContext(normalized,compiledRoutes,opts.notFound);
         const allowed=await runGuard(currentCtx,to,options);
         if(!allowed)return false;
-        if(!currentCtx||normalized!==currentCtx.path)setUrl(normalized,false);
+        if(currentPath()!==normalized)setUrl(normalized,false);
         return dispatch(normalized,options);
       },
       async replace(path,navOptions){

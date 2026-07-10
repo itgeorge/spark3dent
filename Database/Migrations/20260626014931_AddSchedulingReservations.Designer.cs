@@ -3,6 +3,7 @@ using System;
 using Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Database.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260626014931_AddSchedulingReservations")]
+    partial class AddSchedulingReservations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
@@ -432,10 +435,6 @@ namespace Database.Migrations
                     b.Property<decimal?>("DailyCapacityLimitUsed")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<decimal?>("ExistingDailyCapacityUsed")
                         .HasColumnType("TEXT");
 
@@ -449,9 +448,10 @@ namespace Database.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("OrderCode")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("OrderId")
+                    b.Property<long>("OrderId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("OverrideReason")
@@ -459,9 +459,6 @@ namespace Database.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<long?>("RecommendationLogId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("ReservationId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("RulesBypassedJson")
@@ -487,8 +484,6 @@ namespace Database.Migrations
                     b.HasIndex("OrderCode");
 
                     b.HasIndex("OrderId");
-
-                    b.HasIndex("ReservationId");
 
                     b.ToTable("SchedulingDeadlineOverrideLogs");
                 });
@@ -541,10 +536,6 @@ namespace Database.Migrations
                     b.Property<DateOnly>("EffectiveIntakeBusinessDate")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("ExtraLeadTimeBusinessDaysUsed")
                         .HasColumnType("INTEGER");
 
@@ -568,15 +559,13 @@ namespace Database.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("OrderCode")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("OrderCreatedAtUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("OrderId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("ReservationId")
+                    b.Property<long>("OrderId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("ResultStatus")
@@ -608,8 +597,6 @@ namespace Database.Migrations
                     b.HasIndex("OrderCode");
 
                     b.HasIndex("OrderId");
-
-                    b.HasIndex("ReservationId");
 
                     b.ToTable("SchedulingDeadlineRecommendationLogs");
                 });
@@ -818,9 +805,6 @@ namespace Database.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("PromotedFromReservationId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<DateOnly>("RequestedDeliveryDate")
                         .HasColumnType("TEXT");
 
@@ -846,8 +830,6 @@ namespace Database.Migrations
 
                     b.HasIndex("OrderCode")
                         .IsUnique();
-
-                    b.HasIndex("PromotedFromReservationId");
 
                     b.HasIndex("RequestedDeliveryDate");
 
