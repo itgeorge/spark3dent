@@ -50,7 +50,7 @@
     var unspecified = options.unspecifiedValue || 'unspecified';
     container.innerHTML = groups.map(function(group){
       return '<div class="shade-group">' + (group.shades || []).map(function(code){ return shadeCardHtml(code, value); }).join('') + '</div>';
-    }).join('') + '<div class="shade-group">' + shadeCardHtml(unspecified, value, 'Без уточнение') + '</div>';
+    }).join('') + '<div class="shade-group">' + shadeCardHtml(unspecified, value, 'Неуточнен') + '</div>';
     if(options.onChange){
       container.onclick = function(event){
         var button = event.target.closest && event.target.closest('.shade-card[data-shade]');
