@@ -9,7 +9,7 @@
     return nums.map(function(t){
       var box = Teeth.hitBoxes[t];
       var x = box[0], y = box[1], w = box[2], h = box[3];
-      return '<button class="tooth" type="button" data-t="' + t + '" aria-label="Tooth ' + t + '" title="Tooth ' + t + '" style="left:' + (x * 100 / Teeth.FDI_IMAGE_W).toFixed(4) + '%;top:' + (y * 100 / Teeth.FDI_IMAGE_H).toFixed(4) + '%;width:' + (w * 100 / Teeth.FDI_IMAGE_W).toFixed(4) + '%;height:' + (h * 100 / Teeth.FDI_IMAGE_H).toFixed(4) + '%"></button>';
+      return '<button class="tooth" type="button" data-t="' + t + '" aria-label="Зъб ' + t + '" title="Зъб ' + t + '" style="left:' + (x * 100 / Teeth.FDI_IMAGE_W).toFixed(4) + '%;top:' + (y * 100 / Teeth.FDI_IMAGE_H).toFixed(4) + '%;width:' + (w * 100 / Teeth.FDI_IMAGE_W).toFixed(4) + '%;height:' + (h * 100 / Teeth.FDI_IMAGE_H).toFixed(4) + '%"></button>';
     }).join('');
   }
 
@@ -38,7 +38,7 @@
     var Teeth = S3DOrders.Teeth;
     options = options || {};
     if(!container) return;
-    var label = options.label || 'FDI teeth numbering chart';
+    var label = options.label || 'FDI схема за номериране на зъби';
     container.innerHTML = '<div class="fdi-map" role="img" aria-label="' + Dom.esc(label) + '"><div class="fdi-map-markers" aria-hidden="true"></div><div class="fdi-map-buttons">' + buttonHtml(Teeth.upper) + buttonHtml(Teeth.lower) + '</div></div>';
     if(options.onPickTooth){
       container.onclick = function(event){

@@ -10,7 +10,7 @@
   function renderDateCell(ctx, options){
     options = options || {};
     var cell = ctx.cell, date = ctx.date, iso = ctx.iso;
-    var status = options.status || { date: iso, isSelectable: false, reason: 'Unavailable' };
+    var status = options.status || { date: iso, isSelectable: false, reason: 'Недостъпно' };
     var selectedIso = options.selectedIso || '';
     var impressionIso = options.impressionIso || '';
     var dayOrders = options.dayOrders || [];
@@ -79,7 +79,7 @@
       };
     }
     if(options.bindReason){
-      if(isImpression) options.bindReason(cell, 'impression');
+      if(isImpression) options.bindReason(cell, 'ден на отпечатъка');
       else if(!status.isSelectable) options.bindReason(cell, status, date);
     }
     cell.appendChild(button);

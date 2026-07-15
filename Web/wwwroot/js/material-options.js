@@ -18,14 +18,30 @@
     return index(items)[material] || null;
   }
 
+  var BG_MATERIAL_LABELS = {
+    fullContourZirconia: { title: 'Цирконий', description: 'Full-contour циркониева корона/мост' },
+    pfzLayeredZrCrown: { title: 'Цирконий с керамика', description: 'PFZ / керамика, послоена върху ZR' },
+    pfm: { title: 'Металокерамика', description: 'PFM корона/мост' },
+    glassCeramics: { title: 'Стъклокерамика', description: 'Високоестетичен керамичен случай' },
+    pmma: { title: 'Стандартен PMMA', description: 'Временна PMMA корона/мост' },
+    pmmaTelio: { title: 'PMMA Telio', description: 'По-здрав временен PMMA с кръстосани връзки' }
+  };
+
+  function localizedMaterial(item, material){
+    var key = item && item.material || material;
+    return BG_MATERIAL_LABELS[key] || null;
+  }
+
   function titleFor(items, material){
     var item = typeof material === 'object' && material ? material : get(items, material);
-    return item ? (item.title || item.material || '') : String(material || '');
+    var local = localizedMaterial(item, material);
+    return local ? local.title : (item ? (item.title || item.material || '') : String(material || ''));
   }
 
   function descriptionFor(items, material){
     var item = typeof material === 'object' && material ? material : get(items, material);
-    return item ? (item.description || '') : '';
+    var local = localizedMaterial(item, material);
+    return local ? local.description : (item ? (item.description || '') : '');
   }
 
   function visibleItems(items, actor, selectedValue){
@@ -49,9 +65,9 @@
     container.innerHTML = items.map(function(item){
       var active = value && item.material === value;
       var disabled = !!(actor && actor.isLab) && !item.hasAnyConfig;
-      var desc = item.description || '';
-      if(disabled) desc = desc ? desc + ' · No scheduling config' : 'No scheduling config';
-      return '<button class="choice' + (active ? ' active' : '') + (disabled ? ' disabled' : '') + '" type="button" data-mat="' + Dom.esc(item.material) + '"' + (disabled ? ' disabled aria-disabled="true"' : '') + '>' + selectedMarkHtml() + '<b>' + Dom.esc(item.title || item.material) + '</b><span>' + Dom.esc(desc) + '</span></button>';
+      var desc = descriptionFor(items, item);
+      if(disabled) desc = desc ? desc + ' · Няма настройка за срокове' : 'Няма настройка за срокове';
+      return '<button class="choice' + (active ? ' active' : '') + (disabled ? ' disabled' : '') + '" type="button" data-mat="' + Dom.esc(item.material) + '"' + (disabled ? ' disabled aria-disabled="true"' : '') + '>' + selectedMarkHtml() + '<b>' + Dom.esc(titleFor(items, item)) + '</b><span>' + Dom.esc(desc) + '</span></button>';
     }).join('');
     if(options.onChange){
       container.onclick = function(event){

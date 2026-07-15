@@ -20,13 +20,13 @@
     var teeth = orderTeethLabel(o);
     var prefix = Format.orderMaterialCalendarShort(o) + ' · ' + teeth;
     return prefix.length > 28
-      ? orderToothCount(o) + ' teeth · ' + Format.orderMaterialCalendarShort(o) + ' · ' + (o.caseName || '—')
+      ? orderToothCount(o) + (orderToothCount(o) === 1 ? ' зъб · ' : ' зъба · ') + Format.orderMaterialCalendarShort(o) + ' · ' + (o.caseName || '—')
       : prefix + ' · ' + (o.caseName || '—');
   }
 
   function dayToothTotalText(dayOrders){
     var total = dayOrders.reduce(function(sum, o){ return sum + orderToothCount(o); }, 0);
-    return total + ' total ' + (total === 1 ? 'tooth' : 'teeth');
+    return 'общо ' + total + (total === 1 ? ' зъб' : ' зъба');
   }
 
   function applyClinicAccent(el, o, orderClinics){
@@ -84,7 +84,7 @@
   }
 
   function loadLevelLabel(level){
-    return level === 'low' ? 'Low' : (level === 'medium' ? 'Medium' : 'High');
+    return level === 'low' ? 'Ниско' : (level === 'medium' ? 'Средно' : 'Високо');
   }
 
   function loadLevelMouthPath(level){
@@ -128,8 +128,8 @@
     text.textContent = usedText + '/' + limitText;
     el.appendChild(text);
     appendCapacityPie(el, ratio);
-    el.title = 'Capacity used: ' + usedText + ' / ' + limitText;
-    el.setAttribute('aria-label', 'Capacity used ' + usedText + ' of ' + limitText);
+    el.title = 'Използван капацитет: ' + usedText + ' / ' + limitText;
+    el.setAttribute('aria-label', 'Използван капацитет ' + usedText + ' от ' + limitText);
     return el;
   }
 
@@ -146,15 +146,15 @@
     text.className = 'orders-calendar-capacity-text';
     var longLabel = document.createElement('span');
     longLabel.className = 'orders-calendar-week-label-long';
-    longLabel.textContent = 'week';
+    longLabel.textContent = 'седм.';
     var shortLabel = document.createElement('span');
     shortLabel.className = 'orders-calendar-week-label-short';
-    shortLabel.textContent = 'W';
+    shortLabel.textContent = 'С';
     text.append(longLabel, shortLabel, document.createTextNode(': ' + usedText + '/' + limitText));
     el.appendChild(text);
     appendCapacityPie(el, ratio);
-    el.title = 'Weekly capacity used: ' + usedText + ' / ' + limitText;
-    el.setAttribute('aria-label', 'Weekly capacity used ' + usedText + ' of ' + limitText);
+    el.title = 'Използван седмичен капацитет: ' + usedText + ' / ' + limitText;
+    el.setAttribute('aria-label', 'Използван седмичен капацитет ' + usedText + ' от ' + limitText);
     return el;
   }
 
@@ -165,8 +165,8 @@
     el.className = 'orders-calendar-capacity orders-calendar-capacity-' + level + ' orders-calendar-load-level';
     var label = loadLevelLabel(level);
     el.innerHTML = loadLevelSvgHtml(level);
-    el.title = label + ' lab load';
-    el.setAttribute('aria-label', label + ' lab load');
+    el.title = label + ' натоварване на лабораторията';
+    el.setAttribute('aria-label', label + ' натоварване на лабораторията');
     return el;
   }
 
@@ -197,12 +197,12 @@
     more.type = 'button';
     more.className = 'orders-calendar-more';
     more.onclick = function(e){ e.stopPropagation(); onOpen(); };
-    more.title = 'View all ' + dayOrders.length + ' · ' + dayToothTotalText(dayOrders);
+    more.title = 'Виж всички ' + dayOrders.length + ' · ' + dayToothTotalText(dayOrders);
     var inner = document.createElement('span');
     inner.className = 'orders-calendar-more-inner';
     var label = document.createElement('span');
     label.className = 'orders-calendar-more-label';
-    label.textContent = 'View all ' + dayOrders.length;
+    label.textContent = 'Виж всички ' + dayOrders.length;
     inner.appendChild(label);
     appendClinicColorBar(inner, dayOrders, orderClinics, isLab);
     more.appendChild(inner);

@@ -1,6 +1,6 @@
 (function () {
-  const DEFAULT_WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const DEFAULT_TITLE_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+  const DEFAULT_WEEKDAYS = ['Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота', 'Неделя'];
+  const DEFAULT_TITLE_FORMATTER = new Intl.DateTimeFormat('bg-BG', { month: 'long', year: 'numeric' });
 
   function addDays(date, days) {
     const next = new Date(date);
@@ -49,9 +49,9 @@
       if (options.className) this.root.classList.add(options.className);
       this.root.innerHTML = `
         <div class="month-calendar-head">
-          <button class="btn month-calendar-nav" type="button" data-month-calendar-prev aria-label="Previous month"><svg class="month-calendar-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+          <button class="btn month-calendar-nav" type="button" data-month-calendar-prev aria-label="Предишен месец"><svg class="month-calendar-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
           <div class="month-calendar-title" data-month-calendar-title>—</div>
-          <button class="btn month-calendar-nav" type="button" data-month-calendar-next aria-label="Next month"><svg class="month-calendar-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+          <button class="btn month-calendar-nav" type="button" data-month-calendar-next aria-label="Следващ месец"><svg class="month-calendar-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
         </div>
         <div class="month-calendar-grid" data-month-calendar-grid></div>`;
       this.titleEl = this.root.querySelector('[data-month-calendar-title]');

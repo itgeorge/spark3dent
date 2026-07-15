@@ -1,8 +1,8 @@
 (function (global) {
   const PRODUCTS = {
-    invoicer: { label: "Invoicer", href: "/", icon: "&#128179;", visibility: "lab" },
-    scheduler: { label: "Scheduler / Orders", href: "/orders", icon: "&#128197;", visibility: "all" },
-    schedulingConfig: { label: "Scheduling Config", href: "/scheduling-config", icon: "&#9881;", visibility: "lab" },
+    invoicer: { label: "Фактури", href: "/", icon: "&#128179;", visibility: "lab" },
+    scheduler: { label: "Поръчки", href: "/orders", icon: "&#128197;", visibility: "all" },
+    schedulingConfig: { label: "Настройки на графика", href: "/scheduling-config", icon: "&#9881;", visibility: "lab" },
     iam: { label: "IAM", href: "/iam", icon: "&#128101;", visibility: "lab" }
   };
 
@@ -41,21 +41,21 @@
     <img src="${logoSrc}" alt="" class="app-chrome-logo" aria-hidden="true" draggable="false">
     <div class="app-chrome-brand-text">
       <div class="app-chrome-name">Spark3Dent</div>
-      <div class="app-chrome-product">${productMeta.label === "Scheduler / Orders" ? "Scheduler" : productMeta.label}</div>
+      <div class="app-chrome-product">${productMeta.label}</div>
     </div>
   </${brandClick ? "button" : "div"}>
   <div class="app-chrome-actions">
     <div class="app-chrome-extra" data-app-chrome-extra-mount></div>
     <div class="app-menu-wrap${hideMenuWhenSignedOut ? " hidden" : ""}" id="appMenuWrap">
-      <button type="button" class="${menuButtonClass}" id="btnAppMenu" title="Menu" aria-haspopup="true" aria-expanded="false" aria-label="Menu">&#9776;</button>
+      <button type="button" class="${menuButtonClass}" id="btnAppMenu" title="Меню" aria-haspopup="true" aria-expanded="false" aria-label="Меню">&#9776;</button>
       <div class="app-menu" id="appMenu" role="menu">
         ${productMenuHtml(activeProduct)}
         <div class="app-menu-divider" role="separator"></div>
         <div id="appChromeAccount" class="app-menu-account hidden" role="presentation">
-          <div class="app-menu-account-label">Account</div>
+          <div class="app-menu-account-label">Акаунт</div>
           <div id="appChromeActor" class="app-menu-actor"></div>
         </div>
-        <button type="button" class="app-menu-item app-menu-logout" id="appChromeLogoutBtn" role="menuitem">Logout</button>
+        <button type="button" class="app-menu-item app-menu-logout" id="appChromeLogoutBtn" role="menuitem">Изход</button>
       </div>
     </div>
   </div>
