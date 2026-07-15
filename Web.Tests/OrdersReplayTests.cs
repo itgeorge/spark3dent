@@ -32,6 +32,8 @@ public class OrdersReplayTests
 
         await page.GoToAsync(server.Url("/orders"));
         await WaitVisibleAsync(page, "#login");
+        await page.TypeAsync("#clinic", "DEMO");
+        await page.TypeAsync("#pin", "123456");
         await page.ClickAsync("#loginBtn");
         await WaitVisibleAsync(page, "#list");
         Assert.That(await HashAsync(page), Is.EqualTo(string.Empty));

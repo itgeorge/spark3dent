@@ -29,12 +29,12 @@
     function actor(){return getActor()}
     function esc(v){return S3DDom.esc(v)}
     function setOverviewShade(el,text){if(!el)return;const line=text||'';el.textContent=line;el.classList.toggle('hidden',!line)}
-    function setOverviewColorNote(el,text){if(!el)return;const note=(text||'').trim();el.textContent=note?`Color note: ${note}`:'';el.classList.toggle('hidden',!note)}
+    function setOverviewColorNote(el,text){if(!el)return;const note=(text||'').trim();el.textContent=note?`Бележка за цвят: ${note}`:'';el.classList.toggle('hidden',!note)}
     function syncOverviewBodyLayout(bodyEl,range){if(!bodyEl)return;const count=range?.length||0;bodyEl.classList.toggle('overview-body-compact',count>0&&count<=2)}
     function reviewDateCompactMode(){return window.matchMedia('(max-width:900px)').matches&&!!reviewTeeth?.closest('.overview-body')?.classList.contains('overview-body-compact')}
     function formatReviewDeliveryDate(iso){if(!iso)return '';return reviewDateCompactMode()?Format.formatDateBulgarian(iso):Format.formatDateBulgarianWithWeekday(iso)}
-    function renderSelectedTeethPreview(container,range,items){S3DOrders.SelectedTeethPreview.render(container,{teeth:range||[],items:items||[],labelPrefix:'Selected teeth',getItemLabel:Format.orderWorkItemLabel})}
-    async function loadOrderByCode(code){const result=await ordersApi.getOrder(code);const j=result.data;if(!result.ok)throw new Error(j.error||'Could not load order.');return j.order}
+    function renderSelectedTeethPreview(container,range,items){S3DOrders.SelectedTeethPreview.render(container,{teeth:range||[],items:items||[],labelPrefix:'Избрани зъби',getItemLabel:Format.orderWorkItemLabel})}
+    async function loadOrderByCode(code){const result=await ordersApi.getOrder(code);const j=result.data;if(!result.ok)throw new Error(j.error||'Поръчката не можа да се зареди.');return j.order}
 
     async function show(codeToOpen){
       if(!actor())return showLogin();
@@ -42,7 +42,7 @@
       closeOrdersDay();
       closeCancel();
       reviewMsg.classList.add('hidden');
-      try{reviewOrder=await loadOrderByCode(codeToOpen)}catch(err){onRouteError(err.message||'Could not load order.');await replace('',{skipGuard:true});return}
+      try{reviewOrder=await loadOrderByCode(codeToOpen)}catch(err){onRouteError(err.message||'Поръчката не можа да се зареди.');await replace('',{skipGuard:true});return}
       render(reviewOrder);
       list.classList.add('hidden');
       app.classList.add('hidden');
@@ -72,7 +72,7 @@
       setOverviewShade(reviewOverviewShade,Format.orderOverviewShadeLine(o));
       setOverviewColorNote(reviewColorNote,o.colorNote);
       reviewCaseName.textContent=o.caseName||'—';
-      reviewExtraNote.textContent=o.notes?`Note: ${o.notes}`:'';
+      reviewExtraNote.textContent=o.notes?`Бележка: ${o.notes}`:'';
       reviewExtraNote.classList.toggle('hidden',!o.notes);
       const cancelled=o.status==='cancelled';
       reviewEditBtn.disabled=cancelled;
@@ -84,16 +84,16 @@
     }
 
     function edit(){if(!reviewOrder||reviewOrder.status==='cancelled')return;if(options.clearFindHighlight)options.clearFindHighlight();onEdit(reviewOrder.orderCode,1)}
-    function openCancel(){if(!reviewOrder||reviewOrder.status==='cancelled')return;const code=reviewOrder.shortenedOrderCode||reviewOrder.orderCode||'—';cancelOrderConfirmText.innerHTML=`Are you sure you want to cancel order <span class="cancel-order-confirm-code">${esc(code)}</span>?`;openUiModal('cancelOrder',cancelOrderConfirmPopup,cancelOrderConfirmBackBtn)}
-    function closeCancel(){closeUiModal('cancelOrder',cancelOrderConfirmPopup);cancelOrderConfirmYesBtn.disabled=false;cancelOrderConfirmYesBtn.textContent='Yes, cancel order'}
+    function openCancel(){if(!reviewOrder||reviewOrder.status==='cancelled')return;const code=reviewOrder.shortenedOrderCode||reviewOrder.orderCode||'—';cancelOrderConfirmText.innerHTML=`Сигурни ли сте, че искате да откажете поръчка <span class="cancel-order-confirm-code">${esc(code)}</span>?`;openUiModal('cancelOrder',cancelOrderConfirmPopup,cancelOrderConfirmBackBtn)}
+    function closeCancel(){closeUiModal('cancelOrder',cancelOrderConfirmPopup);cancelOrderConfirmYesBtn.disabled=false;cancelOrderConfirmYesBtn.textContent='Да, откажи поръчката'}
     async function confirmCancel(){
       if(!reviewOrder||reviewOrder.status==='cancelled')return;
       cancelOrderConfirmYesBtn.disabled=true;
-      cancelOrderConfirmYesBtn.textContent='Cancelling…';
+      cancelOrderConfirmYesBtn.textContent='Отказване…';
       reviewMsg.classList.add('hidden');
       const result=await ordersApi.deleteOrder(reviewOrder.orderCode);
       const j=result.data;
-      if(!result.ok){closeCancel();reviewMsg.textContent=j.error||'Could not cancel order.';reviewMsg.classList.remove('hidden');return}
+      if(!result.ok){closeCancel();reviewMsg.textContent=j.error||'Поръчката не можа да се откаже.';reviewMsg.classList.remove('hidden');return}
       closeCancel();
       reviewOrder=null;
       if(options.clearFindHighlight)options.clearFindHighlight();

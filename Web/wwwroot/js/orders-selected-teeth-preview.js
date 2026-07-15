@@ -13,8 +13,8 @@
 
   function defaultItemLabel(item){
     var construction = item && (item.constructionType || item.construction || 'case');
-    var labels = { crown:'Crown', bridge:'Bridge', inlayOverlay:'Inlay/Overlay' };
-    var label = labels[construction] || 'Construction';
+    var labels = { crown:'Корона', bridge:'Мост', inlayOverlay:'Инлей/Онлей' };
+    var label = labels[construction] || 'Конструкция';
     if(!item || !item.toothStart) return label + ' —';
     return +item.toothStart === +(item.toothEnd || item.toothStart) ? label + ' ' + item.toothStart : label + ' ' + item.toothStart + '-' + item.toothEnd;
   }
@@ -38,7 +38,7 @@
     options = options || {};
     if(!container) return;
     var range = options.teeth || [];
-    var label = range.length ? (options.labelPrefix || 'Selected teeth') + ': ' + range.join(', ') : 'No teeth selected';
+    var label = range.length ? (options.labelPrefix || 'Избрани зъби') + ': ' + range.join(', ') : 'Няма избрани зъби';
     if(!range.length){
       container.innerHTML = '';
       container.setAttribute('aria-hidden', 'true');
