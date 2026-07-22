@@ -142,7 +142,7 @@ public class OrdersReplayTests
 
         await page.EvaluateExpressionAsync("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))");
 
-        await WaitForFunctionAsync(page, "location.pathname === '/login' && !document.querySelector('#list')");
+        await WaitForLoginWithoutOrdersShellOrFailAsync(page);
     }
 
     private static async Task<IBrowser> LaunchBrowserAsync()
@@ -202,6 +202,22 @@ public class OrdersReplayTests
 
     private static async Task WaitForFunctionAsync(IPage page, string expression) =>
         await page.WaitForFunctionAsync($"() => ({expression})");
+
+    private static async Task WaitForLoginWithoutOrdersShellOrFailAsync(IPage page)
+    {
+        try
+        {
+            await page.WaitForFunctionAsync(
+                "() => location.pathname === '/login' && !document.querySelector('#list')",
+                new WaitForFunctionOptions { Timeout = 3_000 });
+        }
+        catch (WaitTaskTimeoutException)
+        {
+            var location = await page.EvaluateExpressionAsync<string>("location.pathname + location.search + location.hash");
+            var listVisible = await page.EvaluateExpressionAsync<bool>("!!document.querySelector('#list') && !document.querySelector('#list').classList.contains('hidden')");
+            Assert.Fail($"Expected bfcache restore after logout to redirect to /login and remove the cached orders shell, but browser stayed at '{location}' with orders list visible: {listVisible}.");
+        }
+    }
 
     private static async Task WaitForTextAsync(IPage page, string selector, string text) =>
         await page.WaitForFunctionAsync("(sel, text) => (document.querySelector(sel)?.textContent || '').includes(text)", args: new object[] { selector, text });
