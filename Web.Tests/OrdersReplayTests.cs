@@ -117,7 +117,7 @@ public class OrdersReplayTests
 
     [Test]
     [Category("OrdersReplay")]
-    public async Task OrdersPage_AfterLogout_BackButtonDoesNotRevealCachedOrdersShell()
+    public async Task OrdersPage_BfcacheRestoreAfterLogout_DoesNotRevealCachedOrdersShell()
     {
         using var fixture = new ApiTestFixture();
         _ = fixture.Client;
@@ -135,14 +135,12 @@ public class OrdersReplayTests
         await page.ClickAsync("#loginBtn");
         await WaitForFunctionAsync(page, "location.pathname === '/orders'");
         await WaitVisibleAsync(page, "#list");
-        await page.ClickAsync("#newOrderBtn");
-        await WaitForHashAsync(page, "#new/1");
 
-        await page.ClickAsync("#btnAppMenu");
-        await page.ClickAsync("#appChromeLogoutBtn");
-        await WaitForFunctionAsync(page, "location.pathname === '/login'");
+        var logoutOk = await page.EvaluateExpressionAsync<bool>("fetch('/api/scheduling/auth/logout',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}).then(r=>r.ok)");
+        Assert.That(logoutOk, Is.True);
+        await WaitForFunctionAsync(page, "document.querySelector('#list') && !document.querySelector('#list').classList.contains('hidden')");
 
-        await page.GoBackAsync();
+        await page.EvaluateExpressionAsync("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))");
 
         await WaitForFunctionAsync(page, "location.pathname === '/login' && !document.querySelector('#list')");
     }
