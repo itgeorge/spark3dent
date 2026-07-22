@@ -80,6 +80,20 @@ public class LabOnlyPageAuthTests
     }
 
     [Test]
+    public async Task LoginPageScript_UsesServerReturnUrlResolverInsteadOfEmbeddedPageRegistry()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+
+        var script = await client.GetStringAsync("/js/login-page.js");
+
+        Assert.That(script, Does.Contain("/api/app-pages/resolve-return-url"));
+        Assert.That(script, Does.Not.Contain("/iam"));
+        Assert.That(script, Does.Not.Contain("/scheduling-config"));
+        Assert.That(script, Does.Not.Contain("const pages"));
+    }
+
+    [Test]
     public async Task StaticHtmlBypassPaths_DoNotServeAppDocuments()
     {
         using var fixture = new ApiTestFixture();
