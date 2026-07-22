@@ -862,36 +862,7 @@
       background: var(--a2);
     }
 
-    /* App auth and product navigation */
-    .auth-shell{
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-    .auth-card{
-      width: min(100%, 520px);
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-    .auth-card-head{
-      padding: 18px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .auth-card-head img{ width: 38px; height: 38px; border-radius: 10px; object-fit: contain; }
-    .auth-card-body{ padding: 20px; }
-    .auth-card-body label{ display:block; margin: 12px 0 6px; font-size: 12px; font-weight: 800; color: var(--muted); }
-    .auth-card-body input{ width:100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; }
-    .auth-msg{ margin-top: 12px; padding: 10px 12px; border: 1px solid #fecaca; border-radius: 12px; color: #991b1b; background: #fff1f2; font-size: 13px; }
-    .app.auth-locked .app-header,
-    .app.auth-locked > .container{ display:none; }
-    .app:not(.auth-locked) .auth-shell{ display:none; }
+    /* App product navigation */
     /* Settings dropdown */
     .settings-dropdown-wrap{
       position: relative;
@@ -1026,25 +997,7 @@
   </style>
 </head>
 <body>
-  <div class="app auth-locked" id="appRoot">
-    <section id="invoicerAuthShell" class="auth-shell" aria-label="Invoicer login">
-      <div class="auth-card">
-        <div class="auth-card-head">
-          <img src="images/logo.png" alt="" aria-hidden="true" />
-          <div>
-            <h1 style="margin:0;font-size:18px;">Spark3Dent Invoicer</h1>
-          </div>
-        </div>
-        <div class="auth-card-body">
-          <label for="invoicerLoginClinic">Organization code</label>
-          <input id="invoicerLoginClinic" autocomplete="username" />
-          <label for="invoicerLoginPin">Password</label>
-          <input id="invoicerLoginPin" type="password" autocomplete="current-password" />
-          <button class="btn primary" id="invoicerLoginBtn" type="button" style="width:100%;margin-top:16px;">Enter</button>
-          <div id="invoicerLoginMsg" class="auth-msg hidden"></div>
-        </div>
-      </div>
-    </section>
+  <div class="app" id="appRoot">
     <header class="app-header">
     <div class="topbar">
       <div class="topbar-inner" id="appChromeMount">
@@ -1487,21 +1440,12 @@
       return { response, data };
     }
 
-    function showInvoicerLogin(message){
-      $("#appRoot").classList.add("auth-locked");
-      appChrome?.sync(null);
-      const msg = $("#invoicerLoginMsg");
-      msg.textContent = message || "";
-      msg.classList.toggle("hidden", !message);
-      $("#invoicerLoginBtn").disabled = false;
-      $("#invoicerLoginBtn").textContent = "Enter";
+    function redirectToLogin(){
+      window.location.replace("/login?returnUrl=" + encodeURIComponent(window.location.pathname + window.location.search));
     }
 
     async function unlockInvoicer(actor){
-      $("#invoicerLoginBtn").disabled = false;
-      $("#invoicerLoginBtn").textContent = "Enter";
       appChrome.sync(actor);
-      $("#appRoot").classList.remove("auth-locked");
       if(!appInitialized){
         appInitialized = true;
         await init();
@@ -1510,7 +1454,7 @@
 
     async function bootstrapAuth(){
       const { response, data } = await schedulingJson("/api/scheduling/auth/me");
-      if(!response.ok) return showInvoicerLogin();
+      if(!response.ok) return redirectToLogin();
       if(!data.isLab){
         window.location.replace("/orders");
         return;
@@ -2796,36 +2740,6 @@
       selectedInvoiceNumber = invoices[0]?.number ?? null;
     }
 
-    $("#invoicerLoginBtn").addEventListener("click", async ()=>{
-      const btn = $("#invoicerLoginBtn");
-      if(btn.disabled) return;
-      const msg = $("#invoicerLoginMsg");
-      btn.disabled = true;
-      btn.textContent = "Signing in…";
-      msg.classList.add("hidden");
-      try{
-        const { response, data } = await schedulingJson("/api/scheduling/auth/login", {
-          method: "POST",
-          body: JSON.stringify({ organizationCode: $("#invoicerLoginClinic").value, pin: $("#invoicerLoginPin").value })
-        });
-        if(!response.ok){
-          showInvoicerLogin(data.error || "Login failed.");
-          return;
-        }
-        if(!data.isLab){
-          window.location.replace("/orders");
-          return;
-        }
-        await unlockInvoicer(data);
-      }catch{
-        showInvoicerLogin("Login failed.");
-      }
-    });
-    ["#invoicerLoginClinic", "#invoicerLoginPin"].forEach(sel => {
-      $(sel).addEventListener("keydown", e => {
-        if(e.key === "Enter") $("#invoicerLoginBtn").click();
-      });
-    });
     appChrome = AppChrome.mount(document.getElementById("appChromeMount"), {
       product: "invoicer",
       logoSrc: "images/logo.png",
@@ -2838,7 +2752,7 @@
     appChrome.onLogout(async () => {
       await schedulingJson("/api/scheduling/auth/logout", { method: "POST", body: "{}" });
       closeSettingsDropdown();
-      showInvoicerLogin();
+      window.location.replace("/login");
     });
 
     bootstrapAuth();

@@ -34,7 +34,6 @@
       request: request,
       jsonRequest: jsonRequest,
       me: function(){ return jsonRequest('/api/scheduling/auth/me'); },
-      login: function(payload){ return jsonRequest('/api/scheduling/auth/login', { method:'POST', body: JSON.stringify(payload || {}) }, { error:'Входът не беше успешен.' }); },
       logout: function(){ return request('/api/scheduling/auth/logout', { method:'POST', body:'{}' }); },
       listOrders: function(options){ var query = qs({ limit: options && options.limit || '50', cursor: options && options.cursor }); return jsonRequest('/api/scheduling/orders?' + query, undefined, { error:'Поръчките не можаха да се заредят.' }); },
       calendarOrders: function(start, end){ return jsonRequest('/api/scheduling/orders/calendar?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end), undefined, { error:'Календарът не можа да се зареди.' }); },

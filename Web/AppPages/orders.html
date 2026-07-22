@@ -15,28 +15,11 @@
     .btn.danger{background:linear-gradient(180deg,#ef4444,#dc2626);color:white;border-color:#dc2626}#newOrderBtn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:550px){#list .head .actions{min-width:0;flex-shrink:1}#newOrderBtn{max-width:6.5rem;padding-left:10px;padding-right:10px}}.btn.circle-back,.btn.circle-icon{width:38px;height:38px;min-width:38px;padding:0;border-radius:999px;line-height:1;display:inline-flex;align-items:center;justify-content:center}.btn.circle-icon{font-size:20px}.circle-back-icon{display:block;width:18px;height:18px;flex:0 0 auto}.review{table-layout:fixed}.review .col-code{width:120px}.review .col-teeth{width:91px}.review .col-shade{width:48px}.review .col-delivery{width:60px}.review .col-action{width:75px}.order-code-cell{display:flex;align-items:center;gap:7px;white-space:nowrap}.status-icon{width:18px;height:18px;border-radius:999px;display:inline-grid;place-items:center;font-size:12px;font-weight:900;line-height:1;flex:0 0 auto}.status-created{background:#dcfce7;color:#166534}.status-cancelled{background:#fee2e2;color:#991b1b}.mobile-shade{display:none}.review .col-case{width:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.review th.col-case,.review td.col-case{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.review .col-code,.review .col-teeth,.review .col-shade,.review .col-delivery,.review .col-action{white-space:nowrap}.col-action{text-align:right}.review .col-action .btn,.review td.col-action .btn{padding:7px 9px}.find-order-card{width:min(100%,430px)}.find-order-actions{display:flex;justify-content:flex-end;gap:10px;padding:0 18px 18px;flex-wrap:wrap}.find-order-card .msg{margin:12px 0 0}.search-icon{display:block;width:18px;height:18px;flex:0 0 auto}.review-bottom-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:nowrap}.review-bottom-actions .right{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;flex-shrink:0}.review-bottom-actions .right{align-items:stretch}.review-bottom-actions .right .btn{display:inline-flex;align-items:center;justify-content:center;min-width:0;min-height:40px;padding:10px 12px;font-size:13px;line-height:1.2;white-space:nowrap}.review-row-highlight{animation:order-row-highlight-fade 5s linear forwards}@keyframes order-row-highlight-fade{from{background:#ede9fe}to{background:transparent}}.clinic-swatch{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0}.clinic-swatch-dot-only,.clinic-swatch-dot{width:10px;height:10px;border-radius:999px;border:1px solid var(--border);background:var(--clinic-color,#94a3b8);flex:0 0 auto}.clinic-swatch-neutral .clinic-swatch-dot,.clinic-swatch-neutral.clinic-swatch-dot-only{background:#e2e8f0;border-color:#cbd5e1}.clinic-swatch-label{font-size:11px;font-weight:800;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;display:block}.orders-calendar-chip-clinic{border-left:3px solid var(--clinic-accent,#94a3b8)}.target-clinic-preview{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}.head:has(>.btn.circle-back){flex-wrap:nowrap;align-items:flex-start}.head:has(>.btn.circle-back)>:first-child{min-width:0;flex:1 1 auto}.head:has(>.btn.circle-back)>.btn.circle-back{flex-shrink:0}.review-clinic-meta{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-top:4px;min-width:0;max-width:100%}.review-clinic-meta .clinic-swatch{min-width:0;flex:1 1 auto;max-width:100%}@media(max-width:550px){.review td,.review th{padding:7px 6px;font-size:12px}.review .col-case,.review .col-shade{display:none}.mobile-shade{display:inline;color:var(--muted)}.order-code-cell{gap:5px}.status-icon{width:16px;height:16px;font-size:11px}.review td.col-action .btn{padding:6px 8px;font-size:12px}.review-bottom-actions .btn{padding:7px 8px;font-size:12px}}@media(max-width:400px){.review-bottom-actions{gap:6px}.review-bottom-actions .right{gap:6px}.review-bottom-actions .btn{padding:6px 7px;font-size:11px}}
   </style>
 </head>
-<body class="auth-locked">
+<body>
 <header>
   <div id="appChromeMount"></div>
 </header>
 <main class="wrap app-page">
-  <section id="login" class="auth-shell" aria-label="Вход за поръчки">
-    <div class="auth-card">
-      <div class="auth-card-head">
-        <img src="/images/logo.png" alt="" aria-hidden="true">
-        <div><h1 style="margin:0;font-size:18px;">Spark3Dent Поръчки</h1></div>
-      </div>
-      <div class="auth-card-body">
-        <label for="clinic">Потребителско име на клиника</label>
-        <input id="clinic" autocomplete="username">
-        <label for="pin">Парола</label>
-        <input id="pin" type="password" autocomplete="current-password">
-        <button class="btn primary" id="loginBtn" type="button" style="width:100%;margin-top:16px;">Вход</button>
-        <div id="loginMsg" class="auth-msg hidden"></div>
-      </div>
-    </div>
-  </section>
-
   <section id="list" class="card hidden">
     <div class="head"><div><b>Поръчки</b></div><div class="actions"><div class="view-toggle" role="group" aria-label="Изглед на поръчките"><button class="btn" id="ordersListModeBtn" type="button">Списък</button><button class="btn" id="ordersCalendarModeBtn" type="button">Календар</button></div><button class="btn circle-icon" id="openFindOrderBtn" type="button" aria-label="Намери поръчка" title="Намери поръчка"><span data-s3d-icon="search" data-s3d-icon-class="search-icon"></span></button><button class="btn circle-icon" id="reloadOrdersBtn" type="button" aria-label="Обнови">↻</button><button class="btn primary" id="newOrderBtn" type="button">+Нова поръчка</button></div></div>
     <div class="body">

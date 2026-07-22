@@ -16,13 +16,13 @@ todos:
     status: completed
   - id: remove-embedded-login-shells
     content: Remove per-page login shells and login handlers from Orders, Invoicer, IAM, and Scheduling Config pages; pages become authenticated app shells.
-    status: pending
+    status: completed
   - id: centralize-logout-navigation
     content: Update shared app chrome logout behavior/usages so logout revokes the session and location.replace's to /login or a safe login URL.
-    status: pending
+    status: completed
   - id: update-tests
     content: Add automated integration/browser tests covering unauthenticated redirects, successful login page loads, role fallback behavior, and absence of static .html bypasses.
-    status: pending
+    status: completed
   - id: build-and-regression
     content: Run build and relevant Web.Tests regression suites; document any manual smoke checks.
     status: pending

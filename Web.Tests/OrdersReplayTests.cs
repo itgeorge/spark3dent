@@ -31,10 +31,11 @@ public class OrdersReplayTests
         page.DefaultNavigationTimeout = 15_000;
 
         await page.GoToAsync(server.Url("/orders"));
-        await WaitVisibleAsync(page, "#login");
-        await page.TypeAsync("#clinic", "DEMO");
+        await WaitForFunctionAsync(page, "location.pathname === '/login' && new URLSearchParams(location.search).get('returnUrl') === '/orders'");
+        await page.TypeAsync("#organizationCode", "DEMO");
         await page.TypeAsync("#pin", "123456");
         await page.ClickAsync("#loginBtn");
+        await WaitForFunctionAsync(page, "location.pathname === '/orders'");
         await WaitVisibleAsync(page, "#list");
         Assert.That(await HashAsync(page), Is.EqualTo(string.Empty));
 
@@ -108,6 +109,10 @@ public class OrdersReplayTests
         await page.ClickAsync("#cancelCreateBtn");
         await WaitVisibleAsync(page, "#list");
         Assert.That(await HashAsync(page), Is.EqualTo(string.Empty));
+
+        await page.ClickAsync("#btnAppMenu");
+        await page.ClickAsync("#appChromeLogoutBtn");
+        await WaitForFunctionAsync(page, "location.pathname === '/login'");
     }
 
     private static async Task<IBrowser> LaunchBrowserAsync()

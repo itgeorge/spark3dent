@@ -51,6 +51,22 @@ public class LabOnlyPageAuthTests
     }
 
     [Test]
+    public async Task ProductPages_DoNotContainEmbeddedLoginForms()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+
+        foreach (var path in new[] { "/", "/orders", "/iam", "/scheduling-config" })
+        {
+            var html = await (await client.GetAsync(path)).Content.ReadAsStringAsync();
+            Assert.That(html, Does.Not.Contain("id=\"login\""), path);
+            Assert.That(html, Does.Not.Contain("auth/login"), path);
+            Assert.That(html, Does.Not.Contain("id=\"loginBtn\""), path);
+        }
+    }
+
+    [Test]
     public async Task LoginPage_ReturnsHtml()
     {
         using var fixture = new ApiTestFixture();
