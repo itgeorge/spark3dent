@@ -115,6 +115,38 @@ public class OrdersReplayTests
         await WaitForFunctionAsync(page, "location.pathname === '/login'");
     }
 
+    [Test]
+    [Category("OrdersReplay")]
+    public async Task OrdersPage_AfterLogout_BackButtonDoesNotRevealCachedOrdersShell()
+    {
+        using var fixture = new ApiTestFixture();
+        _ = fixture.Client;
+
+        await using var server = await BrowserBridgeServer.StartAsync(fixture);
+        await using var browser = await LaunchBrowserAsync();
+        await using var page = await browser.NewPageAsync();
+        page.DefaultTimeout = 10_000;
+        page.DefaultNavigationTimeout = 15_000;
+
+        await page.GoToAsync(server.Url("/orders"));
+        await WaitForFunctionAsync(page, "location.pathname === '/login'");
+        await page.TypeAsync("#organizationCode", "DEMO");
+        await page.TypeAsync("#pin", "123456");
+        await page.ClickAsync("#loginBtn");
+        await WaitForFunctionAsync(page, "location.pathname === '/orders'");
+        await WaitVisibleAsync(page, "#list");
+        await page.ClickAsync("#newOrderBtn");
+        await WaitForHashAsync(page, "#new/1");
+
+        await page.ClickAsync("#btnAppMenu");
+        await page.ClickAsync("#appChromeLogoutBtn");
+        await WaitForFunctionAsync(page, "location.pathname === '/login'");
+
+        await page.GoBackAsync();
+
+        await WaitForFunctionAsync(page, "location.pathname === '/login' && !document.querySelector('#list')");
+    }
+
     private static async Task<IBrowser> LaunchBrowserAsync()
     {
         try

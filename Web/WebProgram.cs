@@ -126,8 +126,12 @@ app.MapMethods("/healthz", [HttpMethods.Get, HttpMethods.Head], (HttpContext ctx
         : Results.Ok(new { status = "ok" }));
 
 var webAssembly = Assembly.GetExecutingAssembly();
-app.MapGet(AppPageRegistry.LoginPath, async () =>
+app.MapGet(AppPageRegistry.LoginPath, async (HttpContext ctx) =>
 {
+    ctx.Response.Headers.CacheControl = "no-store, max-age=0";
+    ctx.Response.Headers.Pragma = "no-cache";
+    ctx.Response.Headers.Expires = "0";
+
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("login.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
@@ -416,6 +420,10 @@ static async Task<IResult> ServeRegisteredAppPageAsync(
 {
     if (await AppPageRegistry.AuthorizeDocumentRequestAsync(ctx, auth, page) is { } denied)
         return denied;
+
+    ctx.Response.Headers.CacheControl = "no-store, max-age=0";
+    ctx.Response.Headers.Pragma = "no-cache";
+    ctx.Response.Headers.Expires = "0";
 
     var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync(page.ResourceName, webAssembly);
     if (page.Path == AppPageRegistry.DefaultLabPath && cfg.Runtime.HostingMode != HostingMode.HetznerDocker)

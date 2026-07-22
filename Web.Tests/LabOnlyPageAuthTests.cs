@@ -51,6 +51,22 @@ public class LabOnlyPageAuthTests
     }
 
     [Test]
+    public async Task ProtectedAppPages_SendNoStoreCacheHeaders()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(client);
+
+        foreach (var path in new[] { "/", "/orders", "/iam", "/scheduling-config" })
+        {
+            var response = await client.GetAsync(path);
+            Assert.That(response.Headers.CacheControl?.NoStore, Is.True, path);
+            Assert.That(response.Headers.CacheControl?.MaxAge, Is.EqualTo(TimeSpan.Zero), path);
+            Assert.That(response.Headers.Pragma.Select(x => x.Name), Does.Contain("no-cache"), path);
+        }
+    }
+
+    [Test]
     public async Task ProductPages_DoNotContainEmbeddedLoginForms()
     {
         using var fixture = new ApiTestFixture();
