@@ -197,7 +197,7 @@ public sealed class SqliteOrderRepo : IOrderRepository
 
     private static SchedulingOrderEntity ToEntity(OrderRecord order)
     {
-        var entity = new SchedulingOrderEntity { Id = order.Id };
+        var entity = new SchedulingOrderEntity { Id = order.Id, MemberPinHashFingerprint = string.Empty };
         ApplyToEntity(entity, order);
         return entity;
     }
@@ -209,7 +209,6 @@ public sealed class SqliteOrderRepo : IOrderRepository
         entity.ClinicDisplayName = order.ClinicDisplayName;
         entity.MemberId = order.MemberId;
         entity.MemberLabel = order.MemberLabel;
-        entity.MemberPinHashFingerprint = order.MemberPinHashFingerprint;
         entity.CaseName = order.CaseName;
         entity.ImpressionDate = order.ImpressionDate;
         entity.ProductCategory = order.ProductCategory.ToString();
@@ -237,7 +236,6 @@ public sealed class SqliteOrderRepo : IOrderRepository
             e.ClinicDisplayName,
             e.MemberId,
             e.MemberLabel,
-            e.MemberPinHashFingerprint,
             e.CaseName,
             e.ImpressionDate,
             Enum.Parse<ProductCategory>(e.ProductCategory),

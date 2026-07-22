@@ -220,7 +220,7 @@ internal sealed class InMemorySchedulingWriteTransaction : ISchedulingWriteTrans
 
 internal static class TestActors
 {
-    public static readonly AuthenticatedActor Demo = new(OrganizationType.Clinic, "DEMO", "Demo", "cred-1", "Cred 1", "fingerprint", "session-1");
-    public static readonly AuthenticatedActor Other = new(OrganizationType.Clinic, "OTHER", "Other Clinic", "cred-other", "Other Cred", "other-fingerprint", "session-2");
-    public static readonly AuthenticatedActor Lab = new(OrganizationType.Lab, "LAB", "Spark3Dent Lab", "lab-1", "Lab Member 1", "lab-fingerprint", "session-lab");
+    public static readonly AuthenticatedActor Demo = new(OrganizationType.Clinic, "DEMO", "Demo", "cred-1", "Cred 1", "session-1");
+    public static readonly AuthenticatedActor Other = new(OrganizationType.Clinic, "OTHER", "Other Clinic", "cred-other", "Other Cred", "session-2");
+    public static readonly AuthenticatedActor Lab = new(OrganizationType.Lab, "LAB", "Spark3Dent Lab", "lab-1", "Lab Member 1", "session-lab");
 }

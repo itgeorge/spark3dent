@@ -206,7 +206,6 @@ public class OrdersReplayTests
             clinicCode == "DEMO" ? "Demo Dental Clinic" : "Other Clinic",
             "seed",
             "Seed",
-            "fingerprint",
             caseName,
             new DateOnly(2026, 6, 2),
             ProductCategory.Permanent,

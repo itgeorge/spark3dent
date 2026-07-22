@@ -524,7 +524,6 @@ public sealed class SchedulingOrderService
             targetClinic.DisplayName,
             actor.MemberId,
             actor.MemberLabel,
-            actor.MemberPinHashFingerprint,
             draft.CaseName.Trim(),
             draft.ImpressionDate,
             draft.ProductCategory,

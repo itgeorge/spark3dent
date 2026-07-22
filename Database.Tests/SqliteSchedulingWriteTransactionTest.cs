@@ -107,7 +107,6 @@ public class SqliteSchedulingWriteTransactionTest
             "Demo Clinic",
             "seed",
             "Seed",
-            "fingerprint",
             code,
             new DateOnly(2026, 6, 8),
             ProductCategory.Temporary,

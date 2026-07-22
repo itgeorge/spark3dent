@@ -116,7 +116,7 @@ public sealed class SchedulingAuthService
         _configProvider.Current.Options.SessionAbsoluteDays is { } days ? now.AddDays(days) : null;
 
     private static AuthenticatedActor ToActor(SchedulingOrganization organization, SchedulingMember member, string sessionId) =>
-        new(organization.OrganizationType, organization.Code, organization.DisplayName, member.Id, member.Label, member.PinFingerprint, sessionId);
+        new(organization.OrganizationType, organization.Code, organization.DisplayName, member.Id, member.Label, sessionId);
 
     private static string GenerateToken() => Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 

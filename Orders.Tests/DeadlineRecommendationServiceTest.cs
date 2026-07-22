@@ -499,7 +499,6 @@ public class DeadlineRecommendationServiceTest
             "Demo Clinic",
             "seed",
             "Seed",
-            "fingerprint",
             code,
             new DateOnly(2026, 6, 2),
             ProductCategory.Permanent,

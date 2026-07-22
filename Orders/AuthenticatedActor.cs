@@ -12,7 +12,6 @@ public sealed record AuthenticatedActor(
     string OrganizationName,
     string MemberId,
     string MemberLabel,
-    string MemberPinHashFingerprint,
     string SessionId)
 {
     public bool IsLab => OrganizationType == OrganizationType.Lab;

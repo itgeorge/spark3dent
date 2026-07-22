@@ -901,7 +901,6 @@ public class SchedulingOrderServiceTest
             "Demo",
             "seed",
             "Seed",
-            "fingerprint",
             code,
             new DateOnly(2026, 6, 8),
             productCategory,

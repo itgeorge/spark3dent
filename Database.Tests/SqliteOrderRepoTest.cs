@@ -375,6 +375,20 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task CreateOrderAsync_DoesNotPersistMemberPinHashFingerprint()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+
+        await repo.CreateOrderAsync(BuildOrder("NFP-234", "no fingerprint", DateTimeOffset.Parse("2026-05-31T10:00:00Z")));
+
+        await using var ctx = _contextFactory();
+        var entity = await ctx.SchedulingOrders.SingleAsync(o => o.OrderCode == "NFP-234");
+        Assert.That(entity.MemberId, Is.EqualTo("cred-1"));
+        Assert.That(entity.MemberLabel, Is.EqualTo("Credential 1"));
+        Assert.That(entity.MemberPinHashFingerprint, Is.Empty);
+    }
+
+    [Test]
     public async Task CurrentSchedulingOrderSchema_DoesNotContainLegacySingleWorkItemColumns()
     {
         await using var ctx = _contextFactory();
@@ -438,7 +452,6 @@ public class SqliteOrderRepoTest
         clinicCode == "DEMO" ? "Demo Clinic" : "Other Clinic",
         "cred-1",
         "Credential 1",
-        "fingerprint",
         caseName,
         new DateOnly(2026, 5, 31),
         ProductCategory.Permanent,

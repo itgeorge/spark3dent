@@ -7,7 +7,6 @@ public sealed record OrderRecord(
     string ClinicDisplayName,
     string MemberId,
     string MemberLabel,
-    string MemberPinHashFingerprint,
     string CaseName,
     DateOnly ImpressionDate,
     ProductCategory ProductCategory,
