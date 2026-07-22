@@ -25,7 +25,7 @@ todos:
     status: completed
   - id: build-and-regression
     content: Run build and relevant Web.Tests regression suites; document any manual smoke checks.
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -278,16 +278,16 @@ Use existing seeded credentials from tests where available:
 
 ## Completion Checklist
 
-- [ ] App documents moved out of static serving.
-- [ ] `/login` centralized page added.
-- [ ] Page registry added and default-fail behavior documented/tested.
-- [ ] Product pages no longer include duplicate login forms.
-- [ ] Unauthenticated document requests redirect to `/login?returnUrl=...`.
-- [ ] Wrong-role document requests redirect to safe fallback.
-- [ ] Login success redirects to valid target/fallback using actor info.
-- [ ] Logout redirects via `location.replace('/login')`.
-- [ ] Static `.html` bypass paths are closed.
-- [ ] Automated integration tests added.
-- [ ] Automated browser/page-load tests added where feasible.
-- [ ] `dotnet build Web/Web.csproj` passes.
-- [ ] Relevant `dotnet test Web.Tests/Web.Tests.csproj` tests pass.
+- [x] App documents moved out of static serving.
+- [x] `/login` centralized page added.
+- [x] Page registry added and default-fail behavior documented/tested.
+- [x] Product pages no longer include duplicate login forms.
+- [x] Unauthenticated document requests redirect to `/login?returnUrl=...`.
+- [x] Wrong-role document requests redirect to safe fallback.
+- [x] Login success redirects to valid target/fallback using actor info.
+- [x] Logout redirects via `location.replace('/login')`.
+- [x] Static `.html` bypass paths are closed.
+- [x] Automated integration tests added.
+- [x] Automated browser/page-load tests added where feasible.
+- [x] `dotnet build Web/Web.csproj` passes.
+- [x] Relevant `dotnet test Web.Tests/Web.Tests.csproj` tests pass.
