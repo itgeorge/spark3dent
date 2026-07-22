@@ -547,10 +547,10 @@ public class DeadlineRecommendationServiceTest
         public Task<OrderRecord> UpdateOrderAsync(OrderRecord order, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<OrderPage> ListOrdersPageAsync(OrderVisibilityScope scope, int limit, OrderCursor? cursor, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<OrderPage> ListOrdersPageContainingOrderAsync(OrderVisibilityScope scope, OrderRecord target, int limit, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(OrderVisibilityScope scope, string codeSuffix, int limit = 2, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(OrderVisibilityScope scope, DateOnly start, DateOnly end, CancellationToken ct = default) => throw new NotImplementedException();
 
         public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersByDeadlineRangeAsync(DateOnly start, DateOnly end, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<OrderRecord>>(_orders

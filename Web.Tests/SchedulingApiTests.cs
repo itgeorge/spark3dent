@@ -1121,7 +1121,7 @@ public class SchedulingApiTests
         """));
         Assert.That(techCreateMissingClinic.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 
-        var techCreate = await techClient.PostAsync("/api/scheduling/orders", Json("""
+        var techCreateMissingMember = await techClient.PostAsync("/api/scheduling/orders", Json("""
         {
           "clinicCode":"DEMO",
           "caseName":"Tech Case",
@@ -1132,7 +1132,30 @@ public class SchedulingApiTests
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
+        Assert.That(techCreateMissingMember.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+        var techCreate = await techClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"DEMO",
+          "clinicMemberId":"assistant-1",
+          "caseName":"Tech Case",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
         Assert.That(techCreate.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var techOrder = JsonDocument.Parse(await techCreate.Content.ReadAsStringAsync()).RootElement.GetProperty("order");
+        Assert.That(techOrder.GetProperty("memberId").GetString(), Is.EqualTo("assistant-1"));
+
+        var members = await techClient.GetAsync("/api/scheduling/clinics/DEMO/members");
+        Assert.That(members.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var membersText = await members.Content.ReadAsStringAsync();
+        var memberDoc = JsonDocument.Parse(membersText);
+        Assert.That(memberDoc.RootElement.GetProperty("items").EnumerateArray().Any(m => m.GetProperty("id").GetString() == "assistant-1"), Is.True);
+        Assert.That(membersText, Does.Not.Contain("pin").IgnoreCase);
     }
 
     [Test]
@@ -1745,6 +1768,25 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingOrdersEndpoints_ScopeClinicVisibilityByMemberOwner()
+    {
+        using var fixture = NewSchedulingFixture();
+        var ownCode = await SeedOrderAsync(fixture.DbPath, "OWN-001", "Own member", "DEMO", "2026-06-05");
+        await SeedOrderAsync(fixture.DbPath, "OTH-001", "Other member", "DEMO", "2026-06-06", memberId: "assistant-2");
+
+        using var client = fixture.Client;
+        await LoginAsync(client);
+
+        var list = await client.GetAsync("/api/scheduling/orders?limit=50");
+        var listText = await list.Content.ReadAsStringAsync();
+        Assert.That(listText, Does.Contain(ownCode));
+        Assert.That(listText, Does.Not.Contain("OTH-001"));
+
+        var hidden = await client.GetAsync("/api/scheduling/orders/OTH-001");
+        Assert.That(hidden.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
     public async Task SchedulingOrdersListEndpoint_ReturnsCursorPageAndRejectsInvalidCursor()
     {
         using var fixture = NewSchedulingFixture();
@@ -1886,6 +1928,7 @@ public class SchedulingApiTests
         var noReason = await labClient.PostAsync("/api/scheduling/orders", Json("""
         {
           "clinicCode":"OTHER",
+          "clinicMemberId":"other-1",
           "caseName":"Lab No Reason",
           "impressionDate":"2026-06-08",
           "productCategory":"temporary",
@@ -1902,6 +1945,7 @@ public class SchedulingApiTests
         var labOverride = await labClient.PostAsync("/api/scheduling/orders", Json("""
         {
           "clinicCode":"OTHER",
+          "clinicMemberId":"other-1",
           "caseName":"Lab Override",
           "impressionDate":"2026-06-08",
           "productCategory":"temporary",
@@ -1955,6 +1999,7 @@ public class SchedulingApiTests
         var create = await labClient.PostAsync("/api/scheduling/orders", Json("""
         {
           "clinicCode":"OTHER",
+          "clinicMemberId":"other-1",
           "caseName":"Calendar Override",
           "impressionDate":"2026-06-02",
           "productCategory":"permanent",
@@ -2191,14 +2236,16 @@ public class SchedulingApiTests
         string caseName,
         string requestedDeliveryDate,
         string? clinicCode = null,
+        string? clinicMemberId = null,
         string material = "fullContourZirconia",
         string productCategory = "permanent",
         string impressionDate = "2026-06-02")
     {
         var clinicPrefix = clinicCode == null ? "" : $"\"clinicCode\":\"{clinicCode}\",";
+        var memberPrefix = clinicMemberId == null ? "" : $"\"clinicMemberId\":\"{clinicMemberId}\",";
         var create = await client.PostAsync("/api/scheduling/orders", Json($$"""
         {
-          {{clinicPrefix}}
+          {{clinicPrefix}}{{memberPrefix}}
           "caseName":"{{caseName}}",
           "impressionDate":"{{impressionDate}}",
           "productCategory":"{{productCategory}}",
@@ -2211,7 +2258,7 @@ public class SchedulingApiTests
         return JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString()!;
     }
 
-    private static async Task<string> SeedOrderAsync(string dbPath, string code, string caseName, string clinicCode, string requestedDeliveryDate, DateTimeOffset? createdAt = null)
+    private static async Task<string> SeedOrderAsync(string dbPath, string code, string caseName, string clinicCode, string requestedDeliveryDate, DateTimeOffset? createdAt = null, string? memberId = null)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlite($"Data Source={dbPath}")
@@ -2220,13 +2267,14 @@ public class SchedulingApiTests
             await ctx.Database.MigrateAsync();
         var repo = new SqliteOrderRepo(() => new AppDbContext(options));
         var timestamp = createdAt ?? DateTimeOffset.Parse("2026-06-02T12:00:00Z");
+        var ownerMemberId = memberId ?? (clinicCode == "DEMO" ? "assistant-1" : "other-1");
         await repo.CreateOrderAsync(new OrderRecord(
             0,
             code,
             clinicCode,
             clinicCode == "DEMO" ? "Demo Dental Clinic" : "Other Clinic",
-            "seed",
-            "Seed",
+            ownerMemberId,
+            ownerMemberId == "assistant-1" ? "Assistant 1" : "Other Member 1",
             caseName,
             new DateOnly(2026, 6, 2),
             ProductCategory.Permanent,

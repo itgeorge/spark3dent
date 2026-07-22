@@ -27,7 +27,7 @@ public class SchedulingOrderServiceTest
                 Material = Material.Pmma,
                 ProductCategory = ProductCategory.Temporary,
                 RequestedDeliveryDate = new DateOnly(2026, 6, 4)
-            }, "127.0.0.1", "test", "OTHER"));
+            }, "127.0.0.1", "test", "OTHER", "other-1"));
         Assert.That(ex!.OverrideAllowed, Is.True);
         Assert.That(ex.FailedRules, Does.Contain(DeadlineValidationRule.DailyCapacityExceeded));
         Assert.That(overrideLogs.Logs, Is.Empty);
@@ -38,7 +38,7 @@ public class SchedulingOrderServiceTest
                 Material = Material.Pmma,
                 ProductCategory = ProductCategory.Temporary,
                 RequestedDeliveryDate = new DateOnly(2026, 6, 4)
-            }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "  ")));
+            }, "127.0.0.1", "test", "OTHER", "other-1", new DeadlineOverrideRequest(true, "  ")));
         Assert.That(emptyReasonEx!.Message, Does.Contain("reason"));
         Assert.That(overrideLogs.Logs, Is.Empty);
     }
@@ -67,7 +67,7 @@ public class SchedulingOrderServiceTest
             Material = Material.Pmma,
             ProductCategory = ProductCategory.Temporary,
             RequestedDeliveryDate = new DateOnly(2026, 6, 4)
-        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "Rush case approved by lab"));
+        }, "127.0.0.1", "test", "OTHER", "other-1", new DeadlineOverrideRequest(true, "Rush case approved by lab"));
 
         Assert.That(overridden.RequestedDeliveryDate, Is.EqualTo(new DateOnly(2026, 6, 4)));
         Assert.That(overridden.CalculatedCapacityUnits, Is.EqualTo(1m));
@@ -123,7 +123,7 @@ public class SchedulingOrderServiceTest
             Material = Material.Pmma,
             ProductCategory = ProductCategory.Temporary,
             RequestedDeliveryDate = new DateOnly(2026, 6, 3)
-        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "No normal capacity in search window"));
+        }, "127.0.0.1", "test", "OTHER", "other-1", new DeadlineOverrideRequest(true, "No normal capacity in search window"));
 
         Assert.That(overrideLogs.Logs.Single().RulesBypassedJson, Does.Contain(nameof(DeadlineValidationRule.SearchFailure)));
     }
@@ -137,11 +137,11 @@ public class SchedulingOrderServiceTest
         await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Early") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 3)
-        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "Lab accepts earlier date"));
+        }, "127.0.0.1", "test", "OTHER", "other-1", new DeadlineOverrideRequest(true, "Lab accepts earlier date"));
         await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Monday") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 1)
-        }, "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "Pickup arranged despite Monday"));
+        }, "127.0.0.1", "test", "OTHER", "other-1", new DeadlineOverrideRequest(true, "Pickup arranged despite Monday"));
 
         Assert.That(overrideLogs.Logs, Has.Count.EqualTo(2));
         Assert.That(overrideLogs.Logs[0].RulesBypassedJson, Does.Contain(nameof(DeadlineValidationRule.MinimumLeadTime)));
@@ -154,7 +154,7 @@ public class SchedulingOrderServiceTest
         var overrideLogs = new CapturingDeadlineOverrideLogRepository();
         var fixture = new Fixture(1, deadlineOverrideLogs: overrideLogs);
 
-        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Normal"), "127.0.0.1", "test", "OTHER", new DeadlineOverrideRequest(true, "not needed"));
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Normal"), "127.0.0.1", "test", "OTHER", "other-1", new DeadlineOverrideRequest(true, "not needed"));
 
         Assert.That(overrideLogs.Logs, Is.Empty);
     }
@@ -230,7 +230,7 @@ public class SchedulingOrderServiceTest
         var audit = new CapturingAuditLog();
         var fixture = new Fixture(1, auditLog: audit);
 
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Audit create"), "127.0.0.1", "test-agent", "OTHER");
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Audit create"), "127.0.0.1", "test-agent", "OTHER", "other-1");
 
         Assert.That(audit.Events, Has.Count.EqualTo(1));
         var evt = audit.Events[0];
@@ -243,6 +243,30 @@ public class SchedulingOrderServiceTest
         Assert.That(evt.Ip, Is.EqualTo("127.0.0.1"));
         Assert.That(evt.UserAgent, Is.EqualTo("test-agent"));
         Assert.That(evt.MetadataJson, Does.Contain("OTHER"));
+        Assert.That(evt.MetadataJson, Does.Contain("other-1"));
+        Assert.That(evt.MetadataJson, Does.Contain("Other Cred"));
+        Assert.That(evt.MetadataJson, Does.Contain("ownerMemberId"));
+        Assert.That(evt.MetadataJson, Does.Contain("ownerMemberLabel"));
+    }
+
+    [Test]
+    public async Task ListOrdersForActorAsync_ScopesClinicOrdersByMemberOwner()
+    {
+        var fixture = new Fixture(["OWN-1", "OWN-2"]);
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("mine") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 9)
+        }, "127.0.0.1", "test");
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("other member") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test", "DEMO", "assistant-2");
+
+        var demoOrders = await fixture.Service.ListOrdersForActorAsync(TestActors.Demo, 10);
+        var labOrders = await fixture.Service.ListOrdersForActorAsync(TestActors.Lab, 10);
+
+        Assert.That(demoOrders.Select(o => o.OrderCode), Is.EqualTo(new[] { "OWN-1" }));
+        Assert.That(labOrders.Select(o => o.OrderCode), Is.EquivalentTo(new[] { "OWN-1", "OWN-2" }));
     }
 
     [Test]
@@ -320,7 +344,7 @@ public class SchedulingOrderServiceTest
     public async Task UpdateOrderAsync_GivenClinicOtherOrder_ReturnsNotFound()
     {
         var fixture = new Fixture(1);
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Other"), "127.0.0.1", "test", "OTHER");
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Other"), "127.0.0.1", "test", "OTHER", "other-1");
 
         Assert.ThrowsAsync<KeyNotFoundException>(async () =>
             await fixture.Service.UpdateOrderAsync(TestActors.Demo, created.OrderCode, fixture.CreateOrderDraft("Nope")));
@@ -369,15 +393,16 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
-    public async Task CreateOrderAsync_GivenLabTargetClinic_CreatesForTargetClinicWithLabMember()
+    public async Task CreateOrderAsync_GivenLabTargetClinic_CreatesForTargetClinicWithSelectedClinicMember()
     {
         var fixture = new Fixture(1);
 
-        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("For other"), "127.0.0.1", "test", "OTHER");
+        var created = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("For other"), "127.0.0.1", "test", "OTHER", "other-1");
 
         Assert.That(created.ClinicCode, Is.EqualTo("OTHER"));
         Assert.That(created.ClinicDisplayName, Is.EqualTo("Other Clinic"));
-        Assert.That(created.MemberId, Is.EqualTo(TestActors.Lab.MemberId));
+        Assert.That(created.MemberId, Is.EqualTo("other-1"));
+        Assert.That(created.MemberLabel, Is.EqualTo("Other Cred"));
     }
 
     [Test]
@@ -386,7 +411,7 @@ public class SchedulingOrderServiceTest
         var fixture = new Fixture(1);
 
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Bad target"), "127.0.0.1", "test", "OTHER"));
+            await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Bad target"), "127.0.0.1", "test", "OTHER", "other-1"));
     }
 
     [Test]
@@ -396,6 +421,15 @@ public class SchedulingOrderServiceTest
 
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Missing target"), "127.0.0.1", "test"));
+    }
+
+    [Test]
+    public void CreateOrderAsync_GivenLabWithoutTargetClinicMember_Rejects()
+    {
+        var fixture = new Fixture(1);
+
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Missing member"), "127.0.0.1", "test", "OTHER"));
     }
 
     [Test]
@@ -413,7 +447,7 @@ public class SchedulingOrderServiceTest
         await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("other") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
-        }, "127.0.0.1", "test", "OTHER");
+        }, "127.0.0.1", "test", "OTHER", "other-1");
 
         var first = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 1);
         var second = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 1, first.NextCursor);
@@ -433,7 +467,7 @@ public class SchedulingOrderServiceTest
         await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("other same short") with
         {
             RequestedDeliveryDate = new DateOnly(2027, 6, 8)
-        }, "127.0.0.1", "test", "OTHER");
+        }, "127.0.0.1", "test", "OTHER", "other-1");
         var cancelled = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("cancelled") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
@@ -453,6 +487,26 @@ public class SchedulingOrderServiceTest
     }
 
     [Test]
+    public async Task ListOrdersPageForActorAsync_ScopesClinicOrdersByMemberOwner()
+    {
+        var fixture = new Fixture(["OWN-1", "OWN-2", "OTHER-MEMBER"]);
+        await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("mine") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 9)
+        }, "127.0.0.1", "test");
+        await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("other member") with
+        {
+            RequestedDeliveryDate = new DateOnly(2026, 6, 10)
+        }, "127.0.0.1", "test", "DEMO", "assistant-2");
+
+        var demoPage = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Demo, 10);
+        var labPage = await fixture.Service.ListOrdersPageForActorAsync(TestActors.Lab, 10);
+
+        Assert.That(demoPage.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "OWN-1" }));
+        Assert.That(labPage.Items.Select(o => o.OrderCode), Is.EquivalentTo(new[] { "OWN-1", "OWN-2" }));
+    }
+
+    [Test]
     public async Task ListCalendarOrdersAsync_AppliesActorScopeRangeAndExcludesCancelled()
     {
         var fixture = new Fixture(4);
@@ -467,7 +521,7 @@ public class SchedulingOrderServiceTest
         var other = await fixture.Service.CreateOrderAsync(TestActors.Lab, fixture.CreateOrderDraft("Other") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
-        }, "127.0.0.1", "test", "OTHER");
+        }, "127.0.0.1", "test", "OTHER", "other-1");
         var cancelled = await fixture.Service.CreateOrderAsync(TestActors.Demo, fixture.CreateOrderDraft("Cancelled") with
         {
             RequestedDeliveryDate = new DateOnly(2026, 6, 10)
@@ -557,7 +611,7 @@ public class SchedulingOrderServiceTest
         var draft = fixture.CreateOrderDraft("Early lab") with { RequestedDeliveryDate = earlyDate };
 
         Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
-            await fixture.Service.CreateOrderAsync(TestActors.Lab, draft, "127.0.0.1", "test", "OTHER"));
+            await fixture.Service.CreateOrderAsync(TestActors.Lab, draft, "127.0.0.1", "test", "OTHER", "other-1"));
     }
 
     [Test]
@@ -619,14 +673,16 @@ public class SchedulingOrderServiceTest
                 fixture.CreateOrderDraft("Closed") with { RequestedDeliveryDate = new DateOnly(2026, 6, 6) },
                 "127.0.0.1",
                 "test",
-                "OTHER"));
+                "OTHER",
+                "other-1"));
         Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
             await fixture.Service.CreateOrderAsync(
                 TestActors.Lab,
                 fixture.CreateOrderDraft("First after closure") with { RequestedDeliveryDate = new DateOnly(2026, 6, 1) },
                 "127.0.0.1",
                 "test",
-                "OTHER"));
+                "OTHER",
+                "other-1"));
     }
 
     [Test]
@@ -646,6 +702,7 @@ public class SchedulingOrderServiceTest
             "127.0.0.1",
             "test",
             "OTHER",
+            "other-1",
             new DeadlineOverrideRequest(true, "seed early capacity"));
 
         Assert.ThrowsAsync<DeadlineOverrideRequiredException>(async () =>
@@ -654,7 +711,8 @@ public class SchedulingOrderServiceTest
                 fixture.CreateOrderDraft("Blocked early") with { RequestedDeliveryDate = earlyDate },
                 "127.0.0.1",
                 "test",
-                "OTHER"));
+                "OTHER",
+                "other-1"));
     }
 
     [Test]
@@ -1141,20 +1199,20 @@ public class SchedulingOrderServiceTest
             public Task<IReadOnlyList<OrderRecord>> ListOrdersAsync(int limit = 100, CancellationToken ct = default)
             {
                 lock (_gate)
-                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(null).Take(limit).ToList());
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(new OrderVisibilityScope(null, null)).Take(limit).ToList());
             }
 
             public Task<IReadOnlyList<OrderRecord>> ListOrdersForClinicAsync(string clinicCode, int limit = 100, CancellationToken ct = default)
             {
                 lock (_gate)
-                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(clinicCode).Take(limit).ToList());
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(new OrderVisibilityScope(clinicCode, null)).Take(limit).ToList());
             }
 
-            public Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default)
+            public Task<OrderPage> ListOrdersPageAsync(OrderVisibilityScope scope, int limit, OrderCursor? cursor, CancellationToken ct = default)
             {
                 lock (_gate)
                 {
-                    var query = OrderedScoped(clinicCode);
+                    var query = OrderedScoped(scope);
                     if (cursor != null)
                     {
                         query = query.Where(o =>
@@ -1166,28 +1224,29 @@ public class SchedulingOrderServiceTest
                 }
             }
 
-            public Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default)
+            public Task<OrderPage> ListOrdersPageContainingOrderAsync(OrderVisibilityScope scope, OrderRecord target, int limit, CancellationToken ct = default)
             {
                 lock (_gate)
                 {
-                    var query = OrderedScoped(clinicCode).ToList();
+                    var query = OrderedScoped(scope).ToList();
                     var index = query.FindIndex(o => o.Id == target.Id);
                     var start = index < 0 ? 0 : index / Math.Max(1, limit) * Math.Max(1, limit);
                     return Task.FromResult(MakePage(query.Skip(start), limit));
                 }
             }
 
-            public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default)
+            public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(OrderVisibilityScope scope, string codeSuffix, int limit = 2, CancellationToken ct = default)
             {
                 lock (_gate)
-                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(clinicCode)
+                    return Task.FromResult<IReadOnlyList<OrderRecord>>(OrderedScoped(scope)
                         .Where(o => o.OrderCode.EndsWith(codeSuffix, StringComparison.OrdinalIgnoreCase))
                         .Take(Math.Clamp(limit, 1, 20))
                         .ToList());
             }
 
-            private IEnumerable<OrderRecord> OrderedScoped(string? clinicCode) => _ordersByCode.Values
-                .Where(o => clinicCode == null || string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase))
+            private IEnumerable<OrderRecord> OrderedScoped(OrderVisibilityScope scope) => _ordersByCode.Values
+                .Where(o => (scope.ClinicCode == null || string.Equals(o.ClinicCode, scope.ClinicCode, StringComparison.OrdinalIgnoreCase))
+                    && (scope.MemberId == null || string.Equals(o.MemberId, scope.MemberId, StringComparison.OrdinalIgnoreCase)))
                 .OrderByDescending(o => o.RequestedDeliveryDate)
                 .ThenByDescending(o => o.CreatedAt.ToUnixTimeMilliseconds())
                 .ThenByDescending(o => o.Id);
@@ -1202,7 +1261,7 @@ public class SchedulingOrderServiceTest
                 return new OrderPage(items, nextCursor, hasMore);
             }
 
-            public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default)
+            public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(OrderVisibilityScope scope, DateOnly start, DateOnly end, CancellationToken ct = default)
             {
                 lock (_gate)
                     return Task.FromResult<IReadOnlyList<OrderRecord>>(
@@ -1210,7 +1269,8 @@ public class SchedulingOrderServiceTest
                             .Where(o => o.Status != OrderStatus.Cancelled
                                 && o.RequestedDeliveryDate >= start
                                 && o.RequestedDeliveryDate <= end
-                                && (clinicCode == null || string.Equals(o.ClinicCode, clinicCode, StringComparison.OrdinalIgnoreCase)))
+                                && (scope.ClinicCode == null || string.Equals(o.ClinicCode, scope.ClinicCode, StringComparison.OrdinalIgnoreCase))
+                                && (scope.MemberId == null || string.Equals(o.MemberId, scope.MemberId, StringComparison.OrdinalIgnoreCase)))
                             .OrderBy(o => o.RequestedDeliveryDate)
                             .ThenBy(o => o.ClinicDisplayName)
                             .ThenBy(o => o.CaseName)

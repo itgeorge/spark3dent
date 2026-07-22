@@ -94,7 +94,7 @@ public class SqliteOrderRepoTest
 
         var byCode = await repo.GetOrderByCodeAsync("TEL-234");
         var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "TEL-234");
-        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "TEL-234");
+        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope(null, null), new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "TEL-234");
 
         Assert.That(byCode!.Material, Is.EqualTo(Material.PmmaTelio));
         Assert.That(fromList.Material, Is.EqualTo(Material.PmmaTelio));
@@ -126,7 +126,7 @@ public class SqliteOrderRepoTest
 
         var byCode = await repo.GetOrderByCodeAsync("CLR-234");
         var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "CLR-234");
-        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "CLR-234");
+        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope(null, null), new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "CLR-234");
 
         Assert.That(byCode!.ColorNote, Is.EqualTo("body A3, cervical A3.5"));
         Assert.That(fromList.ColorNote, Is.EqualTo("body A3, cervical A3.5"));
@@ -249,8 +249,8 @@ public class SqliteOrderRepoTest
             clinicCode: "OTHER",
             requestedDeliveryDate: new DateOnly(2026, 6, 10)));
 
-        var demoOrders = await repo.ListActiveOrdersForCalendarAsync("DEMO", new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
-        var allOrders = await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
+        var demoOrders = await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope("DEMO", null), new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
+        var allOrders = await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope(null, null), new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 10));
 
         Assert.That(demoOrders.Select(o => o.OrderCode), Is.EqualTo(new[] { "AAA-234" }));
         Assert.That(allOrders.Select(o => o.OrderCode), Is.EqualTo(new[] { "AAA-234", "DDD-234" }));
@@ -307,9 +307,9 @@ public class SqliteOrderRepoTest
         await repo.CreateOrderAsync(BuildOrder("NEW-234", "new", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 7)));
         await repo.CreateOrderAsync(BuildOrder("OTH-234", "other", DateTimeOffset.Parse("2026-05-31T13:00:00Z"), clinicCode: "OTHER", requestedDeliveryDate: new DateOnly(2026, 6, 8)));
 
-        var first = await repo.ListOrdersPageAsync("DEMO", 2, null);
-        var second = await repo.ListOrdersPageAsync("DEMO", 2, OrderCursorCodec.Decode(first.NextCursor));
-        var tech = await repo.ListOrdersPageAsync(null, 10, null);
+        var first = await repo.ListOrdersPageAsync(new OrderVisibilityScope("DEMO", null), 2, null);
+        var second = await repo.ListOrdersPageAsync(new OrderVisibilityScope("DEMO", null), 2, OrderCursorCodec.Decode(first.NextCursor));
+        var tech = await repo.ListOrdersPageAsync(new OrderVisibilityScope(null, null), 10, null);
 
         Assert.That(first.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "NEW-234", "MID-234" }));
         Assert.That(first.HasMore, Is.True);
@@ -328,13 +328,25 @@ public class SqliteOrderRepoTest
         var target = await repo.CreateOrderAsync(BuildOrder("26-0606-Z1BB", "target", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), requestedDeliveryDate: new DateOnly(2026, 6, 6)));
         await repo.CreateOrderAsync(BuildOrder("27-0605-Z1AA", "other", DateTimeOffset.Parse("2026-05-31T12:00:00Z"), clinicCode: "OTHER", requestedDeliveryDate: new DateOnly(2027, 6, 5)));
 
-        var page = await repo.ListOrdersPageContainingOrderAsync("DEMO", target, 1);
-        var demoShortMatches = await repo.FindOrdersByCodeSuffixAsync("DEMO", "0605-Z1AA", 2);
-        var techShortMatches = await repo.FindOrdersByCodeSuffixAsync(null, "0605-Z1AA", 2);
+        var page = await repo.ListOrdersPageContainingOrderAsync(new OrderVisibilityScope("DEMO", null), target, 1);
+        var demoShortMatches = await repo.FindOrdersByCodeSuffixAsync(new OrderVisibilityScope("DEMO", null), "0605-Z1AA", 2);
+        var techShortMatches = await repo.FindOrdersByCodeSuffixAsync(new OrderVisibilityScope(null, null), "0605-Z1AA", 2);
 
         Assert.That(page.Items.Select(o => o.OrderCode), Does.Contain(target.OrderCode));
         Assert.That(demoShortMatches.Select(o => o.OrderCode), Is.EqualTo(new[] { "26-0605-Z1AA" }));
         Assert.That(techShortMatches, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ListOrdersPageAsync_FiltersByClinicMemberScope()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("MEM-A-234", "member a", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), memberId: "assistant-1"));
+        await repo.CreateOrderAsync(BuildOrder("MEM-B-234", "member b", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), memberId: "assistant-2"));
+
+        var scoped = await repo.ListOrdersPageAsync(new OrderVisibilityScope("DEMO", "assistant-1"), 10, null);
+
+        Assert.That(scoped.Items.Select(o => o.OrderCode), Is.EqualTo(new[] { "MEM-A-234" }));
     }
 
     [Test]
@@ -367,7 +379,7 @@ public class SqliteOrderRepoTest
 
         var byCode = await repo.GetOrderByCodeAsync("WRK-234");
         var fromList = (await repo.ListOrdersAsync()).Single(o => o.OrderCode == "WRK-234");
-        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(null, new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "WRK-234");
+        var fromCalendar = (await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope(null, null), new DateOnly(2026, 6, 5), new DateOnly(2026, 6, 5))).Single(o => o.OrderCode == "WRK-234");
 
         Assert.That(byCode!.WorkItems.Select(i => i.ToothStart), Is.EqualTo(new[] { 13, 23 }));
         Assert.That(fromList.WorkItems, Has.Count.EqualTo(2));
@@ -445,13 +457,14 @@ public class SqliteOrderRepoTest
         DateTimeOffset createdAt,
         Shade shade = Shade.Unspecified,
         string clinicCode = "DEMO",
+        string? memberId = null,
         DateOnly? requestedDeliveryDate = null) => new(
         0,
         code,
         clinicCode,
         clinicCode == "DEMO" ? "Demo Clinic" : "Other Clinic",
-        "cred-1",
-        "Credential 1",
+        memberId ?? "cred-1",
+        memberId == "assistant-2" ? "Assistant 2" : "Credential 1",
         caseName,
         new DateOnly(2026, 5, 31),
         ProductCategory.Permanent,

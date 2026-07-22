@@ -60,15 +60,18 @@ public class OrdersReplayTests
         await WaitVisibleAsync(page, "#cancelOrderConfirmPopup");
         await page.Keyboard.PressAsync("Escape");
         await WaitForHiddenAsync(page, "#cancelOrderConfirmPopup");
-        await page.ClickAsync("#reviewBackTopBtn");
+        await page.EvaluateExpressionAsync("document.querySelector('#reviewBackTopBtn').click()");
+        await WaitForHashAsync(page, "");
         await WaitVisibleAsync(page, "#list");
+        await WaitForHiddenAsync(page, "#reviewCard");
         Assert.That(await HashAsync(page), Is.EqualTo(string.Empty));
 
         await page.ClickAsync("#newOrderBtn");
         await WaitVisibleAsync(page, "#app");
         await WaitForHashAsync(page, "#new/1");
 
-        await page.ClickAsync("#quickTeeth .tooth[data-t='11']");
+        await page.EvaluateExpressionAsync("document.querySelector(\"#quickTeeth .tooth[data-t='11']\").click()");
+        await WaitForFunctionAsync(page, "document.querySelector('#ts') && document.querySelector('#ts').value === '11'");
         await page.ClickAsync("#cancelCreateBtn");
         await WaitVisibleAsync(page, "#discardOrderFlowPopup");
         await page.ClickAsync("#discardOrderFlowBackBtn");
@@ -82,7 +85,8 @@ public class OrdersReplayTests
 
         await page.ClickAsync("#newOrderBtn");
         await WaitForHashAsync(page, "#new/1");
-        await page.ClickAsync("#quickTeeth .tooth[data-t='11']");
+        await page.EvaluateExpressionAsync("document.querySelector(\"#quickTeeth .tooth[data-t='11']\").click()");
+        await WaitForFunctionAsync(page, "document.querySelector('#ts') && document.querySelector('#ts').value === '11'");
         await page.ClickAsync(".nav-next");
         await WaitForHashAsync(page, "#new/2");
         await page.ClickAsync("#materialChoices [data-mat='fullContourZirconia']");
@@ -255,8 +259,8 @@ public class OrdersReplayTests
             code,
             clinicCode,
             clinicCode == "DEMO" ? "Demo Dental Clinic" : "Other Clinic",
-            "seed",
-            "Seed",
+            clinicCode == "DEMO" ? "assistant-1" : "other-1",
+            clinicCode == "DEMO" ? "Assistant 1" : "Other Member 1",
             caseName,
             new DateOnly(2026, 6, 2),
             ProductCategory.Permanent,

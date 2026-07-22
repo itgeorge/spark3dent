@@ -277,6 +277,17 @@ public static class SchedulingApi
             return Results.Json(new { items = clinics }, JsonOptions);
         });
 
+        app.MapGet("/api/scheduling/clinics/{clinicCode}/members", async (string clinicCode, HttpContext ctx, SchedulingAuthService auth, ISchedulingIdentityRepository identities) =>
+        {
+            var actor = await RequireActor(ctx, auth);
+            if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
+            var clinic = await identities.GetClinicAsync(clinicCode, includeInactive: false, ctx.RequestAborted);
+            if (clinic == null) return Results.Json(new { error = "Clinic not found." }, statusCode: 404, options: JsonOptions);
+            var members = await identities.ListMembersAsync(OrganizationType.Clinic, clinic.Code, includeInactive: false, ctx.RequestAborted);
+            return Results.Json(new { items = members.Select(ToClinicMemberDto) }, JsonOptions);
+        });
+
         app.MapPost("/api/scheduling/dates", async (HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
         {
             var actor = await RequireActor(ctx, auth);
@@ -286,7 +297,7 @@ public static class SchedulingApi
             try
             {
                 var draft = ToDraft(body, body.Start);
-                var previewOrder = await ResolveDatePreviewOrderAsync(body.OrderCode, actor, orders, ctx.RequestAborted);
+                var previewOrder = await orders.GetOrderForDatePreviewAsync(actor, body.OrderCode, ctx.RequestAborted);
                 var impressionTimestampUtc = previewOrder?.CreatedAt;
                 var excludedOrderId = previewOrder?.Id;
                 var minimum = impressionTimestampUtc.HasValue
@@ -315,7 +326,7 @@ public static class SchedulingApi
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try
             {
-                var created = await orders.CreateOrderAsync(actor, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), body.ClinicCode, ToDeadlineOverrideRequest(body), ctx.RequestAborted);
+                var created = await orders.CreateOrderAsync(actor, ToDraft(body, body.RequestedDeliveryDate), RemoteIp(ctx), UserAgent(ctx), body.ClinicCode, body.ClinicMemberId, ToDeadlineOverrideRequest(body), ctx.RequestAborted);
                 return Results.Json(new { order = ToDto(created) }, statusCode: 201, options: JsonOptions);
             }
             catch (DeadlineOverrideRequiredException ex)
@@ -443,10 +454,16 @@ public static class SchedulingApi
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
-            var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
-            if (order == null) return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
-            var items = await logs.ListForOrderAsync(order.Id, ctx.RequestAborted);
-            return Results.Json(new { items = items.Select(ToDeadlineRecommendationLogDto) }, JsonOptions);
+            try
+            {
+                var order = await orders.GetOrderForActorAsync(actor, code, ctx.RequestAborted);
+                var items = await logs.ListForOrderAsync(order.Id, ctx.RequestAborted);
+                return Results.Json(new { items = items.Select(ToDeadlineRecommendationLogDto) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
         });
 
         app.MapGet("/api/scheduling/orders/{code}/deadline-override-logs", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, IDeadlineOverrideLogRepository logs) =>
@@ -454,23 +471,34 @@ public static class SchedulingApi
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
             if (!actor.IsLab) return Results.Json(new { error = "Lab access required." }, statusCode: 403, options: JsonOptions);
-            var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
-            if (order == null) return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
-            var items = await logs.ListForOrderAsync(order.Id, ctx.RequestAborted);
-            return Results.Json(new { items = items.Select(ToDeadlineOverrideLogDto) }, JsonOptions);
+            try
+            {
+                var order = await orders.GetOrderForActorAsync(actor, code, ctx.RequestAborted);
+                var items = await logs.ListForOrderAsync(order.Id, ctx.RequestAborted);
+                return Results.Json(new { items = items.Select(ToDeadlineOverrideLogDto) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
         });
 
         app.MapGet("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders, ISchedulingIdentityRepository identities) =>
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
-            var order = await orders.GetOrderByCodeAsync(code, ctx.RequestAborted);
-            if (order == null || (!actor.IsLab && !string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase)))
-                return Results.Json(new { error = "Order not found." }, statusCode: 404, options: JsonOptions);
-            SchedulingClinic? liveClinic = null;
-            if (actor.IsLab)
-                liveClinic = await identities.GetClinicAsync(order.ClinicCode, includeInactive: false, ctx.RequestAborted);
-            return Results.Json(new { order = ToDto(order, liveClinic) }, JsonOptions);
+            try
+            {
+                var order = await orders.GetOrderForActorAsync(actor, code, ctx.RequestAborted);
+                SchedulingClinic? liveClinic = null;
+                if (actor.IsLab)
+                    liveClinic = await identities.GetClinicAsync(order.ClinicCode, includeInactive: false, ctx.RequestAborted);
+                return Results.Json(new { order = ToDto(order, liveClinic) }, JsonOptions);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 404, options: JsonOptions);
+            }
         });
 
         app.MapPut("/api/scheduling/orders/{code}", async (string code, HttpContext ctx, SchedulingAuthService auth, SchedulingOrderService orders) =>
@@ -536,20 +564,6 @@ public static class SchedulingApi
     {
         try { return await JsonSerializer.DeserializeAsync<T>(ctx.Request.Body, JsonOptions, ctx.RequestAborted); }
         catch (JsonException) { return default; }
-    }
-
-    private static async Task<OrderRecord?> ResolveDatePreviewOrderAsync(
-        string? orderCode,
-        AuthenticatedActor actor,
-        SchedulingOrderService orders,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(orderCode)) return null;
-
-        var order = await orders.GetOrderByCodeAsync(orderCode.Trim(), ct);
-        if (order == null || (!actor.IsLab && !string.Equals(order.ClinicCode, actor.OrganizationCode, StringComparison.OrdinalIgnoreCase)))
-            throw new KeyNotFoundException("Order not found.");
-        return order;
     }
 
     private static DeadlineOverrideRequest? ToDeadlineOverrideRequest(OrderShape body) =>
@@ -700,6 +714,12 @@ public static class SchedulingApi
     {
         capacity.Used,
         capacity.Limit
+    };
+
+    private static object ToClinicMemberDto(SchedulingMember member) => new
+    {
+        id = member.Id,
+        label = member.Label
     };
 
     private static object ToClinicMetaDto(SchedulingClinic clinic) => new
@@ -983,6 +1003,7 @@ public static class SchedulingApi
     {
         public DateOnly RequestedDeliveryDate { get; init; }
         public string? ClinicCode { get; init; }
+        public string? ClinicMemberId { get; init; }
     }
 
     public sealed record UpdateOrderRequest : OrderShape

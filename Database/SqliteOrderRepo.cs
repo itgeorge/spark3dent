@@ -79,10 +79,10 @@ public sealed class SqliteOrderRepo : IOrderRepository
             return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
         });
 
-    public Task<OrderPage> ListOrdersPageAsync(string? clinicCode, int limit, OrderCursor? cursor, CancellationToken ct = default) =>
+    public Task<OrderPage> ListOrdersPageAsync(OrderVisibilityScope scope, int limit, OrderCursor? cursor, CancellationToken ct = default) =>
         WithContextAsync(async ctx =>
         {
-            var query = ScopedOrders(ctx, clinicCode);
+            var query = ScopedOrders(ctx, scope);
             if (cursor != null)
                 query = query.Where(o =>
                     o.RequestedDeliveryDate < cursor.RequestedDeliveryDate
@@ -92,10 +92,10 @@ public sealed class SqliteOrderRepo : IOrderRepository
             return await MaterializePageAsync(query, limit, ct);
         });
 
-    public Task<OrderPage> ListOrdersPageContainingOrderAsync(string? clinicCode, OrderRecord target, int limit, CancellationToken ct = default) =>
+    public Task<OrderPage> ListOrdersPageContainingOrderAsync(OrderVisibilityScope scope, OrderRecord target, int limit, CancellationToken ct = default) =>
         WithContextAsync(async ctx =>
         {
-            var query = ScopedOrders(ctx, clinicCode);
+            var query = ScopedOrders(ctx, scope);
             var targetCreatedMs = target.CreatedAt.ToUnixTimeMilliseconds();
             var beforeCount = await query.CountAsync(o =>
                 o.RequestedDeliveryDate > target.RequestedDeliveryDate
@@ -105,29 +105,31 @@ public sealed class SqliteOrderRepo : IOrderRepository
             return await MaterializePageAsync(query, limit, ct, pageStart);
         });
 
-    public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(string? clinicCode, string codeSuffix, int limit = 2, CancellationToken ct = default) =>
+    public Task<IReadOnlyList<OrderRecord>> FindOrdersByCodeSuffixAsync(OrderVisibilityScope scope, string codeSuffix, int limit = 2, CancellationToken ct = default) =>
         WithContextAsync(async ctx =>
         {
             var normalized = codeSuffix.Trim().ToUpperInvariant();
             if (normalized.Length == 0)
                 return (IReadOnlyList<OrderRecord>)[];
 
-            var items = await Ordered(ScopedOrders(ctx, clinicCode))
+            var items = await Ordered(ScopedOrders(ctx, scope))
                 .Where(o => o.OrderCode.EndsWith(normalized))
                 .Take(Math.Clamp(limit, 1, 20))
                 .ToListAsync(ct);
             return (IReadOnlyList<OrderRecord>)items.Select(ToDomain).ToList();
         });
 
-    public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(string? clinicCode, DateOnly start, DateOnly end, CancellationToken ct = default) =>
+    public Task<IReadOnlyList<OrderRecord>> ListActiveOrdersForCalendarAsync(OrderVisibilityScope scope, DateOnly start, DateOnly end, CancellationToken ct = default) =>
         WithContextAsync(async ctx =>
         {
             var query = ctx.SchedulingOrders.AsNoTracking()
                 .Where(o => o.Status != nameof(OrderStatus.Cancelled)
                     && o.RequestedDeliveryDate >= start
                     && o.RequestedDeliveryDate <= end);
-            if (!string.IsNullOrWhiteSpace(clinicCode))
-                query = query.Where(o => o.ClinicCode == clinicCode);
+            if (!string.IsNullOrWhiteSpace(scope.ClinicCode))
+                query = query.Where(o => o.ClinicCode == scope.ClinicCode);
+            if (!string.IsNullOrWhiteSpace(scope.MemberId))
+                query = query.Where(o => o.MemberId == scope.MemberId);
 
             var items = await query
                 .OrderBy(o => o.RequestedDeliveryDate)
@@ -163,11 +165,13 @@ public sealed class SqliteOrderRepo : IOrderRepository
         return await operation(ctx);
     }
 
-    private static IQueryable<SchedulingOrderEntity> ScopedOrders(AppDbContext ctx, string? clinicCode)
+    private static IQueryable<SchedulingOrderEntity> ScopedOrders(AppDbContext ctx, OrderVisibilityScope scope)
     {
         var query = ctx.SchedulingOrders.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(clinicCode))
-            query = query.Where(o => o.ClinicCode == clinicCode);
+        if (!string.IsNullOrWhiteSpace(scope.ClinicCode))
+            query = query.Where(o => o.ClinicCode == scope.ClinicCode);
+        if (!string.IsNullOrWhiteSpace(scope.MemberId))
+            query = query.Where(o => o.MemberId == scope.MemberId);
         return query;
     }
 

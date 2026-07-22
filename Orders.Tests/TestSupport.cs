@@ -110,7 +110,15 @@ internal sealed class InMemorySchedulingIdentityRepository : ISchedulingIdentity
     {
         _labsByCode = (labs ?? [DemoLab()]).ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
         _clinicsByCode = (clinics ?? [DemoClinic(), OtherClinic()]).ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
-        _members = (members ?? []).ToList();
+        _members = (members ?? DefaultMembers()).ToList();
+    }
+
+    private static IEnumerable<SchedulingMember> DefaultMembers()
+    {
+        var now = DateTimeOffset.UtcNow;
+        yield return new SchedulingMember(OrganizationType.Clinic, "DEMO", "cred-1", "Cred 1", "hash", true, now, now);
+        yield return new SchedulingMember(OrganizationType.Clinic, "DEMO", "assistant-2", "Assistant 2", "hash", true, now, now);
+        yield return new SchedulingMember(OrganizationType.Clinic, "OTHER", "other-1", "Other Cred", "hash", true, now, now);
     }
 
     public static SchedulingLab DemoLab() => new(1, "LAB", "Spark3Dent Lab", true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);

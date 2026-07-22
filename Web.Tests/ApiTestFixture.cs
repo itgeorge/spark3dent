@@ -181,6 +181,8 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         await EnsureClinicAsync(ctx, "OTHER", "Other Clinic", null, "#0ea5e9", now);
         await EnsureMemberAsync(ctx, OrganizationType.Lab, "LAB", "lab-1", "Lab Member 1", "654321", hasher, now);
         await EnsureMemberAsync(ctx, OrganizationType.Clinic, "DEMO", "assistant-1", "Assistant 1", "123456", hasher, now);
+        await EnsureMemberAsync(ctx, OrganizationType.Clinic, "DEMO", "assistant-2", "Assistant 2", "222222", hasher, now);
+        await EnsureMemberAsync(ctx, OrganizationType.Clinic, "OTHER", "other-1", "Other Member 1", "111111", hasher, now);
         await ctx.SaveChangesAsync();
     }
 

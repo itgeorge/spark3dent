@@ -3,6 +3,8 @@ using System.Text.Json;
 
 namespace Orders;
 
+public sealed record OrderVisibilityScope(string? ClinicCode, string? MemberId);
+
 public sealed record OrderCursor(DateOnly RequestedDeliveryDate, long CreatedAtUnixTimeMilliseconds, long Id)
 {
     public static OrderCursor FromOrder(OrderRecord order) =>
