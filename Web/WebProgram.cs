@@ -126,42 +126,22 @@ app.MapMethods("/healthz", [HttpMethods.Get, HttpMethods.Head], (HttpContext ctx
         : Results.Ok(new { status = "ok" }));
 
 var webAssembly = Assembly.GetExecutingAssembly();
-app.MapGet("/", async (HttpContext ctx, Config cfg, SchedulingAuthService auth) =>
+app.MapGet(AppPageRegistry.LoginPath, async () =>
 {
-    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
-        return denied;
-
-    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("index.html", webAssembly);
-    if (cfg.Runtime.HostingMode != HostingMode.HetznerDocker)
-    {
-        const string banner = @"<div id=""dev-banner"" style=""background:#facc15;color:#0f172a;text-align:center;font-size:2.25rem;font-weight:700;padding:8px;border-bottom:2px solid #eab308;animation:dev-pulse 2s ease-in-out infinite;"">Development</div><style>@keyframes dev-pulse{0%,100%{opacity:1}50%{opacity:.75}}</style>";
-        html = html.Replace("<body>", "<body>" + banner);
-    }
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("login.html", webAssembly);
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
-app.MapGet("/orders", async () =>
+foreach (var page in AppPageRegistry.Pages)
 {
-    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("orders.html", webAssembly);
-    return Results.Content(html, "text/html; charset=utf-8");
-});
+    app.MapGet(page.Path, async (HttpContext ctx, Config cfg, SchedulingAuthService auth) =>
+        await ServeRegisteredAppPageAsync(ctx, cfg, auth, page, webAssembly));
+}
 
-app.MapGet("/iam", async (HttpContext ctx, SchedulingAuthService auth) =>
+app.MapGet("/api/app-pages/resolve-return-url", async (HttpContext ctx, SchedulingAuthService auth, string? returnUrl) =>
 {
-    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
-        return denied;
-
-    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("iam.html", webAssembly);
-    return Results.Content(html, "text/html; charset=utf-8");
-});
-
-app.MapGet("/scheduling-config", async (HttpContext ctx, SchedulingAuthService auth) =>
-{
-    if (await SchedulingEndpointAuth.RequireLabActorOrRedirectAsync(ctx, auth) is { } denied)
-        return denied;
-
-    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync("scheduling-config.html", webAssembly);
-    return Results.Content(html, "text/html; charset=utf-8");
+    var actor = await SchedulingEndpointAuth.AuthenticateAsync(ctx, auth);
+    return Results.Ok(new { path = AppPageRegistry.ResolveReturnPath(returnUrl, actor) });
 });
 
 app.MapGet("/licenses", async () =>
@@ -425,6 +405,25 @@ static async Task<string?> LoadLogoBase64Async(string contentRootPath)
         return null;
     var bytes = await File.ReadAllBytesAsync(logoPath);
     return Convert.ToBase64String(bytes);
+}
+
+static async Task<IResult> ServeRegisteredAppPageAsync(
+    HttpContext ctx,
+    Config cfg,
+    SchedulingAuthService auth,
+    AppPageDefinition page,
+    Assembly webAssembly)
+{
+    if (await AppPageRegistry.AuthorizeDocumentRequestAsync(ctx, auth, page) is { } denied)
+        return denied;
+
+    var html = await EmbeddedResourceLoader.LoadEmbeddedResourceAsync(page.ResourceName, webAssembly);
+    if (page.Path == AppPageRegistry.DefaultLabPath && cfg.Runtime.HostingMode != HostingMode.HetznerDocker)
+    {
+        const string banner = @"<div id=""dev-banner"" style=""background:#facc15;color:#0f172a;text-align:center;font-size:2.25rem;font-weight:700;padding:8px;border-bottom:2px solid #eab308;animation:dev-pulse 2s ease-in-out infinite;"">Development</div><style>@keyframes dev-pulse{0%,100%{opacity:1}50%{opacity:.75}}</style>";
+        html = html.Replace("<body>", "<body>" + banner);
+    }
+    return Results.Content(html, "text/html; charset=utf-8");
 }
 
 public partial class Program { }
