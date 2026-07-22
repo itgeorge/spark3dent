@@ -1,7 +1,18 @@
 (function(){
   'use strict';
   const $=id=>document.getElementById(id);
-  function localize(text){return String(text||'').replaceAll('Credentials are required.','Въведете потребителско име и парола.').replaceAll('Invalid organization or PIN.','Невалидна организация или парола.').replaceAll('Invalid organization or password.','Невалидна организация или парола.').replaceAll('Not authenticated.','Не сте влезли в системата.');}
+  function localize(text){
+    const value=String(text||'');
+    const translations={
+      'Credentials are required.':'Въведете потребителско име на клиника и парола.',
+      'Invalid credentials.':'Грешна организация/парола',
+      'Invalid organization or PIN.':'Грешна организация/парола',
+      'Invalid organization or password.':'Грешна организация/парола',
+      'Not authenticated.':'Не сте влезли в системата.',
+      'Login failed.':'Входът не беше успешен.'
+    };
+    return translations[value]||value;
+  }
   function returnUrl(){return new URLSearchParams(window.location.search).get('returnUrl')||'';}
   async function api(url,options){
     const response=await fetch(url,{headers:{'content-type':'application/json',...(options&&options.headers||{})},...(options||{})});

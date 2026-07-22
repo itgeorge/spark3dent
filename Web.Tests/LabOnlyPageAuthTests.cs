@@ -96,6 +96,26 @@ public class LabOnlyPageAuthTests
     }
 
     [Test]
+    public async Task LoginPage_UsesBulgarianCopyAndErrorTranslations()
+    {
+        using var fixture = new ApiTestFixture();
+        using var client = fixture.Client;
+
+        var html = await client.GetStringAsync("/login");
+        var script = await client.GetStringAsync("/js/login-page.js");
+
+        Assert.That(html, Does.Contain("Потребителско име на клиника"));
+        Assert.That(html, Does.Contain("aria-label=\"Вход в Spark3Dent\""));
+        Assert.That(script, Does.Contain("'Invalid credentials.':'Грешна организация/парола'"));
+        Assert.That(script, Does.Contain("'Invalid organization or PIN.':'Грешна организация/парола'"));
+        Assert.That(script, Does.Contain("'Credentials are required.':'Въведете потребителско име на клиника и парола.'"));
+        Assert.That(script, Does.Contain("'Login failed.':'Входът не беше успешен.'"));
+        Assert.That(script, Does.Contain("btn.disabled=true"));
+        Assert.That(script, Does.Contain("btn.textContent='Влизане…'"));
+        Assert.That(script, Does.Contain("btn.disabled=false"));
+    }
+
+    [Test]
     public async Task LoginPageScript_UsesServerReturnUrlResolverInsteadOfEmbeddedPageRegistry()
     {
         using var fixture = new ApiTestFixture();
