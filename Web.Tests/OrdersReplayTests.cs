@@ -17,6 +17,7 @@ public class OrdersReplayTests
 {
     [Test]
     [Category("OrdersReplay")]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task OrdersCoreReplay_LoginRoutesCreateConfirmationAndDirtyGuard_Work()
     {
         using var fixture = new ApiTestFixture();

@@ -322,6 +322,8 @@ public static class SchedulingApi
         {
             var actor = await RequireActor(ctx, auth);
             if (actor == null) return Results.Json(new { error = "Not authenticated." }, statusCode: 401, options: JsonOptions);
+            if (SchedulingOrderCreationGate.IsTemporarilyDisabled)
+                return Results.Json(new { error = SchedulingOrderCreationGate.ErrorMessage }, statusCode: SchedulingOrderCreationGate.StatusCode, options: JsonOptions);
             var body = await ReadJson<CreateOrderRequest>(ctx);
             if (body == null) return Results.Json(new { error = "Invalid JSON body." }, statusCode: 400, options: JsonOptions);
             try

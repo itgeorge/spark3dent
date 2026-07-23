@@ -23,6 +23,43 @@ public class SchedulingApiTests
     }
 
     [Test]
+    public async Task SchedulingOrderCreate_IsBlockedDuringMaintenance_ForClinicAndLab()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var clinicClient = fixture.Client;
+        await LoginAsync(clinicClient);
+
+        var clinicCreate = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "caseName":"Blocked",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(clinicCreate.StatusCode, Is.EqualTo((HttpStatusCode)SchedulingOrderCreationGate.StatusCode));
+        var clinicDoc = JsonDocument.Parse(await clinicCreate.Content.ReadAsStringAsync());
+        Assert.That(clinicDoc.RootElement.GetProperty("error").GetString(), Is.EqualTo(SchedulingOrderCreationGate.ErrorMessage));
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        var labCreate = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"DEMO",
+          "caseName":"Blocked Lab",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(labCreate.StatusCode, Is.EqualTo((HttpStatusCode)SchedulingOrderCreationGate.StatusCode));
+    }
+
+    [Test]
     public async Task SchedulingFlow_LoginCreateListLogout_Works()
     {
         using var fixture = NewSchedulingFixture();
@@ -67,28 +104,22 @@ public class SchedulingApiTests
           "requestedDeliveryDate":"2026-06-05"
         }
         """));
-        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
-        var orderElement = createDoc.RootElement.GetProperty("order");
-        var code = orderElement.GetProperty("orderCode").GetString();
-        var shortenedCode = orderElement.GetProperty("shortenedOrderCode").GetString();
-        Assert.That(code, Is.Not.Null.And.Contains("-"));
-        Assert.That(shortenedCode, Is.EqualTo(code![3..]));
-        Assert.That(orderElement.GetProperty("shade").GetString(), Is.EqualTo("A3.5"));
-        Assert.That(orderElement.GetProperty("colorNote").GetString(), Is.EqualTo("incisal translucent, cervical A3.5"));
-        Assert.That(orderElement.GetProperty("workItems").GetArrayLength(), Is.EqualTo(1));
+        Assert.That(create.StatusCode, Is.EqualTo((HttpStatusCode)SchedulingOrderCreationGate.StatusCode));
+
+        var code = await SeedOrderAsync(fixture.DbPath, "26-0605-QA01", "QA Crown", "DEMO", "2026-06-05");
 
         var list = await client.GetAsync("/api/scheduling/orders");
         Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var listText = await list.Content.ReadAsStringAsync();
         Assert.That(listText, Does.Contain(code));
-        Assert.That(listText, Does.Contain("incisal translucent, cervical A3.5"));
+        Assert.That(listText, Does.Contain("QA Crown"));
 
         var logout = await client.PostAsync("/api/scheduling/auth/logout", Json("{}"));
         Assert.That(logout.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingDates_AndClinicCreate_BlockFirstBusinessDayAfterWeekend()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 2, 25, 7, 30, 0, TimeSpan.Zero));
@@ -133,6 +164,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingDates_AndClinicCreate_BlockFirstBusinessDayAfterHoliday()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 2, 25, 7, 30, 0, TimeSpan.Zero));
@@ -346,6 +378,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingConfigAdmin_ChangedCapacityBlocksClinicOrderOverDailyLimit_WhenDayAlreadyHasOrders()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -462,6 +495,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_CreateValidationReflectsDbEditedMaterialLeadTime()
     {
         using var fixture = NewSchedulingFixture();
@@ -485,6 +519,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_CapacityAwareCreateRejectAndCancelRelease_WorkEndToEnd()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -578,6 +613,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingDates_WeeklyCapacityFullCandidateUnavailableAndNextWeekSelectable()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -617,6 +653,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingDates_DailyCapacityExceeded_WhenExistingUsageIs11AndNewOrderIs2_ShowsWarningAndRejectsClinicCreate()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -742,6 +779,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingDates_WhenSingleOrderWouldBe13AgainstCap12_ButDayIsEmpty_AllowsClinicCreate()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -818,8 +856,8 @@ public class SchedulingApiTests
         using var client = fixture.Client;
         await LoginAsync(client);
 
-        var firstCode = await CreateOrderAsync(client, "Update Self", "2026-06-10", material: "pmma", productCategory: "temporary");
-        var secondCode = await CreateOrderAsync(client, "Update Other", "2026-06-11", material: "pmma", productCategory: "temporary");
+        var firstCode = await CreateOrderAsync(fixture, client, "Update Self", "2026-06-10", material: "pmma", productCategory: "temporary");
+        var secondCode = await CreateOrderAsync(fixture, client, "Update Other", "2026-06-11", material: "pmma", productCategory: "temporary");
 
         var selfUpdate = await client.PutAsync($"/api/scheduling/orders/{firstCode}", Json("""
         {
@@ -853,6 +891,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_ConcurrentCreatesCannotOverbookDailyCapacity()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -907,6 +946,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_ConcurrentCreatesCannotOverbookWeeklyCapacity()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
@@ -967,8 +1007,8 @@ public class SchedulingApiTests
         await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
         using var setupClient = fixture.CreateClient();
         await LoginAsync(setupClient);
-        var firstCode = await CreateOrderAsync(setupClient, "Concurrent Update A", "2026-06-11", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
-        var secondCode = await CreateOrderAsync(setupClient, "Concurrent Update B", "2026-06-12", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
+        var firstCode = await CreateOrderAsync(fixture, setupClient, "Concurrent Update A", "2026-06-11", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
+        var secondCode = await CreateOrderAsync(fixture, setupClient, "Concurrent Update B", "2026-06-12", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
 
         using var client1 = fixture.CreateClient();
         using var client2 = fixture.CreateClient();
@@ -1020,6 +1060,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_CreatePmmaTelioOrder_RoundTripsMaterial()
     {
         using var fixture = NewSchedulingFixture();
@@ -1081,6 +1122,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_LabCanListAndCreateWithTargetClinic()
     {
         using var fixture = NewSchedulingFixture();
@@ -1161,23 +1203,13 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_UpdateAndCancelOrder_EnforcesPermissions()
     {
         using var fixture = NewSchedulingFixture();
         using var client = fixture.Client;
         await LoginAsync(client);
-        var create = await client.PostAsync("/api/scheduling/orders", Json("""
-        {
-          "caseName":"Original Case",
-          "impressionDate":"2026-06-02",
-          "productCategory":"permanent",
-          "material":"fullContourZirconia",
-          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
-          "requestedDeliveryDate":"2026-06-05"
-        }
-        """));
-        Assert.That(create.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        var code = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("order").GetProperty("orderCode").GetString();
+        var code = await CreateOrderAsync(fixture, client, "Original Case", "2026-06-05");
 
         var update = await client.PutAsync($"/api/scheduling/orders/{code}", Json("""
         {
@@ -1322,6 +1354,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task LabOffdays_FlowThroughNonWorkingDaysDatesAndOrderValidation()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 1, 7, 30, 0, TimeSpan.Zero));
@@ -1405,9 +1438,9 @@ public class SchedulingApiTests
         using var clinicClient = fixture.Client;
         await LoginAsync(clinicClient);
 
-        var demoStart = await CreateOrderAsync(clinicClient, "Demo Start", "2026-06-05");
-        var demoEndCancelled = await CreateOrderAsync(clinicClient, "Demo Cancelled", "2026-06-10");
-        var demoOutside = await CreateOrderAsync(clinicClient, "Demo Outside", "2026-06-12");
+        var demoStart = await CreateOrderAsync(fixture, clinicClient, "Demo Start", "2026-06-05");
+        var demoEndCancelled = await CreateOrderAsync(fixture, clinicClient, "Demo Cancelled", "2026-06-10");
+        var demoOutside = await CreateOrderAsync(fixture, clinicClient, "Demo Outside", "2026-06-12");
         var cancel = await clinicClient.DeleteAsync($"/api/scheduling/orders/{demoEndCancelled}");
         Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
@@ -1436,6 +1469,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_CreateUpdateListGetCalendar_WithOrderWorkItems()
     {
         using var fixture = NewSchedulingFixture();
@@ -1494,6 +1528,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_InvalidOverlappingOrderWorkItems_Returns400()
     {
         using var fixture = NewSchedulingFixture();
@@ -1532,6 +1567,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_OldSingleFieldOnlyRequest_Returns400()
     {
         using var fixture = NewSchedulingFixture();
@@ -1675,6 +1711,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_RejectsWeekendDelivery()
     {
         using var fixture = NewSchedulingFixture();
@@ -1696,6 +1733,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_NormalizesReversedToothRangeOnCreate()
     {
         using var fixture = NewSchedulingFixture();
@@ -1725,6 +1763,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task SchedulingFlow_RejectsToothRangeAcrossBothJaws()
     {
         using var fixture = NewSchedulingFixture();
@@ -1967,12 +2006,13 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task DeadlineRecommendationLogsEndpoint_LabCanInspectCreateAndUpdateLogsAndClinicForbidden()
     {
         using var fixture = NewSchedulingFixture();
         using var clinicClient = fixture.Client;
         await LoginAsync(clinicClient);
-        var code = await CreateOrderAsync(clinicClient, "Logged API", "2026-06-05");
+        var code = await CreateOrderAsync(fixture, clinicClient, "Logged API", "2026-06-05");
 
         var update = await clinicClient.PutAsync($"/api/scheduling/orders/{code}", Json("""
         {
@@ -2013,13 +2053,14 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task DeadlineOverride_ClinicCannotOverrideButLabCanAndLogsAreRetrievable()
     {
         using var fixture = NewSchedulingFixture(new DateTimeOffset(2026, 6, 8, 7, 30, 0, TimeSpan.Zero));
         await UpsertCapacityConfigAsync(fixture.DbPath, new DateOnly(2026, 1, 1), 1.0m, 10.0m);
         using var clinicClient = fixture.Client;
         await LoginAsync(clinicClient);
-        var firstCode = await CreateOrderAsync(clinicClient, "Capacity First", "2026-06-10", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
+        var firstCode = await CreateOrderAsync(fixture, clinicClient, "Capacity First", "2026-06-10", material: "pmma", productCategory: "temporary", impressionDate: "2026-06-08");
 
         var clinicOverride = await clinicClient.PostAsync("/api/scheduling/orders", Json("""
         {
@@ -2108,6 +2149,7 @@ public class SchedulingApiTests
     }
 
     [Test]
+    [Ignore("Deployment 1: order creation temporarily disabled")]
     public async Task DeadlineOverride_LabCanOverrideCalendarBlockedDate()
     {
         using var fixture = NewSchedulingFixture();
@@ -2350,6 +2392,7 @@ public class SchedulingApiTests
     }
 
     private static async Task<string> CreateOrderAsync(
+        ApiTestFixture fixture,
         HttpClient client,
         string caseName,
         string requestedDeliveryDate,
@@ -2359,6 +2402,13 @@ public class SchedulingApiTests
         string productCategory = "permanent",
         string impressionDate = "2026-06-02")
     {
+        if (SchedulingOrderCreationGate.IsTemporarilyDisabled)
+        {
+            var code = $"T-{Guid.NewGuid():N}"[..14].ToUpperInvariant();
+            await SeedOrderAsync(fixture.DbPath, code, caseName, clinicCode ?? "DEMO", requestedDeliveryDate);
+            return code;
+        }
+
         var clinicPrefix = clinicCode == null ? "" : $"\"clinicCode\":\"{clinicCode}\",";
         var memberPrefix = clinicMemberId == null ? "" : $"\"clinicMemberId\":\"{clinicMemberId}\",";
         var create = await client.PostAsync("/api/scheduling/orders", Json($$"""
