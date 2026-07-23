@@ -24,8 +24,11 @@
   function normalizeClinicColor(c){ const raw=String(c||'').trim(); if(/^#[0-9a-fA-F]{6}$/.test(raw))return raw; if(/^#[0-9a-fA-F]{3}$/.test(raw)){ const h=raw.slice(1); return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`; } return null; }
   function clinicMetaForOrder(o, clinicsByCode){ const code=o?.clinicCode; return code && clinicsByCode ? clinicsByCode[code] || null : null; }
   function clinicDisplayNameForOrder(o, clinicsByCode){ return o?.clinicDisplayName || clinicMetaForOrder(o, clinicsByCode)?.clinicDisplayName || o?.clinicCode || 'Клиника'; }
+  function memberDisplayNameForOrder(o){ return o?.memberLabel || o?.memberId || ''; }
+  function clinicAndMemberDisplayNameForOrder(o, clinicsByCode){ const clinic=clinicDisplayNameForOrder(o, clinicsByCode), member=memberDisplayNameForOrder(o); return member ? `${clinic} · ${member}` : clinic; }
   function clinicColorForOrder(o, clinicsByCode){ return normalizeClinicColor(o?.clinicDisplayColor || clinicMetaForOrder(o, clinicsByCode)?.clinicDisplayColor); }
   function clinicSwatchHtml(o, clinicsByCode){ const name=clinicDisplayNameForOrder(o, clinicsByCode), color=clinicColorForOrder(o, clinicsByCode), cls=`clinic-swatch${color?'':' clinic-swatch-neutral'}`, style=color?` style="--clinic-color:${color}"`:''; return `<span class="${cls}"${style} title="${esc(name)}"><span class="clinic-swatch-dot" aria-hidden="true"></span><span class="clinic-swatch-label" title="${esc(name)}">${esc(name)}</span></span>`; }
+  function clinicAndMemberSwatchHtml(o, clinicsByCode){ const name=clinicAndMemberDisplayNameForOrder(o, clinicsByCode), color=clinicColorForOrder(o, clinicsByCode), cls=`clinic-swatch${color?'':' clinic-swatch-neutral'}`, style=color?` style="--clinic-color:${color}"`:''; return `<span class="${cls}"${style} title="${esc(name)}"><span class="clinic-swatch-dot" aria-hidden="true"></span><span class="clinic-swatch-label" title="${esc(name)}">${esc(name)}</span></span>`; }
   function clinicSwatchDotHtml(o, clinicsByCode){ const name=clinicDisplayNameForOrder(o, clinicsByCode), color=clinicColorForOrder(o, clinicsByCode), cls=`clinic-swatch-dot-only${color?'':' clinic-swatch-neutral'}`, style=color?` style="--clinic-color:${color}"`:''; return `<span class="${cls}"${style} title="${esc(name)}" aria-label="Клиника ${esc(name)}"></span>`; }
 
   S3DOrders.Format = {
@@ -50,8 +53,11 @@
     normalizeClinicColor,
     clinicMetaForOrder,
     clinicDisplayNameForOrder,
+    memberDisplayNameForOrder,
+    clinicAndMemberDisplayNameForOrder,
     clinicColorForOrder,
     clinicSwatchHtml,
+    clinicAndMemberSwatchHtml,
     clinicSwatchDotHtml
   };
 })(typeof window !== 'undefined' ? window : globalThis);

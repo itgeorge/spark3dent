@@ -62,10 +62,11 @@
 
     function render(o){
       reviewCode.textContent=o.shortenedOrderCode||o.orderCode||'—';
-      reviewSub.textContent=`${Format.statusText(o.status)}${actor()?.isLab?'':` • ${o.clinicDisplayName||o.clinicCode||''}`}`;
+      const ownerDisplay=Format.clinicAndMemberDisplayNameForOrder(o);
+      reviewSub.textContent=`${Format.statusText(o.status)}${actor()?.isLab?'':` • ${ownerDisplay}`}`;
       const reviewClinicMetaEl=$('reviewClinicMeta');
       if(reviewClinicMetaEl){
-        if(actor()?.isLab){reviewClinicMetaEl.classList.remove('hidden');reviewClinicMetaEl.innerHTML=Format.clinicSwatchHtml(o)}
+        if(actor()?.isLab){reviewClinicMetaEl.classList.remove('hidden');reviewClinicMetaEl.innerHTML=Format.clinicAndMemberSwatchHtml(o)}
         else{reviewClinicMetaEl.classList.add('hidden');reviewClinicMetaEl.innerHTML=''}
       }
       reviewOverviewText.textContent=Format.orderOverviewBaseText(o);
