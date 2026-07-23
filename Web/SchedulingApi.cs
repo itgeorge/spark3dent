@@ -718,8 +718,8 @@ public static class SchedulingApi
 
     private static object ToClinicMemberDto(SchedulingMember member) => new
     {
-        id = member.Id,
-        label = member.Label
+        memberId = member.Id,
+        memberLabel = member.Label
     };
 
     private static object ToClinicMetaDto(SchedulingClinic clinic) => new

@@ -121,6 +121,99 @@ public class OrdersReplayTests
 
     [Test]
     [Category("OrdersReplay")]
+    public async Task OrdersReplay_DirtyGuard_PersistsAcrossStepNavigation()
+    {
+        using var fixture = new ApiTestFixture();
+        _ = fixture.Client;
+        const string seedCode = "26-0605-Z1AA";
+        await SeedOrderAsync(fixture.DbPath, seedCode, "Replay seeded review", "DEMO", "2026-06-05");
+
+        await using var server = await BrowserBridgeServer.StartAsync(fixture);
+        await using var browser = await LaunchBrowserAsync();
+        await using var page = await browser.NewPageAsync();
+        page.DefaultTimeout = 10_000;
+        page.DefaultNavigationTimeout = 15_000;
+
+        await page.GoToAsync(server.Url("/orders"));
+        await WaitForFunctionAsync(page, "location.pathname === '/login'");
+        await page.TypeAsync("#organizationCode", "DEMO");
+        await page.TypeAsync("#pin", "123456");
+        await page.ClickAsync("#loginBtn");
+        await WaitForFunctionAsync(page, "location.pathname === '/orders'");
+
+        await page.ClickAsync("#newOrderBtn");
+        await WaitForHashAsync(page, "#new/1");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+        await page.EvaluateExpressionAsync("document.querySelector(\"#quickTeeth .tooth[data-t='11']\").click()");
+        await WaitForFunctionAsync(page, "document.querySelector('#ts') && document.querySelector('#ts').value === '11'");
+        await page.ClickAsync(".nav-next");
+        await WaitForHashAsync(page, "#new/2");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+        await page.ClickAsync("#cancelCreateBtn");
+        await WaitVisibleAsync(page, "#discardOrderFlowPopup");
+        await page.ClickAsync("#discardOrderFlowYesBtn");
+        await WaitVisibleAsync(page, "#list");
+
+        await page.GoToAsync(server.Url($"/orders#order/{Uri.EscapeDataString(seedCode)}"));
+        await WaitVisibleAsync(page, "#reviewCard");
+        await page.EvaluateExpressionAsync("document.querySelector('#reviewEditBtn').click()");
+        await WaitForHashAsync(page, $"#edit/{Uri.EscapeDataString(seedCode)}/1");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+        await page.EvaluateExpressionAsync("document.querySelector(\"#quickTeeth .tooth[data-t='12']\").click()");
+        await WaitForFunctionAsync(page, "document.querySelector('#ts') && document.querySelector('#ts').value === '12'");
+        await page.ClickAsync(".nav-next");
+        await WaitForHashAsync(page, $"#edit/{Uri.EscapeDataString(seedCode)}/2");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+        await page.ClickAsync("#cancelCreateBtn");
+        await WaitVisibleAsync(page, "#discardOrderFlowPopup");
+    }
+
+    [Test]
+    [Category("OrdersReplay")]
+    public async Task OrdersReplay_HeaderExit_ReopensEditFlowWithFreshLoad()
+    {
+        using var fixture = new ApiTestFixture();
+        _ = fixture.Client;
+        const string seedCode = "26-0605-Z1AA";
+        await SeedOrderAsync(fixture.DbPath, seedCode, "Replay seeded review", "DEMO", "2026-06-05");
+
+        await using var server = await BrowserBridgeServer.StartAsync(fixture);
+        await using var browser = await LaunchBrowserAsync();
+        await using var page = await browser.NewPageAsync();
+        page.DefaultTimeout = 10_000;
+        page.DefaultNavigationTimeout = 15_000;
+
+        await page.GoToAsync(server.Url("/orders"));
+        await WaitForFunctionAsync(page, "location.pathname === '/login'");
+        await page.TypeAsync("#organizationCode", "DEMO");
+        await page.TypeAsync("#pin", "123456");
+        await page.ClickAsync("#loginBtn");
+        await WaitForFunctionAsync(page, "location.pathname === '/orders'");
+
+        await page.GoToAsync(server.Url($"/orders#order/{Uri.EscapeDataString(seedCode)}"));
+        await WaitVisibleAsync(page, "#reviewCard");
+        await page.EvaluateExpressionAsync("document.querySelector('#reviewEditBtn').click()");
+        await WaitForHashAsync(page, $"#edit/{Uri.EscapeDataString(seedCode)}/1");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+        await page.ClickAsync(".nav-next");
+        await WaitForHashAsync(page, $"#edit/{Uri.EscapeDataString(seedCode)}/2");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+
+        await page.ClickAsync("#appChromeBrand");
+        await WaitForHashAsync(page, "");
+        await WaitVisibleAsync(page, "#list");
+        await WaitForHiddenAsync(page, "#app");
+
+        await page.GoToAsync(server.Url($"/orders#order/{Uri.EscapeDataString(seedCode)}"));
+        await WaitVisibleAsync(page, "#reviewCard");
+        await page.EvaluateExpressionAsync("document.querySelector('#reviewEditBtn').click()");
+        await WaitForHashAsync(page, $"#edit/{Uri.EscapeDataString(seedCode)}/1");
+        await WaitForVisibleStateAsync(page, "#app", visible: true);
+        await WaitForFunctionAsync(page, "document.querySelector('.step[data-s=\"1\"]') && document.querySelector('.step[data-s=\"1\"]').classList.contains('active')");
+    }
+
+    [Test]
+    [Category("OrdersReplay")]
     public async Task OrdersPage_BfcacheRestoreAfterLogout_DoesNotRevealCachedOrdersShell()
     {
         using var fixture = new ApiTestFixture();

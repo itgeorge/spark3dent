@@ -1154,8 +1154,10 @@ public class SchedulingApiTests
         Assert.That(members.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var membersText = await members.Content.ReadAsStringAsync();
         var memberDoc = JsonDocument.Parse(membersText);
-        Assert.That(memberDoc.RootElement.GetProperty("items").EnumerateArray().Any(m => m.GetProperty("id").GetString() == "assistant-1"), Is.True);
+        Assert.That(memberDoc.RootElement.GetProperty("items").EnumerateArray().Any(m => m.GetProperty("memberId").GetString() == "assistant-1"), Is.True);
         Assert.That(membersText, Does.Not.Contain("pin").IgnoreCase);
+        Assert.That(membersText, Does.Not.Contain("hash").IgnoreCase);
+        Assert.That(membersText, Does.Not.Contain("fingerprint").IgnoreCase);
     }
 
     [Test]
@@ -1771,8 +1773,8 @@ public class SchedulingApiTests
     public async Task SchedulingOrdersEndpoints_ScopeClinicVisibilityByMemberOwner()
     {
         using var fixture = NewSchedulingFixture();
-        var ownCode = await SeedOrderAsync(fixture.DbPath, "OWN-001", "Own member", "DEMO", "2026-06-05");
-        await SeedOrderAsync(fixture.DbPath, "OTH-001", "Other member", "DEMO", "2026-06-06", memberId: "assistant-2");
+        var ownCode = await SeedOrderAsync(fixture.DbPath, "26-0606-OWN1", "Own member", "DEMO", "2026-06-06");
+        var otherCode = await SeedOrderAsync(fixture.DbPath, "26-0606-OTH2", "Other member", "DEMO", "2026-06-06", memberId: "assistant-2");
 
         using var client = fixture.Client;
         await LoginAsync(client);
@@ -1780,10 +1782,126 @@ public class SchedulingApiTests
         var list = await client.GetAsync("/api/scheduling/orders?limit=50");
         var listText = await list.Content.ReadAsStringAsync();
         Assert.That(listText, Does.Contain(ownCode));
-        Assert.That(listText, Does.Not.Contain("OTH-001"));
+        Assert.That(listText, Does.Not.Contain(otherCode));
 
-        var hidden = await client.GetAsync("/api/scheduling/orders/OTH-001");
-        Assert.That(hidden.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        var hiddenByFullCode = await client.GetAsync($"/api/scheduling/orders/{otherCode}");
+        Assert.That(hiddenByFullCode.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var hiddenByShortCode = await client.GetAsync("/api/scheduling/orders/find?code=0606-OTH2");
+        Assert.That(hiddenByShortCode.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var update = await client.PutAsync($"/api/scheduling/orders/{otherCode}", Json("""
+        {
+          "caseName":"Blocked update",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-06"
+        }
+        """));
+        Assert.That(update.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var cancel = await client.DeleteAsync($"/api/scheduling/orders/{otherCode}");
+        Assert.That(cancel.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var calendar = await client.GetAsync("/api/scheduling/orders/calendar?start=2026-06-06&end=2026-06-06");
+        Assert.That(calendar.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var calendarText = await calendar.Content.ReadAsStringAsync();
+        Assert.That(calendarText, Does.Contain(ownCode));
+        Assert.That(calendarText, Does.Not.Contain(otherCode));
+
+        using var labClient = fixture.CreateClient();
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+        Assert.That((await labClient.GetAsync($"/api/scheduling/orders/{otherCode}")).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await labClient.GetAsync("/api/scheduling/orders/find?code=0606-OTH2")).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await labClient.DeleteAsync($"/api/scheduling/orders/{otherCode}")).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task SchedulingClinicMembersEndpoint_EnforcesLabOnlyContractAndActiveMembers()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var members = await labClient.GetAsync("/api/scheduling/clinics/DEMO/members");
+        Assert.That(members.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var membersText = await members.Content.ReadAsStringAsync();
+        var memberDoc = JsonDocument.Parse(membersText);
+        var items = memberDoc.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.That(items.Select(m => m.GetProperty("memberId").GetString()), Is.EquivalentTo(new[] { "assistant-1", "assistant-2" }));
+        Assert.That(items.All(m => m.TryGetProperty("memberLabel", out var label) && !string.IsNullOrWhiteSpace(label.GetString())), Is.True);
+        Assert.That(membersText, Does.Not.Contain("pin").IgnoreCase);
+        Assert.That(membersText, Does.Not.Contain("hash").IgnoreCase);
+        Assert.That(membersText, Does.Not.Contain("fingerprint").IgnoreCase);
+
+        await DeactivateMemberAsync(fixture.DbPath, OrganizationType.Clinic, "DEMO", "assistant-2");
+        var activeOnly = await labClient.GetAsync("/api/scheduling/clinics/DEMO/members");
+        var activeItems = JsonDocument.Parse(await activeOnly.Content.ReadAsStringAsync()).RootElement.GetProperty("items").EnumerateArray().Select(m => m.GetProperty("memberId").GetString()).ToArray();
+        Assert.That(activeItems, Is.EqualTo(new[] { "assistant-1" }));
+
+        var missingClinic = await labClient.GetAsync("/api/scheduling/clinics/MISSING/members");
+        Assert.That(missingClinic.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        using var clinicClient = fixture.CreateClient();
+        await LoginAsync(clinicClient);
+        var forbidden = await clinicClient.GetAsync("/api/scheduling/clinics/DEMO/members");
+        Assert.That(forbidden.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    [Test]
+    public async Task SchedulingLabCreate_RejectsInvalidClinicMemberOwner()
+    {
+        using var fixture = NewSchedulingFixture();
+        using var labClient = fixture.Client;
+        await ApiTestFixture.LoginAsLabAsync(labClient);
+
+        var unknownMember = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"DEMO",
+          "clinicMemberId":"missing-member",
+          "caseName":"Bad owner",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(unknownMember.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await unknownMember.Content.ReadAsStringAsync(), Does.Contain("Clinic member not found or inactive."));
+
+        await DeactivateMemberAsync(fixture.DbPath, OrganizationType.Clinic, "DEMO", "assistant-2");
+        var inactiveMember = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"DEMO",
+          "clinicMemberId":"assistant-2",
+          "caseName":"Inactive owner",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(inactiveMember.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await inactiveMember.Content.ReadAsStringAsync(), Does.Contain("Clinic member not found or inactive."));
+
+        var otherClinicMember = await labClient.PostAsync("/api/scheduling/orders", Json("""
+        {
+          "clinicCode":"DEMO",
+          "clinicMemberId":"other-1",
+          "caseName":"Wrong clinic member",
+          "impressionDate":"2026-06-02",
+          "productCategory":"permanent",
+          "material":"fullContourZirconia",
+          "workItems":[{"constructionType":"crown","toothStart":11,"toothEnd":11}],
+          "requestedDeliveryDate":"2026-06-05"
+        }
+        """));
+        Assert.That(otherClinicMember.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await otherClinicMember.Content.ReadAsStringAsync(), Does.Contain("Clinic member not found or inactive."));
     }
 
     [Test]
@@ -2268,13 +2386,20 @@ public class SchedulingApiTests
         var repo = new SqliteOrderRepo(() => new AppDbContext(options));
         var timestamp = createdAt ?? DateTimeOffset.Parse("2026-06-02T12:00:00Z");
         var ownerMemberId = memberId ?? (clinicCode == "DEMO" ? "assistant-1" : "other-1");
+        var ownerMemberLabel = ownerMemberId switch
+        {
+            "assistant-1" => "Assistant 1",
+            "assistant-2" => "Assistant 2",
+            "other-1" => "Other Member 1",
+            _ => "Other Member 1"
+        };
         await repo.CreateOrderAsync(new OrderRecord(
             0,
             code,
             clinicCode,
             clinicCode == "DEMO" ? "Demo Dental Clinic" : "Other Clinic",
             ownerMemberId,
-            ownerMemberId == "assistant-1" ? "Assistant 1" : "Other Member 1",
+            ownerMemberLabel,
             caseName,
             new DateOnly(2026, 6, 2),
             ProductCategory.Permanent,
@@ -2324,6 +2449,18 @@ public class SchedulingApiTests
             row.UpdatedAt = DateTimeOffset.Parse("2026-06-21T00:00:00Z");
         }
 
+        await ctx.SaveChangesAsync();
+    }
+
+    private static async Task DeactivateMemberAsync(string dbPath, OrganizationType organizationType, string organizationCode, string memberId)
+    {
+        await using var ctx = OpenDb(dbPath);
+        var member = await ctx.SchedulingMembers.SingleAsync(m =>
+            m.OrganizationType == organizationType &&
+            m.OrganizationCode == organizationCode &&
+            m.Id == memberId);
+        member.IsActive = false;
+        member.UpdatedAt = DateTimeOffset.UtcNow;
         await ctx.SaveChangesAsync();
     }
 

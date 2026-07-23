@@ -338,6 +338,50 @@ public class SqliteOrderRepoTest
     }
 
     [Test]
+    public async Task FindOrdersByCodeSuffixAsync_FiltersByClinicMemberScope()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("26-0605-MEM1", "member one", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), memberId: "assistant-1"));
+        await repo.CreateOrderAsync(BuildOrder("26-0605-MEM2", "member two", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), memberId: "assistant-2"));
+
+        var scopedMatches = await repo.FindOrdersByCodeSuffixAsync(new OrderVisibilityScope("DEMO", "assistant-1"), "0605-MEM2", 2);
+        var clinicMatches = await repo.FindOrdersByCodeSuffixAsync(new OrderVisibilityScope("DEMO", null), "0605-MEM2", 2);
+        var labMatches = await repo.FindOrdersByCodeSuffixAsync(new OrderVisibilityScope(null, null), "0605-MEM2", 2);
+
+        Assert.That(scopedMatches, Is.Empty);
+        Assert.That(clinicMatches.Select(o => o.OrderCode), Is.EqualTo(new[] { "26-0605-MEM2" }));
+        Assert.That(labMatches.Select(o => o.OrderCode), Is.EqualTo(new[] { "26-0605-MEM2" }));
+    }
+
+    [Test]
+    public async Task ListActiveOrdersForCalendarAsync_FiltersByClinicMemberScope()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("CAL-A-234", "member a", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), memberId: "assistant-1", requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+        await repo.CreateOrderAsync(BuildOrder("CAL-B-234", "member b", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), memberId: "assistant-2", requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+
+        var scoped = await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope("DEMO", "assistant-1"), new DateOnly(2026, 6, 6), new DateOnly(2026, 6, 6));
+        var clinic = await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope("DEMO", null), new DateOnly(2026, 6, 6), new DateOnly(2026, 6, 6));
+        var lab = await repo.ListActiveOrdersForCalendarAsync(new OrderVisibilityScope(null, null), new DateOnly(2026, 6, 6), new DateOnly(2026, 6, 6));
+
+        Assert.That(scoped.Select(o => o.OrderCode), Is.EqualTo(new[] { "CAL-A-234" }));
+        Assert.That(clinic.Select(o => o.OrderCode), Is.EqualTo(new[] { "CAL-A-234", "CAL-B-234" }));
+        Assert.That(lab.Select(o => o.OrderCode), Is.EqualTo(new[] { "CAL-A-234", "CAL-B-234" }));
+    }
+
+    [Test]
+    public async Task ListActiveOrdersByDeadlineRangeAsync_RemainsUnscopedByMember()
+    {
+        var repo = new SqliteOrderRepo(_contextFactory);
+        await repo.CreateOrderAsync(BuildOrder("DLN-A-234", "member a", DateTimeOffset.Parse("2026-05-31T10:00:00Z"), memberId: "assistant-1", requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+        await repo.CreateOrderAsync(BuildOrder("DLN-B-234", "member b", DateTimeOffset.Parse("2026-05-31T11:00:00Z"), memberId: "assistant-2", requestedDeliveryDate: new DateOnly(2026, 6, 6)));
+
+        var orders = await repo.ListActiveOrdersByDeadlineRangeAsync(new DateOnly(2026, 6, 6), new DateOnly(2026, 6, 6));
+
+        Assert.That(orders.Select(o => o.OrderCode), Is.EqualTo(new[] { "DLN-A-234", "DLN-B-234" }));
+    }
+
+    [Test]
     public async Task ListOrdersPageAsync_FiltersByClinicMemberScope()
     {
         var repo = new SqliteOrderRepo(_contextFactory);
