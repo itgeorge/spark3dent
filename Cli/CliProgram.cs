@@ -25,7 +25,7 @@ class CliProgram
         if (await TryRunIamHelperAsync(args, config))
             return;
 
-        if (TryRunSchedulingHelper(args, config))
+        if (await TryRunSchedulingHelperAsync(args, config))
             return;
 
         var logDir = config.SingleBox.LogDirectory;
@@ -192,7 +192,7 @@ class CliProgram
 
     static string NormalizeCode(string value) => value.Trim().ToUpperInvariant();
 
-    static bool TryRunSchedulingHelper(string[] args, Configuration.Config config)
+    static async Task<bool> TryRunSchedulingHelperAsync(string[] args, Configuration.Config config)
     {
         if (args.Length < 2 || !args[0].Equals("scheduling", StringComparison.OrdinalIgnoreCase))
             return false;
@@ -206,7 +206,18 @@ class CliProgram
             return true;
         }
 
+        if (args[1].Equals("order-owner-report", StringComparison.OrdinalIgnoreCase) ||
+            args[1].Equals("order-owner-validate", StringComparison.OrdinalIgnoreCase) ||
+            args[1].Equals("order-owner-apply", StringComparison.OrdinalIgnoreCase))
+        {
+            Environment.ExitCode = await SchedulingOrderOwnerCommands.RunAsync(args[1], args.Skip(2).ToArray(), config.SingleBox.DatabasePath);
+            return true;
+        }
+
         Console.WriteLine("Usage: scheduling hash-pin <credential-secret>");
+        Console.WriteLine("       scheduling order-owner-report --db <path> --out <path>");
+        Console.WriteLine("       scheduling order-owner-validate --db <path> --assignments <path> [--force-current-mismatch]");
+        Console.WriteLine("       scheduling order-owner-apply --db <path> --assignments <path> --backup-confirmed --out <path> [--force-current-mismatch]");
         return true;
     }
 
@@ -328,6 +339,12 @@ class CliProgram
         Console.WriteLine("                          - Import legacy PDF invoices recursively; prompt for client nicknames");
         Console.WriteLine("  scheduling hash-pin <secret>");
         Console.WriteLine("                          - Generate a hashed scheduling credential secret");
+        Console.WriteLine("  scheduling order-owner-report --db <path> --out <path>");
+        Console.WriteLine("                          - Generate order owner reassignment report/template");
+        Console.WriteLine("  scheduling order-owner-validate --db <path> --assignments <path>");
+        Console.WriteLine("                          - Validate edited order owner assignments");
+        Console.WriteLine("  scheduling order-owner-apply --db <path> --assignments <path> --backup-confirmed --out <path>");
+        Console.WriteLine("                          - Apply validated order owner assignments");
         Console.WriteLine("  iam bootstrap-lab --db <path> [--reset]");
         Console.WriteLine("                          - Create/reset the singleton lab and first lab member");
         Console.WriteLine("  audit list [filters]    - List audit events (newest first)");
